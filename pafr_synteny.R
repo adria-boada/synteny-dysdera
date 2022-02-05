@@ -172,64 +172,111 @@ circos.genomicLink(bed1, bed2, col = rand_color(nrow(bed1), transparency = 0.5),
 
 
 # CREA EL PLOT DE CIRCOS:
-# PER COMENÇAR, CARREGA DATA I LLIBRERIES:
+### Creates circos and coverage plots from minimap2 data (i.e., alignment.paf).
+
+# PER COMENÇAR, CARREGA DADES I LLIBRERIES:
 {
   library(pafr)
   library(circlize)
   library(RColorBrewer)
-# Anem a usar les dades de Dysdera per formatejar-les com a circos:
-aln_circos = read_paf("Bioinformatics/testfiles/filtered_whole_tcat.paf")
+ 
+# Carrega el camí fins als fitxers necessaris i defineix variables:
+  
+# .paf amb alineament:
+  path_to_paf = "Bioinformatics/testfiles/filtered_whole_tcat.paf"
+  
+# Variables per a filtrar el .paf i reduir-ne la mida:
+  min_map_qual = 20  # No es mira per sota de 20 de qualitat de mapatge.
+  min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
+
+ # Defineix una funció per augmentar la mida dels aliniaments de la funció plot_coverage()
+
+  artificial_coverage=function(df) {
+  # Adds alen to end coord and Substracts alen from start coord.
+  # Input: pafreader data.frame, with tstart/tend cols.
+  
+  # Substracts from tstart
+  df$tstart = ifelse( (df$tstart - df$alen)<0, 0, df$tstart - df$alen)
+  # Adds to tend
+  df$tend = ifelse( (df$tend + df$alen)>df$tlen, df$tlen, df$tend + df$alen)
+  # Substracts from qstart
+  df$qstart = ifelse( (df$qstart - df$alen)<0, 0, df$qstart - df$alen)
+  # Adds to qend
+  df$qend = ifelse( (df$qend + df$alen)>df$tlen, df$qlen, df$qend + df$alen)
+  return(df)
+}
+ 
+# Anem a usar les dades de Dysdera de minimap2 per formatejar-les com a circos:
+  aln_circos = read_paf(path_to_paf)
 
 # S'ha de filtrar els aliniaments o no es veurà res:
-aln_circos = subset(aln_circos, mapq > 20)
-aln_circos = subset(aln_circos, alen > 6e3)
-
+  aln_circos = subset(aln_circos, mapq > min_map_qual)  # Elimina poca qualitat de mapeig
+  aln_circos = subset(aln_circos, alen > min_align_len)  # Elimina alineaments curts
+ 
 # Crea dos bedlike dataframes amb les columnes dels aliniaments:
-# Es necessita partir el data.frame en dos de nous.
-query = aln_circos[c("qname", "qstart", "qend", "qlen")]
-target = aln_circos[c("tname", "tstart", "tend", "tlen")]
+# Es necessita partir el data.frame en dos de nous per fer els links del circos.
+  query = aln_circos[c("qname", "qstart", "qend", "qlen")]
+  target = aln_circos[c("tname", "tstart", "tend", "tlen")]
 
 # Crea una llista ordenada de bedlike dataframes; 
 # cada objecte de la llista són tots els alineaments d'un cromosoma 
 # (un sol query o un sol target):
+ 
 query_list = c() ; target_list = c()  # Dos llistes buides
+ 
 for (chr in sort(unique(query$qname))) {  # Per a cada qname:
   # Extreu les línies de la query que contenen 'qname==chr'
   query_list = c(query_list, chr = list(query[query$qname == chr,]))
-  # Extreu les línies de la target que contenen name==chr'
+  # Extreu les línies de la target que contenen 'tname==chr'
   target_list = c(target_list, chr = list(target[query$qname == chr,]))
 }
+ 
 # Anomena cada objecte de la llista correctament. 
 names(query_list) = sort(unique(query$qname))
 names(target_list) = sort(unique(query$qname))
 
 # Reordena la llista amb els aliniaments per estètica:
+  # Primer 'X' i després la resta.
 query_list = c(query_list[9], query_list[1:8])
 target_list = c(target_list[9], target_list[1:8])
+ 
+# Crea uns indexos que separen el cercle en sectors
+# Cada sector és un cromosoma amb la mida que indica l'index.
 
 # index silvatica dels principals chr
 index_sil_general = data.frame(
-  name = c("DsilChrX", "DsilChr1", "DsilChr2", "DsilChr3", "DsilChr4", "DsilChr5", "DsilChr6", "DsilChrU1", "DsilChrU2"),
-  start = c(rep(0,9)),
-  end = c(317950935, 177171321, 176727214, 174235172, 129237514, 125974146, 80954097, 22260796, 1135477)
+  name = c(unique(query$qname)),
+  start = c(rep(0, length(unique(query$qname)))),
+  end = c(unique(query$qlen))
 )
 # index catalonica dels principals chr
 index_cat_general = data.frame(
-  name = c("DcatChr2", "DcatChrX", "DcatChr1", "DcatChr3", "DcatChr4"),
-  start = c(rep(0,5)),
-  end = c(827927493, 662930524, 604492468, 431906129, 421735357)
+  name = c(unique(target$tname)),
+  start = c(rep(0, length(unique(target$tname)))),
+  end = c(unique(target$tlen))
 )
+# Ordena els cromosomes de l'index numericament per llargada (end). 
+  index_sil_general = index_sil_general[order(-index_sil_general$end), ]
+  index_cat_general = index_cat_general[order(-index_cat_general$end), ]
+ 
 # rbind dels dos data.frames:
 dysdera_tracks = rbind(index_cat_general, index_sil_general)
-
 }
 
+
+# HA ACABAT DE CARREGAR DADES
+
 # COMENÇA A PLOTEJAR CIRCOS:...
+
+
 {
 circos.clear()  # Per si de cas es necessita netejar la pantalla...
+ # (en cas de que es corri l'script més d'una vegada)
 
 # Separació dels tracks:
 circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,8), 6))
+ 
+# Inicialitza amb les dades de Dysdera.
 circos.genomicInitialize(dysdera_tracks, plotType = NULL)
 
 # Complexa funció per fer uns tracks generals de chr:
@@ -245,7 +292,7 @@ highlight.chromosome(unique(query$qname),
                      col = rgb(1,0,0,.7))
 highlight.chromosome(unique(target$tname),
                      col = rgb(0,0,1,.7))
-
+ 
 # Fés els requadres buits de sota els cromosomes.
 circos.track(ylim = c(0, 1), track.height = .15)
 
@@ -261,7 +308,8 @@ for (chr in names(query_list)) {
   x = x+1
 }
 
-# Afageix transparencia a la palette pels links [NO FUNCIONA]:
+# Afageix transparencia a la palette pels links:
+  ### [NO FUNCIONA]
 palette_cols = add_transparency(col = palette_cols, transparency = 0.5)
 
 # Links entre les regions aliniades:
@@ -278,11 +326,16 @@ for (n in 1:length(query_list)) {
 }
 
 circos.clear()
+ 
+# Text que marca quina espècie és quina: 
 text(-0.85, -0.8, "D. catalonica\ngenome", col = "blue", cex = .6)
 text(0.9, 0.8, "D. silvatica\ngenome", col = "red", cex = .6)
 }
 
-# COMENÇA A PLOTEJAR COVERAGE:
+
+# HA ACABAT LA FIGURA CIRCOS
+
+# FINALMENT, GENERA ELS "PLOT_COVERAGE()" DE PAFR:
 plot_coverage(aln_circos)
 plot_coverage(artificial_coverage(aln_circos))
 
