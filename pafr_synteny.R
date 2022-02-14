@@ -183,12 +183,20 @@ circos.genomicLink(bed1, bed2, col = rand_color(nrow(bed1), transparency = 0.5),
 # Carrega el camí fins als fitxers necessaris i defineix variables:
   
 # .paf amb alineament:
-  path_to_paf = "Bioinformatics/testfiles/filtered_whole_tcat.paf"
+  path_to_paf = "Escritorio/Data/Synteny/modified_pafs/filtered_whole_tcat.paf"
   
 # Variables per a filtrar el .paf i reduir-ne la mida:
   min_map_qual = 20  # No es mira per sota de 20 de qualitat de mapatge.
   min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
-
+  
+# Paleta de colors extreta del paper de Paula Escuer:
+  paleta_escuer = c(chrx="#f659a5", chr1="#c5090a", chr2="#ff7f07", 
+                    chr3="#cabf0a", chr4="#41a62a", chr5="#4fa1ca", 
+                    chr6="#4f3b97", chrU1="#a29a9c", chrU2="#a65628")
+  # Test amb un barplot per veure que els colors rutllen:
+  if (FALSE) {
+  barplot(c(chrx=5, chr1=5, chr2=5, chr3=5, chr4=5, chr5=5, chr6=5, chrU1=5, chrU2=5), col=paleta_escuer)
+  }
  # Defineix una funció per augmentar la mida dels aliniaments de la funció plot_coverage()
 
   artificial_coverage=function(df) {
@@ -274,17 +282,17 @@ circos.clear()  # Per si de cas es necessita netejar la pantalla...
  # (en cas de que es corri l'script més d'una vegada)
 
 # Separació dels tracks:
-circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,8), 6))
+circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,7), 4, 6))
  
 # Inicialitza amb les dades de Dysdera.
 circos.genomicInitialize(dysdera_tracks, plotType = NULL)
 
 # Complexa funció per fer uns tracks generals de chr:
 circos.track(ylim = c(0,1), panel.fun = function(x, y) {
-  circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(1), 
-              gsub(".*Chr", "", CELL_META$sector.index), cex = 0.6, niceFacing = TRUE)
+  circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
+              gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
   # Afageix axis genòmics a sobre del track [INHABILITAT]:
-  # circos.genomicAxis(h = "top")
+  circos.genomicAxis(h = "top")
 }, track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
 
 # Crea dues cintes, vermella i blava, per a diferenciar les dues espècies:
@@ -294,42 +302,43 @@ highlight.chromosome(unique(target$tname),
                      col = rgb(0,0,1,.7))
  
 # Fés els requadres buits de sota els cromosomes.
-circos.track(ylim = c(0, 1), track.height = .15)
+circos.track(ylim = c(0, 1), track.height = .1)
 
-# Crea una paleta de colors per a pintar el cercle:
-palette_cols = brewer.pal(9, "Set1")
+# Crea una paleta de colors per a pintar el cercle [OBSOLET]:
+# Es necessitava RColorBrewer.
+# palette_cols = brewer.pal(9, "Set1")
 
 # Posa una paleta de colors sobre els cromosomes de silvatica:
 x=1
 for (chr in names(query_list)) {
   highlight.chromosome(chr,
-  col = palette_cols[x],
+  col = paleta_escuer[x],
   track.index = 2)
   x = x+1
 }
 
 # Afageix transparencia a la palette pels links:
   ### [NO FUNCIONA]
-palette_cols = add_transparency(col = palette_cols, transparency = 0.5)
+paleta_escuer_transp = add_transparency(col = paleta_escuer, transparency = 0.5)
 
 # Links entre les regions aliniades:
 # x=1
 # for (n in c("x", 1:6, "U1", "U2")) {
 #   print(paste0("target.chr", n, " - ", "query.chr", n))
 #   circos.genomicLink(eval(as.name(paste0("target.chr", n))), eval(as.name(paste0("query.chr", n))), 
-#                      col = palette_cols[x])
+#                      col = paleta_escuer[x])
 #   x = x+1
 # }
 for (n in 1:length(query_list)) {
   circos.genomicLink(target_list[n], query_list[n],
-                     col = palette_cols[n])
+                     col = paleta_escuer_transp[n])
 }
 
 circos.clear()
  
 # Text que marca quina espècie és quina: 
-text(-0.85, -0.8, "D. catalonica\ngenome", col = "blue", cex = .6)
-text(0.9, 0.8, "D. silvatica\ngenome", col = "red", cex = .6)
+text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
+text(0.9, 0.9, "D. silvatica\ngenome", col = "red", cex = 1.1)
 }
 
 
