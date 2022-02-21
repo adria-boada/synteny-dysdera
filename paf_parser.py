@@ -28,7 +28,7 @@ paf_file = sys.argv[1]
 # Create a dict. in which to store chr coverage.
 Qseqdic = {} ; Tseqdic = {} 
 
-# Get all query-names:
+# Get all chr-names (query and target):
 with open(paf_file) as paf:
 	for line in paf:
 		# Split the lines by tabs, and cut column one [0].
@@ -78,9 +78,16 @@ for key, val in Tseqdic.items():
 print(Qseqdic)
 # ~ print("\n"+"="*80+"\n")
 # ~ print(Tseqdic)
+print("\n"+"="*80+"\n")
 
+# Create a dictionary to store lengths for every chr.
+lendic = {}
 
+# For each key: [list of inteervals], store key: nº of intervals in list.
+for key, x in Qseqdic.items(): lendic[key] = len(x)
+print(lendic)
 
+# for each pair of intervals in the list, remove overlapping:
 
 
 
