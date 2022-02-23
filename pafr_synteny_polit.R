@@ -15,7 +15,8 @@
   path_to_paf = "Escritorio/Data/Synteny/modified_pafs/filtered_whole_tcat.paf"
   
 # Variables per a filtrar el .paf i reduir-ne la mida:
-  min_map_qual = 60  # No es mira per sota de 20 de qualitat de mapatge. Entre 0 i 60.
+  min_map_qual = 60  # No es mira per sota de 60 de qualitat de mapatge.
+  # El rang de qualitats de mapatge per minimap2 vira entre mínim de zero i màxim de seixanta. 
   min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
   
 # Paleta de colors extreta del paper de Paula Escuer:
