@@ -28,6 +28,9 @@ paf_file = sys.argv[1]
 # Create a dict. in which to store chr coverage.
 seqdic = {} 
 
+# Create a dict in which to store chr total len
+chr_total_len = {}
+
 # Get all chr-names (query and target):
 with open(paf_file) as paf:
 	for line in paf:
@@ -35,10 +38,17 @@ with open(paf_file) as paf:
 		qname=line.split("\t")[0]
 		# Create an entry in the dict for each query name
 		seqdic[f"Q.{qname}"]=[]
+		# Split the line by tabs and cut qlen column:
+		qlen = line.split("\t")[1]
+		chr_total_len[f"Q.{qname}"] = qlen
+		
 		
 		# Do the same for target names:
 		tname=line.split("\t")[5]
 		seqdic[f"T.{tname}"]=[]
+		
+		tlen = line.split("\t")[6]
+		chr_total_len[f"T.{tname}"] = tlen
 
 
 
@@ -130,7 +140,7 @@ for chr, length in lendic.items():
 
 # Create a list with all the points (both left and right)
 # of every interval.
-	for i in range(0, length-1):
+	for i in range(0, length):
 		# Left point == 0.
 		point_list += [ [seqdic[chr][i][0], 0, i] ]
 		# Right point == 1.
@@ -147,7 +157,7 @@ for chr, length in lendic.items():
 	answer = []
 	
 	# for each point in the point_list:
-	for i in range(0, len(point_list)-1):
+	for i in range(0, len(point_list)):
 		
 		# Si el punt actual és 'Left; opens an interval'
 		if point_list[i][1] == 0:
@@ -191,7 +201,7 @@ for chr, length in lendic.items():
 				added = False
 
 	# Traspassa la answer a intervals dins del cromosoma chr:
-	for i in range(0, length-1):
+	for i in range(0, length):
 		# Si 'i' es troba a 'answer', afageix a solapats:
 		if i in answer:
 			solapats[chr] += [[seqdic[chr][i] ]]
@@ -211,10 +221,26 @@ print(f"NO SOLAPATS: ")
 print(no_solapats)
 				
 print(llargades_solapament)
-		
+
+
+
+# Anem a mirar coverage per sols els intevals NO solapats:
+
+for chr, value in no_solapats.items():
+	# var to count length
+	total_len = 0	
+	
+	# iterate through list and get len of intervals
+	for i in value:
+		total_len += i[0][1] - i[0][0] + 1
+	
+	# calculate coverage
+	cov = (total_len/ int(chr_total_len[chr]) )
+	print(f"For chr {chr}, coverage is {cov}.")	
 
 
 # for each pair of intervals in the list, remove overlapping:
+
 
 
 
