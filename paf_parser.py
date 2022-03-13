@@ -123,15 +123,6 @@ print(lendic)
 
  ##### SWEEP LINE APPROACH
 
-# Crea un diccionari de solapats, per filtrar els solapats
-# dels que no ho són:
-solapats = {}
-no_solapats = {}
-
-# Omple els diccionaris amb els cromosomes necessaris:
-for chr, length in lendic.items():
-	solapats[chr] = []
-	no_solapats[chr] = []
 
 # Per a cada chr, sigui query o target, dins el paf-file:
 for chr, length in lendic.items():
@@ -149,6 +140,7 @@ for chr, length in lendic.items():
 	# Sort the list:
 	point_list.sort()
 	
+	print("Imprimeix la llista de punts ordenada:")
 	print(f"{chr} : {point_list}") # Sembla que si que ordena correctament.
 
 	# State variables for algorithm:
@@ -242,6 +234,67 @@ for chr, value in no_solapats.items():
 # for each pair of intervals in the list, remove overlapping:
 
 
+def point_list_overlapping_indices (p_list: "A list of sorted points from *point_list*"):
+	
+	""" Acquire and return indices of overlapping intervals from 
+	*point_list*. Returns pairs of overlapping intervals in the form of 
+	sublists. """
+	
+	# State variables for algorithm:
+	currentOpen = -1
+	added = False
+	answer = []
+	
+	# for each point in the point_list:
+	for i in range(0, len(p_list)):
+		
+		# Si el punt actual és 'Left; opens an interval'
+		if p_list[i][1] == 0:
+			# Si no hi ha cap interval actualment obert:
+			if currentOpen == -1:
+				# 'Entra' a l'interval 'i'.
+				currentOpen = p_list[i][2]
+				added = False
+			# Si es trobava dins un interval anterior:
+			else:
+				# Index del nou interval:
+				index = p_list[i][2]
+				# Aquest forma part de la resposta (intervals solapats).
+				answer += [index]
+				
+				# DEBUG: prints each found answer.
+				# ~ print( [ [chr, index] ] )
+				
+				# Si l'interval currentOpen no ha sigut encara afegit:
+				if (not added):
+					# Fes-ho:
+					answer += [currentOpen]
+					
+					# DEBUG: prints each found answer.
+					# ~ print( [ [chr, currentOpen] ] )
+					
+					added = True
+				# Mira quin dels dos intervals que s'estan comparant
+				# te la cua més llarga, i per tant solaparà amb
+				# més intervals (cua = Right point).
+				if (seqdic[chr][currentOpen][1] < seqdic[chr][index][1]):
+					currentOpen = index
+					added = True
+					
+		# Si troba un punt que és 'Right'; que tanca interval:
+		else:
+			# I és el punt esquerra de l'interval actual:
+			if p_list[i][2] == currentOpen:
+				# Surt de l'interval
+				currentOpen = -1
+				added = False
 
-
+	# Traspassa la answer a intervals dins del cromosoma chr:
+	for i in range(0, length):
+		# Si 'i' es troba a 'answer', afageix a solapats:
+		if i in answer:
+			solapats[chr] += [[seqdic[chr][i] ]]
+		# else, a no solapats:
+		else:
+			no_solapats[chr] += [[ seqdic[chr][i] ]]
 
