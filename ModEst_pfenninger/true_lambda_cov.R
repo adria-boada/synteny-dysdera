@@ -3,37 +3,8 @@ library(fitdistrplus)
 library(truncdist) 
 library(splitstackshape) 
 
-# Distribució Poisson truncada: http://freerangestats.info/blog/2018/03/20/truncated-poisson
-
-# transform Qualimap output to R-object.
-# diferencia respecte samtools: inclou zero coverage.
-obj <- read.table("Escritorio/Dscabricula_gstats.txt", skip = 5, col.names = c("cov", "freq"))
-obj <- read.table("Escriptori/genome_size_dsilchru2/raw_data_qualimapReport/coverage_histogram.txt", header = TRUE)
-
-# path pel pc del lab:
-# inclou zero:
-obj <- read.table("Escritorio/genome_size/raw_data_qualimapReport/coverage_histogram.txt", header = TRUE)
-# exclou zero:
-obj <- obj[-1, ]
-
- # Carrega una femella de la Paula.
-obj <- read.table("Escritorio/Results/Gsize_Dscabricula/paula181_gstats.txt", skip=4, col.names = c("cov", "freq"))
-
- # objectes de prova:
-obj <- c(1,1, 2,2, 3,3)
-obj <- c(rep(1,10), rep(2,10), rep(3,10))
-
- # Crear una taula més petita:
-factor = sum(obj$freq)/10000
-obj$freq = obj$freq/factor
-
-
-obj <- expandRows(obj, "freq") 
-obj <- as.vector(obj$cov) 
-summary(obj)
-
- # Create a function to find the median without placing values in a vector
- # (too long, no mem available)
+# Create a function to find the median without placing values in a vector
+# (too long, no mem available)
 median_zeroidx_cov <- function(x) {
   # Si la suma del vector és parella:
   if ((sum(x) %% 2) == 0) {
@@ -63,18 +34,75 @@ median_zeroidx_cov <- function(x) {
   }
 }
 
-# mediana de coverage del vector de freqüències.
+# Distribució Poisson truncada: http://freerangestats.info/blog/2018/03/20/truncated-poisson
+
+# transform Qualimap output to R-object.
+# diferencia respecte samtools: inclou zero coverage. Realment necessari?
+
+
+  # Objectes de prova curts:
+    obj <- c(1,1, 2,2, 3,3)
+    obj <- c(rep(1,10), rep(2,10), rep(3,10))
+
+
+  # LAB DATASET PATHS 
+    # Qualistats inclou zero:
+    obj <- read.table("Escritorio/genome_size/raw_data_qualimapReport/coverage_histogram.txt", header = TRUE)
+    # exclou zero:
+    obj <- obj[-1, ]
+    
+    # Carrega una femella de la Paula.
+    obj <- read.table("Escritorio/Results/Gsize_Dscabricula/paula181_gstats.txt", skip=4, col.names = c("cov", "freq"))
+    
+
+  # HOME PC DATA PATHS
+    obj <- read.table("Escriptori/u2_gstats.txt", skip = 5, col.names = c("cov", "freq"))
+    obj <- read.table("Escriptori/u2_qualistats.txt", col.names = c("cov", "freq"))
+    
+    obj <- read.table("Escriptori/paula194_gstats.txt", skip = 4, col.names = c("cov", "freq"))
+    obj <- read.table("Escriptori/paula194_qualistats.txt", col.names = c("cov", "freq"))
+    
+    obj <- read.table("Escriptori/deng_gstats.txt", skip = 4, col.names = c("cov", "freq"))
+    
+    obj <- read.table("Escriptori/Dscabricula_gstats.txt", skip = 5, col.names = c("cov", "freq"))
+    
+    # VADIM:
+    obj <- read.table("Baixades/Deng_19mer_rawreads.histo", col.names = c("cov", "freq"))
+    obj <- read.table("Baixades/Dsca_19mer_out.histo", col.names = c("cov", "freq"))
+    obj <- read.table("Baixades/DsilPEsg3680196_raw_17_out.histo", col.names = c("cov", "freq"))
+
+    
+    plot(obj, xlim = c(1, 20), type = "l", lty=1, col = "green")
+    legend(x = "topright", legend = c("Denghofii", "Dsilvatica", "Dscabricula"), fill = c("red", "green", "blue"))
+    lines(obj, lty=1, col = "red")
+    lines(obj, lty=3, col = "green")
+    
+  # Crear una taula més petita (mides genòmiques enormes pengen el programa):
+  # Disminueix la mida del dataset però manté els percentatges de cada variable:
+    quantitat_objectes_nova_taula = 10000  # Transforma de N entrades a q_o_n_t entrades.
+    # factor de re-escalada.
+    factor = sum(obj$freq)/quantitat_objectes_nova_taula
+    # Transforma freqüència x al 10% al 10% de q_o_n_t.
+    obj$freq = obj$freq/factor
+
+  # Com que el coverage és una variable discreta, s'ha de manejar de la següent forma:
+    obj <- expandRows(obj, "freq")  # Questa funció no treballa bé amb datasets grans.
+    obj <- as.vector(obj$cov) 
+    summary(obj)
+
+# funció mediana de coverage del vector de freqüències.
 median_zeroidx_cov(obj$freq)
 
 # define function for mode:
 # el valor de la 1era columna que te el màxim a la 2na columna.
 mode <- function(x) {x[,1][x[,2]==max(x[,2])]}
 
-# funció de la moda per a un objecte vectorial amb els valors quantitzats.
+# funció de la moda per a un objecte vectorial, amb valors discrets.
 mode <- function(obj) {uniqv <- unique(obj) ; uniqv[which.max(tabulate(match(obj, uniqv)))]}
 
-# Agafa un valor 5 per sota de mòdul. Si és més petit que zero, agafa'l a ell.
-mini <- function(x) ifelse(test = mode(x)-5>=0, yes = mode(x)-5, no = 0)
+# Agafa un valor 5 per sota de mòdul. Si és més petit que zero, agafa el zero. 
+mini <- function(x) ifelse(test = mode(x)-5>=0, yes = mode(x)-5, no = 1)
+# Agafa un valor per sobre de 5 del mòdul.
 maxi <- function(x) mode(x) + 5
 
 dtruncated_poisson <- function(x, lambda) {dtrunc(x, "pois", a=min, b=max, lambda=lambda)} 
@@ -82,7 +110,9 @@ ptruncated_poisson <- function(q, lambda) {ptrunc(q, "pois", a=min, b=max, lambd
 
 dtruncated_poisson(obj$freq, mode(obj))
 
-fitdist(obj$freq, "pois", start = list(lambda = mode(obj)))
+unique(dtrunc(obj, "pois", a = mini(obj), b=maxi(obj), lambda=mode(obj)))
+
+fitdist(obj, "truncated_poisson", start = list(lambda = mode(obj)))
 
 
  # Funcionen les aproximacions del vector a vectors més petits per calcular la Poisson?
