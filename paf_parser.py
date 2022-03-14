@@ -38,10 +38,10 @@ with open(paf_file) as paf:
 		qname=line.split("\t")[0]
 		# Create an entry in the dict for each query name
 		seqdic[f"Q.{qname}"]=[]
+		
 		# Split the line by tabs and cut qlen column:
 		qlen = line.split("\t")[1]
 		chr_total_len[f"Q.{qname}"] = qlen
-		
 		
 		# Do the same for target names:
 		tname=line.split("\t")[5]
@@ -52,11 +52,8 @@ with open(paf_file) as paf:
 
 
 
-
 # View the created dictionaries:		
-print(seqdic)
-
-
+# ~ print(seqdic)
 
 
 # Get all coordinate ranges covered by the alignment:
@@ -78,7 +75,6 @@ for key, val in seqdic.items():
 
 
 
-
 # View the created dictionaries:		
 # ~ print(seqdic)
 
@@ -90,6 +86,7 @@ lendic = {}
 # in the lendic dictionary.
 for key, x in seqdic.items(): lendic[key] = len(x)
 print(lendic)
+
 
  ##### NAÏVE ALGORITHM
  
@@ -117,9 +114,50 @@ print(lendic)
  ##### SWEEP LINE APPROACH
 
 
+def point_list_overlapping_indices (p_list: "A list of sorted points from *point_list*"):
+	
+	""" Acquire and return indices of overlapping intervals from 
+	*point_list*. Returns couples of overlapping intervals in the form 
+	of sublists. Only does one sweep to find pairs; to find multiple 
+	overlaps an iterative approach is required. """
+	
+	# State variables for algorithm:
+	currentOpen = -1
+	answer = []
+	
+	# for each point in the point_list:
+	for i in range(0, len(p_list)):
+		
+		# Si el punt actual és 'Left; opens an interval'
+		if p_list[i][1] == 0:
+			
+			# Si no hi ha cap interval actualment obert:
+			if currentOpen == -1:
+				# 'Entra' a l'interval 'i'.
+				currentOpen = p_list[i][2]
+			
+			# Si es trobava dins un interval anterior:
+			else:
+				# Index del nou interval:
+				index = p_list[i][2]
+				# Afageix la parella a la resposta:
+				answer += [ [currentOpen, index] ]
+				# Tanca l'interval previ
+				currentOpen = -1
+
+		# Si troba un punt que és 'Right'; que tanca interval:
+		else:
+			# Surt del currentOpen.
+			currentOpen = -1
+	
+	return answer
+
+
+
+
 # Per a cada chr, sigui query o target, dins el paf-file:
 for chr, length in lendic.items():
- 
+
 	point_list = []
 
 # Create a list with all the points (both left and right)
@@ -133,161 +171,121 @@ for chr, length in lendic.items():
 	# Sort the list:
 	point_list.sort()
 	
-	print("Imprimeix la llista de punts ordenada:")
-	print(f"{chr} : {point_list}") # Sembla que si que ordena correctament.
+	# ~ print("Imprimeix la llista de punts ordenada:")
+	# ~ print(f"{chr} : {point_list}") # Sembla que si que ordena correctament.
 
-	# State variables for algorithm:
-	currentOpen = -1
-	added = False
-	answer = []
-	
-	# for each point in the point_list:
-	for i in range(0, len(point_list)):
+	# Create overlapping indices. 
+	solapats = point_list_overlapping_indices (point_list)
+
+	# Mentre hi hagi objectes dins de solapats:
+	while solapats:
 		
-		# Si el punt actual és 'Left; opens an interval'
-		if point_list[i][1] == 0:
-			# Si no hi ha cap interval actualment obert:
-			if currentOpen == -1:
-				# 'Entra' a l'interval 'i'.
-				currentOpen = point_list[i][2]
-				added = False
-			# Si es trobava dins un interval anterior:
-			else:
-				# Index del nou interval:
-				index = point_list[i][2]
-				# Aquest forma part de la resposta (intervals solapats).
-				answer += [index]
-				
-				# DEBUG: prints each found answer.
-				print( [ [chr, index] ] )
-				
-				# Si l'interval currentOpen no ha sigut encara afegit:
-				if (not added):
-					# Fes-ho:
-					answer += [currentOpen]
-					
-					# DEBUG: prints each found answer.
-					print( [ [chr, currentOpen] ] )
-					
-					added = True
-				# Mira quin dels dos intervals que s'estan comparant
-				# te la cua més llarga, i per tant solaparà amb
-				# més intervals (cua = Right point).
-				if (seqdic[chr][currentOpen][1] < seqdic[chr][index][1]):
-					currentOpen = index
-					added = True
-					
-		# Si troba un punt que és 'Right'; que tanca interval:
-		else:
-			# I és el punt esquerra de l'interval actual:
-			if point_list[i][2] == currentOpen:
-				# Surt de l'interval
-				currentOpen = -1
-				added = False
-
-	# Traspassa la answer a intervals dins del cromosoma chr:
-	for i in range(0, length):
-		# Si 'i' es troba a 'answer', afageix a solapats:
-		if i in answer:
-			solapats[chr] += [[seqdic[chr][i] ]]
-		# else, a no solapats:
-		else:
-			no_solapats[chr] += [[ seqdic[chr][i] ]]
-
-# LLargada dels solapats:
-llargades_solapament = {}
-for chr, x in solapats.items(): llargades_solapament[f"S.{chr}"] = len(x)
-for chr, x in no_solapats.items(): llargades_solapament[f"NS.{chr}"] = len(x)
-
-print(f"SOLAPATS: ")
-print(solapats)
-
-print(f"NO SOLAPATS: ")
-print(no_solapats)
-				
-print(llargades_solapament)
-
-
-
-# Anem a mirar coverage per sols els intevals NO solapats:
-
-for chr, value in no_solapats.items():
-	# var to count length
-	total_len = 0	
-	
-	# iterate through list and get len of intervals
-	for i in value:
-		total_len += i[0][1] - i[0][0] + 1
-	
-	# calculate coverage
-	cov = (total_len/ int(chr_total_len[chr]) )
-	print(f"For chr {chr}, coverage is {cov}.")	
-
-
-# for each pair of intervals in the list, remove overlapping:
-
-
-def point_list_overlapping_indices (p_list: "A list of sorted points from *point_list*"):
-	
-	""" Acquire and return indices of overlapping intervals from 
-	*point_list*. Returns pairs of overlapping intervals in the form of 
-	sublists. """
-	
-	# State variables for algorithm:
-	currentOpen = -1
-	added = False
-	answer = []
-	
-	# for each point in the point_list:
-	for i in range(0, len(p_list)):
+		# DEBUG:
+		# ~ print(solapats)
 		
-		# Si el punt actual és 'Left; opens an interval'
-		if p_list[i][1] == 0:
-			# Si no hi ha cap interval actualment obert:
-			if currentOpen == -1:
-				# 'Entra' a l'interval 'i'.
-				currentOpen = p_list[i][2]
-				added = False
-			# Si es trobava dins un interval anterior:
-			else:
-				# Index del nou interval:
-				index = p_list[i][2]
-				# Aquest forma part de la resposta (intervals solapats).
-				answer += [index]
-				
-				# DEBUG: prints each found answer.
-				# ~ print( [ [chr, index] ] )
-				
-				# Si l'interval currentOpen no ha sigut encara afegit:
-				if (not added):
-					# Fes-ho:
-					answer += [currentOpen]
-					
-					# DEBUG: prints each found answer.
-					# ~ print( [ [chr, currentOpen] ] )
-					
-					added = True
-				# Mira quin dels dos intervals que s'estan comparant
-				# te la cua més llarga, i per tant solaparà amb
-				# més intervals (cua = Right point).
-				if (seqdic[chr][currentOpen][1] < seqdic[chr][index][1]):
-					currentOpen = index
-					added = True
-					
-		# Si troba un punt que és 'Right'; que tanca interval:
-		else:
-			# I és el punt esquerra de l'interval actual:
-			if p_list[i][2] == currentOpen:
-				# Surt de l'interval
-				currentOpen = -1
-				added = False
+		# Prepara variable per algorisme:
+		extensos = []
+		
+		# Traspassa la fusió de parelles dins solapats a la llista 'extensos'. 
+		for i in solapats:
+			
+			# Extreu una parella de la llista (i[0] i i[1])
+			overlap = [ seqdic[chr][i[0]] , seqdic[chr][i[1]] ]
+			
+			# Crea nous intervals extensos (suma intervals parella):
+			# Agafa el mínim de l'esquerra (x[0]) i el màxim de la dreta (x[1]) 
+			extensos += [[ min( [x[0] for x in overlap] ), max( [x[1] for x in overlap] ) ]]
+			
+			# DEBUG:
+			# ~ print(overlap, extensos)
+	
+		# Afageix un complementari de la llista d'indices solapats
+		# (és a dir, afageix objectes que no solapen a 'extensos'):
+		
+		# Necessita una llista on pugui avaluar si index pertany
+		# (les subllistes de 'solapats' molesten en aquest pas).
+		des_solapats = [x[0] for x in solapats] + [x[1] for x in solapats]
+		des_solapats.sort()
+		
+		# per a cada possible índex:
+		for i in range(0, length):
+			
+			# Guarda'l si no es troba dins dels solapats:
+			if i not in des_solapats:
+				extensos += [ seqdic[chr][i] ]
+		
+		# DEBUG
+		# ~ print(extensos)
+		# ~ print("\n"*20)
+		
+		# Ordena els intervals segons la 1era coordenada.
+		extensos.sort()
+		
+		# Guarda els nous intervals extensos al dict.
+		seqdic[chr] = extensos
+		
+		# DEBUG
+		print(extensos, "\n"*5, seqdic[chr])
+		
+		# Crea una altra llista de punts per tornar a iterar per
+		# la funció que extreu parelles de solapats:
+		point_list = []
+		
+		# Create a list with all the points (both left and right)
+		# of every interval.
+		for i in range(0, len(extensos)):
+			# Left point == 0.
+			point_list += [ [extensos[i][0], 0, i] ]
+			# Right point == 1.
+			point_list += [ [extensos[i][1], 1, i] ]
+		
+		# DEBUG
+		print(point_list)
+		
+		# Ordena la llista de punts per trobar solapaments:
+		point_list.sort()
+		
+		# Buida solapats i torna a iterar per veure si troba
+		# solapaments addicionals:
+		solapats = point_list_overlapping_indices (point_list)
+		
+		# Si en troba torna a dalt del while;
+		# Alternativament, continua.
+		
+	
+	
 
-	# Traspassa la answer a intervals dins del cromosoma chr:
-	for i in range(0, length):
-		# Si 'i' es troba a 'answer', afageix a solapats:
-		if i in answer:
-			solapats[chr] += [[seqdic[chr][i] ]]
-		# else, a no solapats:
-		else:
-			no_solapats[chr] += [[ seqdic[chr][i] ]]
+
+
+
+# ~ # LLargada dels solapats:
+# ~ llargades_solapament = {}
+# ~ for chr, x in solapats.items(): llargades_solapament[f"S.{chr}"] = len(x)
+# ~ for chr, x in no_solapats.items(): llargades_solapament[f"NS.{chr}"] = len(x)
+
+# ~ print(f"SOLAPATS: ")
+# ~ print(solapats)
+
+# ~ print(f"NO SOLAPATS: ")
+# ~ print(no_solapats)
+				
+# ~ print(llargades_solapament)
+
+
+
+# ~ # Anem a mirar coverage per sols els intevals NO solapats:
+
+# ~ for chr, value in no_solapats.items():
+	# ~ # var to count length
+	# ~ total_len = 0	
+	
+	# ~ # iterate through list and get len of intervals
+	# ~ for i in value:
+		# ~ total_len += i[0][1] - i[0][0] + 1
+	
+	# ~ # calculate coverage
+	# ~ cov = (total_len/ int(chr_total_len[chr]) )
+	# ~ print(f"For chr {chr}, coverage is {cov}.")	
+
+
 
