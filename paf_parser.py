@@ -85,7 +85,9 @@ lendic = {}
 # For each { key: [list of intervals] }, store { key: nº of intervals }
 # in the lendic dictionary.
 for key, x in seqdic.items(): lendic[key] = len(x)
-print(lendic)
+
+# DEBUG
+# ~ print(lendic)
 
 
  ##### NAÏVE ALGORITHM
@@ -222,7 +224,7 @@ for chr, length in lendic.items():
 		extensos.sort()
 		
 		# DEBUG
-		print(len(extensos), len(seqdic[chr]), len(solapats))
+		# ~ print(len(extensos), len(seqdic[chr]), len(solapats))
 		
 		# Guarda els nous intervals extensos al dict.
 		seqdic[chr] = extensos
@@ -249,7 +251,7 @@ for chr, length in lendic.items():
 		point_list.sort()
 		
 		# DEBUG
-		print(f"{chr}\n", "\n"*4, point_list)
+		# ~ print(f"{chr}\n", "\n"*4, point_list)
 		
 		# Buida solapats i torna a iterar per veure si troba
 		# solapaments addicionals:
@@ -258,8 +260,32 @@ for chr, length in lendic.items():
 		# Si en troba torna a dalt del while;
 		# Alternativament, continua.
 		
+		
+# DEBUG:
+# ~ for key, x in seqdic.items():
+	# ~ print("**"*38, f"\n{key}", f"\n\n{x}\n")	
+
+# Final algorisme que extreu intervals solapats.
+
+# Calcula la longitud total d'alineaments de cada chr:
+llargada_intervals_sumats = {}
+
+for chr, x in seqdic.items():
+	llargada_intervals_sumats [chr] = 0
 	
+	# Per a cada interval [inici, final]:
+	for interval in x:
+		llargada_intervals_sumats [chr] += int(interval[1] - interval[0] + 1)
+
+# DEBUG:
+for chr, x in llargada_intervals_sumats.items():
+	print ("*"*78, f"\nFor chromosome {chr}:")
+	print ("Total len:", chr_total_len[chr])
+	print ("Aligned len:", llargada_intervals_sumats[chr])
+	print ("Aligned percent:", (llargada_intervals_sumats[chr]/int(chr_total_len[chr]) ) )
 	
+	print() # Espai estètic
+
 
 
 
