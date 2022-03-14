@@ -208,7 +208,7 @@ for chr, length in lendic.items():
 		des_solapats.sort()
 		
 		# per a cada possible índex:
-		for i in range(0, length):
+		for i in range(0, len(seqdic[chr])):
 			
 			# Guarda'l si no es troba dins dels solapats:
 			if i not in des_solapats:
@@ -221,11 +221,14 @@ for chr, length in lendic.items():
 		# Ordena els intervals segons la 1era coordenada.
 		extensos.sort()
 		
+		# DEBUG
+		print(len(extensos), len(seqdic[chr]), len(solapats))
+		
 		# Guarda els nous intervals extensos al dict.
 		seqdic[chr] = extensos
 		
 		# DEBUG
-		print(extensos, "\n"*5, seqdic[chr])
+		# ~ print(extensos, "\n"*5, seqdic[chr])
 		
 		# Crea una altra llista de punts per tornar a iterar per
 		# la funció que extreu parelles de solapats:
@@ -240,10 +243,13 @@ for chr, length in lendic.items():
 			point_list += [ [extensos[i][1], 1, i] ]
 		
 		# DEBUG
-		print(point_list)
+		# ~ print(point_list)
 		
 		# Ordena la llista de punts per trobar solapaments:
 		point_list.sort()
+		
+		# DEBUG
+		print(f"{chr}\n", "\n"*4, point_list)
 		
 		# Buida solapats i torna a iterar per veure si troba
 		# solapaments addicionals:
