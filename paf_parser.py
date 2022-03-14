@@ -54,9 +54,7 @@ with open(paf_file) as paf:
 
 
 # View the created dictionaries:		
-# ~ print(Qseqdic)
-# ~ print("\n"+"="*80+"\n")
-# ~ print(Tseqdic)
+print(seqdic)
 
 
 
@@ -77,18 +75,13 @@ with open(paf_file) as paf:
 for key, val in seqdic.items():
 	# Sort each list of values.
 	val.sort()
-	
-# ~ # Same for Tdict.:
-# ~ for key, val in Tseqdic.items():
-	# ~ val.sort()
+
 
 
 
 # View the created dictionaries:		
-# ~ print(Qseqdic)
-# ~ print("\n"+"="*80+"\n")
-# ~ print(Tseqdic)
-print("\n"+"="*80+"\n")
+# ~ print(seqdic)
+
 
 # Create a dictionary to store lengths for every chr.
 lendic = {}
