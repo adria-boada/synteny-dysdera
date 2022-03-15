@@ -31,6 +31,9 @@ seqdic = {}
 # Create a dict in which to store chr total len
 chr_total_len = {}
 
+# Create a list in which to store gaps (to calc. gap percent)
+gaps_len = []
+
 # Get all chr-names (query and target):
 with open(paf_file) as paf:
 	for line in paf:
@@ -50,8 +53,36 @@ with open(paf_file) as paf:
 		tlen = line.split("\t")[6]
 		chr_total_len[f"T.{tname}"] = tlen
 
+		# cut out the gaps column (col 10 and 11):
+		temp_gaps = [ int( line.split("\t")[9] ), int( line.split("\t")[10] ) ]
+		# amb els nombres de la línia anterior,
+		# fés un càlcul de bases ocupades per gaps:
+		temp_gaps += [ (temp_gaps[1] - temp_gaps[0]) ]
+		
+		# Store the computed vals in a sub-list, for posterity;
+		gaps_len += [ temp_gaps ]
+		
 
+# Compute the comparison of gaps versus mapped bases:	
+total_gap_len = 0
+total_bases_mapped = 0
 
+for x in gaps_len:
+	total_gap_len += x[2]
+	total_bases_mapped += x[0]
+
+# Sum of total length of alignment:
+total_sum_bases_ali = 0
+for chr, x in chr_total_len.items():
+	total_sum_bases_ali += int(x)
+
+# DEBUG:
+print("Sum of alignment bases:", total_sum_bases_ali )
+print("Total mapped bases:", total_bases_mapped )
+print("Percent mapped bases:", total_bases_mapped/total_sum_bases_ali )
+print("Total gaps:", total_gap_len )
+print("Percent gaps:", total_gap_len/total_sum_bases_ali )
+		
 # View the created dictionaries:		
 # ~ print(seqdic)
 
@@ -276,6 +307,7 @@ for chr, x in seqdic.items():
 	# Per a cada interval [inici, final]:
 	for interval in x:
 		llargada_intervals_sumats [chr] += int(interval[1] - interval[0] + 1)
+
 
 # DEBUG:
 for chr, x in llargada_intervals_sumats.items():
