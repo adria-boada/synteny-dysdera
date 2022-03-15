@@ -14,12 +14,12 @@ case "$1" in
   *.paf)
       # 1er arg és paf-file.
       i=$1
-      echo "^file   ${i##*/}" ; paf_parser.py "$i"
+      echo "^file   ${i##*/}" ; .paf_parser.py "$i"
       ;;
 
   *)
       # 1er arg és llista
-      for i in $(cat "$1") ; do echo "^file   ${i##*/}" ; paf_parser.py "$i" ; done
+      for i in $(cat "$1") ; do echo "^file   ${i##*/}" ; .paf_parser.py "$i" ; done
       ;;
 
 esac
