@@ -183,7 +183,7 @@ circos.genomicLink(bed1, bed2, col = rand_color(nrow(bed1), transparency = 0.5),
 # Carrega el camí fins als fitxers necessaris i defineix variables:
   
 # .paf amb alineament:
-  path_to_paf = "Escritorio/Data/Synteny/modified_pafs/filtered_whole_tcat.paf"
+  path_to_paf = "/home/adria/Escritorio/Data/Synteny/modified_pafs/mainchr_tcat.paf"
   
 # Variables per a filtrar el .paf i reduir-ne la mida:
   min_map_qual = 20  # No es mira per sota de 20 de qualitat de mapatge.
@@ -241,7 +241,7 @@ for (chr in sort(unique(query$qname))) {  # Per a cada qname:
  
 # Anomena cada objecte de la llista correctament. 
 names(query_list) = sort(unique(query$qname))
-names(target_list) = sort(unique(query$qname))
+names(target_list) = sort(unique(target$tname))
 
 # Reordena la llista amb els aliniaments per estètica:
   # Primer 'X' i després la resta.
@@ -274,6 +274,13 @@ dysdera_tracks = rbind(index_cat_general, index_sil_general)
 
 # HA ACABAT DE CARREGAR DADES
 
+# Per a fer el plot de S.G.R. per a l'Alex, vaig usar
+# cairo_pdf() amb settings:
+  
+# cairo_pdf(width = 1080, height = 1920, filename = "circos_alex", bg = "black")
+# eliminar gran part de circos.track
+
+
 # COMENÇA A PLOTEJAR CIRCOS:...
 
 
@@ -288,12 +295,14 @@ circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,7), 4, 6))
 circos.genomicInitialize(dysdera_tracks, plotType = NULL)
 
 # Complexa funció per fer uns tracks generals de chr:
-circos.track(ylim = c(0,1), panel.fun = function(x, y) {
+circos.track(ylim = c(0,1), 
+              panel.fun = function(x, y) {
   circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
-              gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
-  # Afageix axis genòmics a sobre del track [INHABILITAT]:
+             gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
+  # Afageix axis genòmics a sobre del track:
   circos.genomicAxis(h = "top")
-}, track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
+}, 
+track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
 
 # Crea dues cintes, vermella i blava, per a diferenciar les dues espècies:
 highlight.chromosome(unique(query$qname),
@@ -315,6 +324,13 @@ for (chr in names(query_list)) {
   col = paleta_escuer[x],
   track.index = 2)
   x = x+1
+}
+# Per a la imatge de l'Àlex, posa color sobre catalonica.
+x=1
+for (chr in unique(target$tname)) {
+  highlight.chromosome(chr,
+                       col = "grey",
+                       track.index = 2)
 }
 
 # Afageix transparencia a la palette pels links:
