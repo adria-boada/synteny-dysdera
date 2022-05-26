@@ -155,7 +155,6 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
 
 # Accepts a CIGAR string and calculates total and percent M, I and D. 
 def cig_analysis (cig: "CIGAR string"):
-
     """ Returns a dictionary with 'tM', 'tI','tD'.
     Accepts a string with Matches, Deletions and Insertions 
     (and no other type).
@@ -172,7 +171,8 @@ def cig_analysis (cig: "CIGAR string"):
     c = c.split(' ')
 
     # Elimina un espai buit al final:
-    c = c[:-1]
+    # c = c[:-1]
+    # (Ja es sol fer abans d'entrar a la func.)
 
     # Prepara retorn:
     answer = {
