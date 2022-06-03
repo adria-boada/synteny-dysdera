@@ -15,7 +15,7 @@
   path_to_paf = "Escritorio/Data/Synteny/modified_pafs/filtered_whole_tcat.paf"
   
 # Variables per a filtrar el .paf i reduir-ne la mida:
-  min_map_qual = 60  # No es mira per sota de 60 de qualitat de mapatge.
+  min_map_qual = 20  # No es mira per sota d'aquesta qualitat de mapatge.
   # El rang de qualitats de mapatge per minimap2 vira entre mínim de zero i màxim de seixanta. 
   min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
   
@@ -28,8 +28,8 @@
   if (FALSE) {
   barplot(c(chrx=5, chr1=5, chr2=5, chr3=5, chr4=5, chr5=5, chr6=5, chrU1=5, chrU2=5), col=paleta_escuer)
   }
-  
-# Defineix una funció per augmentar la mida dels aliniaments de la funció plot_coverage()
+
+ # Defineix una funció per augmentar la mida dels aliniaments de la funció plot_coverage()
 
   artificial_coverage=function(df) {
   # Adds alen to end coord and Substracts alen from start coord.
@@ -45,7 +45,7 @@
   df$qend = ifelse( (df$qend + df$alen)>df$tlen, df$qlen, df$qend + df$alen)
   return(df)
 }
-  
+ 
 # Anem a usar les dades de Dysdera de minimap2 per formatejar-les com a circos:
   aln_circos = read_paf(path_to_paf)
 
@@ -73,8 +73,8 @@ for (chr in sort(unique(query$qname))) {  # Per a cada qname:
   
 # Anomena cada objecte de la llista correctament. 
 names(query_list) = sort(unique(query$qname))
-names(target_list) = sort(unique(query$qname))
-  
+names(target_list) = sort(unique(target$tname))
+
 # Reordena la llista amb els aliniaments per estètica:
   # Primer 'X' i després la resta.
 query_list = c(query_list[9], query_list[1:8])
@@ -98,7 +98,7 @@ index_cat_general = data.frame(
 # Ordena els cromosomes de l'index numericament per llargada (end). 
   index_sil_general = index_sil_general[order(-index_sil_general$end), ]
   index_cat_general = index_cat_general[order(-index_cat_general$end), ]
-  
+ 
 # rbind dels dos data.frames:
 dysdera_tracks = rbind(index_cat_general, index_sil_general)
 }
@@ -111,7 +111,7 @@ dysdera_tracks = rbind(index_cat_general, index_sil_general)
 
 {
 circos.clear()  # Per si de cas, s'eliminen les últimes opcions de circos abans de res...
-# (en cas de que es repeteixi l'script)
+ # (en cas de que es corri l'script més d'una vegada)
 
 # Separació dels tracks (gaps entre chr):
 circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,7), 4, 6))
@@ -122,10 +122,11 @@ circos.genomicInitialize(dysdera_tracks, plotType = NULL)
 # Complexa funció per fer uns tracks generals de chr:
 circos.track(ylim = c(0,1), panel.fun = function(x, y) {
   circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
-              gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
-  # Afageix axis genòmics a sobre del track [INHABILITAT]:
+             gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
+  # Afageix axis genòmics a sobre del track:
   circos.genomicAxis(h = "top")
-}, track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
+}, 
+track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
 
 # Crea dues cintes, vermella i blava, per a diferenciar les dues espècies:
 highlight.chromosome(unique(query$qname),
@@ -186,14 +187,10 @@ for (link in 1:length(query_list)){
   # (en cas de que es repeteixi l'script)
   
   # Separació dels tracks (gaps entre chr):
-  circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,7), 4, 6))
-  
   # Inicialitza amb les dades de Dysdera.
   circos.genomicInitialize(dysdera_tracks, plotType = NULL)
   
   # Complexa funció per fer uns tracks generals de chr:
-  circos.track(ylim = c(0,1), panel.fun = function(x, y) {
-    circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
                 gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
     # Afageix axis genòmics a sobre del track [INHABILITAT]:
     circos.genomicAxis(h = "top")
