@@ -64,25 +64,24 @@ def unique_main_refid(rmfile):
     return unique_refids
 
 
-def matplotlib_abline(slope, intercept):
-    """ Draws an abline with some determined slope and intercept
-    into a matplotlib plot. 
-    """
-    axes = plt.gca()
-    x_vals = np.array(axes.get_xlim())
-    y_vals = intercept + slope * x_vals
-    plt.plot(x_vals, y_vals, '--')
+#def matplotlib_abline(slope, intercept):
+#    """ Draws an abline with some determined slope and intercept
+#    into a matplotlib plot. 
+#    """
+#    axes = plt.gca()
+#    x_vals = np.array(axes.get_xlim())
+#    y_vals = intercept + slope * x_vals
+#    plt.plot(x_vals, y_vals, '--')
 
 
-def scatterplot_repeats(x, y, name, axes):
+def scatterplot_repeats(x, y, ylab, main_title, axes):
     """ Create a scatterplot figure with matplotlib.
+
     Inputs: 
      * X and Y lists of points,
-     
-     * Whether you'd like to create a png file or
-    show the plot directly without saving. 
-    
-     * Name of the analysis (length or amount?)
+     * Name of the ylab (length or amount)
+     * Name of the main title for the plot. 
+     * The created axes with fig, ax = plt.subplots()
     """
 
     # Calcula mitjana
@@ -91,6 +90,8 @@ def scatterplot_repeats(x, y, name, axes):
     # divideix entre dos el percent (meitat superior, meitat inferior).
     sup_cutoff = (len(y)/100) * (percent/2)
     inf_cutoff = (len(y)/100) * (100-(percent/2))
+    # Ordena els punts, per recollir els que estiguin per sobre
+    # i per sota del llindar calculat segons percent.
     sortedY = [] + y
     sortedY.sort()
     sortedX = [] + x
@@ -100,21 +101,23 @@ def scatterplot_repeats(x, y, name, axes):
     inf_line = sortedY[int(inf_cutoff)]
     
     # Dibuixa les tres línies horitzontals:
+    # La mitjana al centre, el cutoff superior i l'inferior.
     for intercept in (sup_line, mean, inf_line):
         x_vals = np.array((0, sortedX[-1]))
         y_vals = intercept + 0 * x_vals
         axes.plot(x_vals, y_vals, '--')
 
-    # Si hi han pocs punts, fes línia
+    # Si hi han pocs punts (<100), fes línia.
     if len(x) < 100:
-        axes.plot(x, y, '.-')  # '.-' is the format string.
-    # Si hi han molts punts, scatterplot:
+        axes.plot(x, y, '.-')  
+        # '.-' is the format string: points joint by lines.
+    # Si hi han molts punts, scatterplot sense línies:
     else:
         axes.plot(x, y, '.')  # '.' is the format string.
 
-    axes.set_title(f"Chromosome: {crm}, Repeat: {cls.replace('/', '')}\nWindow Size: {window_size}, Space between Wndws: {jump}")
+    axes.set_title(title) 
     axes.set_xlabel('Posició dins el cromosoma (b)')
-    axes.set_ylabel(name)
+    axes.set_ylabel(ylab)
 
 
 # Funció (refid, fileRM.out, val_finestra ) --> dict{key: refid, val: where_reps}
@@ -152,23 +155,22 @@ if __name__ == '__main__':
         # default: 2.5% superior and inferior cutoffs.
         percent = 5
 
-    # switch si estas dins a WSL ja que no 
-    # te accés a la UI de plt.show():
-    if microsoft=='savefig':
-        import matplotlib
-        matplotlib.use('Agg') # no UI backend in WSL. 
+    # Save figs inside wsl.
+    import matplotlib
+    matplotlib.use('Agg') # no UI backend in WSL. 
     import matplotlib.pyplot as plt
 
     # create a default dict which stores values
-    #         per refid,           per window,          per repeatclass.  length & amount.
-    results = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda :{'l': 0, 'a': 0}) ))
+    # 1er, dos cerques,   per repeatclass,    per chromosome,      per posició dins chr: length & amount.
+    results = {'general':defaultdict(lambda : defaultdict(lambda : defaultdict(lambda :{'l': 0, 'a': 0}) )),
+            'especific': defaultdict(lambda : defaultdict(lambda : defaultdict(lambda :{'l': 0, 'a': 0}) ))
+}
 
     # permet fer el següent sense necessitar generar prèviament claus:
     # results['refid']['class'][position] += 1
     # (això és degut a que inicialitza amb valor = 0)
 
-
-    # si la llista es troba buida
+    # si la llista es troba buida...
     # (no s'ha trobat cap cromosoma dins la llista unique_refids):
     if unique_main_refid(rmfile) == []:
         sys.exit("No s'ha trobat cap cromosoma principal (amb etiqueta 'chr' a la columna refid.) dins el fitxer RepeatMasker.")
@@ -192,13 +194,13 @@ if __name__ == '__main__':
                         n = int((repobj.begin-modulo)/(window_size+jump))
                         finestra = n*(jump+window_size)
                         # Pel complet de superfamilies:
-                        #~results[crm][repobj.repclass[-1]][finestra]['a'] += 1
-                        #~results[crm][repobj.repclass[-1]][finestra]['l'] += repobj.replen
+                        results['especific'][repobj.repclass[-1]][crm][finestra]['a'] += 1
+                        results['especific'][repobj.repclass[-1]][crm][finestra]['l'] += repobj.replen
                         # Per un overview general de classes:
-                        results[crm][repobj.repclass[0]][finestra]['a'] += 1
-                        results[crm][repobj.repclass[0]][finestra]['l'] += repobj.replen 
+                        results['general'][repobj.repclass[0]][crm][finestra]['a'] += 1
+                        results['general'][repobj.repclass[0]][crm][finestra]['l'] += repobj.replen 
 
-    # create a plot.
+    # pseudocode to create a plot:
     # for each chr:
         # sum all repeat values
         # sum the last chr length to the X axis.
@@ -210,57 +212,89 @@ if __name__ == '__main__':
     ### SCATTER-PLOT OF LENGTH:
     # initialize vars to capture results we're interested in...
     last_x_pos = 0
+    fig, axL = plt.subplots()
 
-    for crm, crm_val in results.items():
-        for cls, cls_val in crm_val.items():
+    # agafa els resultats de classes generals...
+    for cls, cls_val in results['general'].items():
+        for crm, crm_val in cls_val.items():
             x_pos = []
             y_len = []
             y_amt = []
-            for pos, val in cls_val.items():
+            for pos, val in crm_val.items():
                 # Recopilar valors:
                 x_pos += [int(pos)]
                 y_len += [int(val['a'])]
                 y_amt += [int(val['l'])]
-
+            
             j = []
             for i in x_pos:
                 j += [i + last_x_pos]
             last_x_pos = int(j[-1])
 
-            scatterplot_repeats(j, y_len,'Length of repeats found in window' , axL)
-            scatterplot_repeats(j, y_amt, 'Amount of repeats found in window', axA)
-    
-    plt.show()
+            title = f"Chromosome: {crm}, Repeat: {cls.replace('/', '')}\nWindow Size: {window_size}, Space between Wndws: {jump}"
+            scatterplot_repeats(j, y_len, 'Length of repeats found in window', title, axL)
+            #~scatterplot_repeats(j, y_amt, 'Amount of repeats found in window', title, axA)
 
-    
-    ### SCATTER-PLOT OF MAIN CHRS AND MAIN CLASSES:
-    for crm, crm_val in results.items():
-        for cls, cls_val in crm_val.items():
-            # initialize vars:
-            X_posicions=[]
-            Y_amount=[]
-            Y_length=[]
-            for pos, val in cls_val.items():
-                # Recopilar valors:
-                X_posicions += [pos]
-                Y_amount += [int(val['a'])]
-                Y_length += [int(val['l'])]
+        # Save a fig for each Repeat class in the results['gen'] dict. 
+        plt.savefig(f"length_{cls.replace('/', '')}.png")
 
-            for Y in ((Y_amount, 'Amount of repeats'), (Y_length, 'Length of repeats found in window')):
-                # Y[0] -> List of data.
-                # Y[1] -> Name of data.
-                fig, ax = plt.subplots()
-                scatterplot_repeats(X_posicions, Y[0], Y[1], ax)
-                # la funció replace() elimina les barres ("/") que confonen amb directoris 
-                if microsoft=='savefig':
-                    # to name the saved png figures:
-                    # use the first word in the 'name' variable.
-                    plt.savefig( f"{Y[1].split(' ')[0]}_{crm}_{cls.replace('/', '')}.png")
-                elif microsoft=='showfull':
-                    plt.get_current_fig_manager().full_screen_toggle()  # toggle fullscreen mode
-                    plt.show()
-                elif microsoft=='showfig':
-                    plt.show()
+#    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#    last_x_pos = 0
+#
+#    figL, axL = plt.subplots()
+#    figA, axA = plt.subplots()
+#
+#    for crm, crm_val in results.items():
+#        for cls, cls_val in crm_val.items():
+#            x_pos = []
+#            y_len = []
+#            y_amt = []
+#            for pos, val in cls_val.items():
+#                # Recopilar valors:
+#                x_pos += [int(pos)]
+#                y_len += [int(val['a'])]
+#                y_amt += [int(val['l'])]
+#
+#            j = []
+#            for i in x_pos:
+#                j += [i + last_x_pos]
+#            last_x_pos = int(j[-1])
+#
+#            title = f"Chromosome: {crm}, Repeat: {cls.replace('/', '')}\nWindow Size: {window_size}, Space between Wndws: {jump}"
+#            scatterplot_repeats(j, y_len, 'Length of repeats found in window', title, axL)
+#            scatterplot_repeats(j, y_amt, 'Amount of repeats found in window', title, axA)
+#    
+#    plt.show()
+#
+#    
+#    ### SCATTER-PLOT OF MAIN CHRS AND MAIN CLASSES:
+#    for crm, crm_val in results.items():
+#        for cls, cls_val in crm_val.items():
+#            # initialize vars:
+#            X_posicions=[]
+#            Y_amount=[]
+#            Y_length=[]
+#            for pos, val in cls_val.items():
+#                # Recopilar valors:
+#                X_posicions += [pos]
+#                Y_amount += [int(val['a'])]
+#                Y_length += [int(val['l'])]
+#
+#            for Y in ((Y_amount, 'Amount of repeats'), (Y_length, 'Length of repeats found in window')):
+#                # Y[0] -> List of data.
+#                # Y[1] -> Name of data.
+#                fig, ax = plt.subplots()
+#                scatterplot_repeats(X_posicions, Y[0], Y[1], ax)
+#                # la funció replace() elimina les barres ("/") que confonen amb directoris 
+#                if microsoft=='savefig':
+#                    # to name the saved png figures:
+#                    # use the first word in the 'name' variable.
+#                    plt.savefig( f"{Y[1].split(' ')[0]}_{crm}_{cls.replace('/', '')}.png")
+#                elif microsoft=='showfull':
+#                    plt.get_current_fig_manager().full_screen_toggle()  # toggle fullscreen mode
+#                    plt.show()
+#                elif microsoft=='showfig':
+#                    plt.show()
 
 
 
