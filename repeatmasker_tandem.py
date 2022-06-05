@@ -23,9 +23,12 @@ matplotlib plot: how do we do it?
 """
 
 import sys
+import os.path
 import numpy as np
 import repeatmasker_parser3 as rm3
 from collections import defaultdict
+# colours for matplotlib.
+from matplotlib.pyplot import cm
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -64,6 +67,21 @@ def unique_main_refid(rmfile):
     return unique_refids
 
 
+def refid_to_length(refid_name, indexed_fasta):
+    """
+    Inputs: chromosome/scaffold name and an indexed fasta;
+    a file with tabulated pairs of (chr, length).
+
+    Returns the length of the inputted chromosome.
+    """
+    # Obre el fitxer indexed_fasta:
+    with open(indexed_fasta) as idx:
+        for line in idx:
+            # Si la línia conté el 'chr' d'interès:
+            if refid_name in line:
+                return line.split()[1]
+
+
 #def matplotlib_abline(slope, intercept):
 #    """ Draws an abline with some determined slope and intercept
 #    into a matplotlib plot. 
@@ -74,55 +92,95 @@ def unique_main_refid(rmfile):
 #    plt.plot(x_vals, y_vals, '--')
 
 
-def scatterplot_repeats(x, y, ylab, main_title, axes):
-    """ Create a scatterplot figure with matplotlib.
+def matplotlib_cutoffs(x, y):
+    """Returns which point should be used as a cutoff
+    in a matplotlib plot.
 
-    Inputs: 
-     * X and Y lists of points,
-     * Name of the ylab (length or amount)
-     * Name of the main title for the plot. 
-     * The created axes with fig, ax = plt.subplots()
+    Inputs:
+     * X and Y lists of points.
+
+    Outputs:
+     * A list of 3 horizontal lines:
+     [sup-cutoff, mean, inf-cutoff, out].
+
+     * Out: a list composed of pairs of
+     (x_values, y_values) which can be plotted.
     """
 
-    # Calcula mitjana
+    out=[]
+
+    # Calcula mitjana per l'axis Y.
     mean = sum(y) / len(y)
     # Calcula percentils sup. i inf.
     # divideix entre dos el percent (meitat superior, meitat inferior).
-    sup_cutoff = (len(y)/100) * (percent/2)
-    inf_cutoff = (len(y)/100) * (100-(percent/2))
+    inf_cutoff = (len(y)/100) * (percent/2)
+    sup_cutoff = (len(y)/100) * (100-(percent/2))
     # Ordena els punts, per recollir els que estiguin per sobre
     # i per sota del llindar calculat segons percent.
     sortedY = [] + y
     sortedY.sort()
     sortedX = [] + x
     sortedX.sort()
-    # intercepts amb l'eix Y de les línies de percentil:
+    # Busca el punt amb el qual es farà una línia horitzontal
+    # que intercepti amb l'eix Y i separi segons percentils:
     sup_line = sortedY[int(sup_cutoff)]
     inf_line = sortedY[int(inf_cutoff)]
-    
-    # Dibuixa les tres línies horitzontals:
+
+    # Crea els punts per a les tres línies horitzontals:
     # La mitjana al centre, el cutoff superior i l'inferior.
     for intercept in (sup_line, mean, inf_line):
         x_vals = np.array((0, sortedX[-1]))
         y_vals = intercept + 0 * x_vals
-        axes.plot(x_vals, y_vals, '--')
+        out += [(x_vals, y_vals)]
 
-    # Si hi han pocs punts (<100), fes línia.
-    if len(x) < 100:
-        axes.plot(x, y, '.-')  
-        # '.-' is the format string: points joint by lines.
-    # Si hi han molts punts, scatterplot sense línies:
-    else:
-        axes.plot(x, y, '.')  # '.' is the format string.
-
-    axes.set_title(title) 
-    axes.set_xlabel('Posició dins el cromosoma (b)')
-    axes.set_ylabel(ylab)
+    return (sup_line, mean, inf_line, out)
 
 
-# Funció (refid, fileRM.out, val_finestra ) --> dict{key: refid, val: where_reps}
-
-# where_reps = {'0--val_finestra': amount, 'v_f--2*v_f': amount, ...}
+#def scatterplot_repeats(x, y, ylab, lbl, axes):
+#    """ Create a scatterplot figure with matplotlib.
+#
+#    Inputs: 
+#     * X and Y lists of points,
+#     * Name of the ylab (length or amount)
+#     * Name of the main title for the plot. 
+#     * The created axes with fig, ax = plt.subplots()
+#    """
+#
+#    # Calcula mitjana
+#    mean = sum(y) / len(y)
+#    # Calcula percentils sup. i inf.
+#    # divideix entre dos el percent (meitat superior, meitat inferior).
+#    sup_cutoff = (len(y)/100) * (percent/2)
+#    inf_cutoff = (len(y)/100) * (100-(percent/2))
+#    # Ordena els punts, per recollir els que estiguin per sobre
+#    # i per sota del llindar calculat segons percent.
+#    sortedY = [] + y
+#    sortedY.sort()
+#    sortedX = [] + x
+#    sortedX.sort()
+#    # Busca el punt amb el qual es farà una línia horitzontal
+#    # que intercepti amb l'eix Y i separi segons percentils:
+#    sup_line = sortedY[int(sup_cutoff)]
+#    inf_line = sortedY[int(inf_cutoff)]
+#    
+#    # Dibuixa les tres línies horitzontals:
+#    # La mitjana al centre, el cutoff superior i l'inferior.
+#    for intercept in (sup_line, mean, inf_line):
+#        x_vals = np.array((0, sortedX[-1]))
+#        y_vals = intercept + 0 * x_vals
+#        axes.plot(x_vals, y_vals, '--')
+#
+#    # Si hi han pocs punts (<100), fes línia.
+#    if len(x) < 100:
+#        data, = axes.plot(x, y, '.-', label=lbl)  
+#        # '.-' is the format string: points joint by lines.
+#    # Si hi han molts punts, scatterplot sense línies:
+#    else:
+#        data, = axes.plot(x, y, '.', label=lbl)  # '.' is the format string.
+#
+#    axes.legend(handles=[data])
+#    axes.set_xlabel('Posició dins el cromosoma (b)')
+#    axes.set_ylabel(ylab)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -130,36 +188,49 @@ def scatterplot_repeats(x, y, ylab, main_title, axes):
 
 # Si es crida com a script:
 if __name__ == '__main__':
-    ### VALORS DELS ARGUMENTS VIA TERMINAL:
+    ### VALORS DELS ARGUMENTS VIA TERMINAL ###
     # Instruccions respecte els arguments necessaris per cridar l'script:
-    try:
-        rmfile, window_size, microsoft = (sys.argv[1], int(sys.argv[2]), sys.argv[3] )
-    except (ValueError, IndexError):
-        print("\nCrit script: ",
-                "\n%s <RepeatMasker.out> <window-size> <Show-or-Save?> [<space-between-windows>] [<percent_cutoffs>] \n" % sys.argv[0],
-                "\n  * Show-or-Save: do you want the figure to be saved or shown directly with matplotlib?\n",
-                "       - savefig: save the figure to the current directory.\n",
-                "       - showfig: display the figure directly. \n",
-                "       - showfull: display the figure in full-screen mode\n")
-        sys.exit(1)
-    # Optional Jump between windows:
-    try:
-        jump = int(sys.argv[4])
-    except:
-        # default: no jump.
-        jump = 0
-    # Setting Percent 'ablines'
-    try:
-        percent = int(sys.argv[5])
-    except:
-        # default: 2.5% superior and inferior cutoffs.
-        percent = 5
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Analyze RepeatMasker output by windows')
+    # rmfile name.
+    parser.add_argument('rmfile', type=str,
+            help='RepeatMasker file-name')
+    # chr-len file name.
+    parser.add_argument('fasta_idx', type=str,
+            help="Tabulated index file with 2 columns: main refids/chromosomes and their length")
+    # Window-size.
+    parser.add_argument('-w', '--window', type=int, required=True,
+            help='Window analysis size')
+    # Jump between windows.
+    parser.add_argument('-j', '--jump', type=int, 
+            help='Distance between neighbours windows',
+            default=0, required=False)
+    # percent cutoffs.
+    parser.add_argument('-p', '--percent', 
+            help="A horizontal line will be cutting off the values above and below '-p' %% percentils",
+            type=int, required=False, default=5)
+    # save or show the figure with matplotlib?
+    parser.add_argument('-s', '--microsoft', type=str,
+            help="Save the matplotlib figure as a file or show it directly",
+            required=False, default='savefig',
+            choices=['savefig', 'showfig', 'showfull'])
+
+    args = parser.parse_args()
+
+    # Correcció dels arguments marxa enrere.
+    rmfile = args.rmfile
+    window_size = args.window
+    jump = args.jump
+    microsoft = args.microsoft
+    percent = args.percent
 
     # Save figs inside wsl.
     import matplotlib
     matplotlib.use('Agg') # no UI backend in WSL. 
     import matplotlib.pyplot as plt
 
+    ### CREATE A 'RESULTS' DICT AND POPULATE WITH DATA ###
     # create a default dict which stores values
     # 1er, dos cerques,   per repeatclass,    per chromosome,      per posició dins chr: length & amount.
     results = {'general':defaultdict(lambda : defaultdict(lambda : defaultdict(lambda :{'l': 0, 'a': 0}) )),
@@ -167,7 +238,7 @@ if __name__ == '__main__':
 }
 
     # permet fer el següent sense necessitar generar prèviament claus:
-    # results['refid']['class'][position] += 1
+    # results[repeat-type][repeat-class][chr-refid][chr-position][data-type] += 1
     # (això és degut a que inicialitza amb valor = 0)
 
     # si la llista es troba buida...
@@ -200,22 +271,33 @@ if __name__ == '__main__':
                         results['general'][repobj.repclass[0]][crm][finestra]['a'] += 1
                         results['general'][repobj.repclass[0]][crm][finestra]['l'] += repobj.replen 
 
-    # pseudocode to create a plot:
-    # for each chr:
-        # sum all repeat values
-        # sum the last chr length to the X axis.
-        # plot them
-    # show plot. 
 
-    ### SCATTER-PLOT OF WHOLE GENOME, SUMMED FAMILIES...
-    
-    ### SCATTER-PLOT OF LENGTH:
-    # initialize vars to capture results we're interested in...
-    last_x_pos = 0
-    fig, axL = plt.subplots()
+    ### AFAGEIX AL DICCIONARI DE RESULTATS LA LLARGADA MÀXIMA DE CADA CRM. ###
+    for rep_type, rep_type_val in results.items():
+        for rep_class, rep_class_val in rep_type_val.items():
+            for crm, crm_val in rep_class_val.items():
+                # find max-chr-len with the below function.
+                crm_len = refid_to_length(crm, args.fasta_idx)
+                # create a new position as the max_crm_len.
+                results[rep_type][rep_class][crm][crm_len]['a'] = 0
+                results[rep_type][rep_class][crm][crm_len]['l'] = 0
 
+
+    ### SCATTER-PLOT OF REPEAT FAM LENGTH FOR THE WHOLE GENOME ###
     # agafa els resultats de classes generals...
     for cls, cls_val in results['general'].items():
+        # initialize vars to capture results we're interested in...
+        last_x_pos = 0
+        # Create a new figure for each repeat class.
+        fig, axes = plt.subplots()
+        # List with cutoffs for each chr.
+        cutoffs = []
+        # Create an iterable object with all the required colours.
+        # You need a colour for each main chromosome/scaffold (~ refid).
+        colour = iter(cm.rainbow(np.linspace(0, 1, len(unique_main_refid(rmfile)))))
+
+        # Include all chromosomes in a single figure:
+        # Plot the length by position of each chromosome.
         for crm, crm_val in cls_val.items():
             x_pos = []
             y_len = []
@@ -223,20 +305,58 @@ if __name__ == '__main__':
             for pos, val in crm_val.items():
                 # Recopilar valors:
                 x_pos += [int(pos)]
-                y_len += [int(val['a'])]
-                y_amt += [int(val['l'])]
+                y_len += [int(val['l'])]
+                y_amt += [int(val['a'])]
             
+            cutoffs += [matplotlib_cutoffs(x_pos, y_len)]
             j = []
             for i in x_pos:
                 j += [i + last_x_pos]
             last_x_pos = int(j[-1])
 
-            title = f"Chromosome: {crm}, Repeat: {cls.replace('/', '')}\nWindow Size: {window_size}, Space between Wndws: {jump}"
-            scatterplot_repeats(j, y_len, 'Length of repeats found in window', title, axL)
-            #~scatterplot_repeats(j, y_amt, 'Amount of repeats found in window', title, axA)
+            # Plot either length or amount...
+            #~scatterplot_repeats(j, y_len, 'Length of repeats found in window', crm, axL)
+
+            # Get a colour to plot this specific chromosome:
+            c = next(colour)
+            # Si hi han pocs punts (<100), fes línia.
+            if len(j) < 100:
+                axes.plot(j, y_len, '.-', label=crm, c=c)  
+                # '.-' is the format string: points joint by lines.
+            # Si hi han molts punts, scatterplot sense línies:
+            else:
+                axes.plot(j, y_len, '.', label=crm, c=c)  # '.' is the format string.
+
+        # Plot the cutoffs (superior perc., mean, inferior perc.)
+        # color for each cutoff:
+        colour = iter(cm.rainbow(np.linspace(0, 1, len(unique_main_refid(rmfile)))))
+        for cut in cutoffs:
+            # L'ordre de les llistes de color i cutoffs haurien de coincidir;
+            # el primer valor de cada llista és pel cromosoma A,
+            # el segon valor de cada llista és pel cromosoma B...
+            c = next(colour)
+
+            # Dibuixa les tres línies horitzontals:
+            # La mitjana al centre, el cutoff superior i l'inferior.
+            # intercept: a on intercepta la línia horitzontal i eix Y.
+            for intercept in (cut[0], cut[1], cut[2]):
+                # valors x: la gràfica sencera (de 0 a last val.)
+                x_vals = np.array((0, last_x_pos))
+                # valors y: el mateix per a tots els punts, l'intercept.
+                y_vals = intercept + 0 * x_vals
+                axes.plot(x_vals, y_vals, '--', c=c)
+
+        # Crea una llegenda a partir de les etiquetes subministrades 
+        # (variable label dins la funció axes.plot()).
+        axes.legend()
+        axes.set_xlabel('Posició dins el cromosoma (b)')
+        axes.set_ylabel('Length of repeats found in window (b)')
+        
+        title = f"Repeat: {cls.replace('/', '')}\nW. Size: {window_size}; Space between W.: {jump}; %% Cutoffs: {percent}"
+        axes.set_title(title)
 
         # Save a fig for each Repeat class in the results['gen'] dict. 
-        plt.savefig(f"length_{cls.replace('/', '')}.png")
+        plt.savefig(f"length_{cls.replace('/', '')}.png", bbox_inches='tight')
 
 #    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #    last_x_pos = 0
