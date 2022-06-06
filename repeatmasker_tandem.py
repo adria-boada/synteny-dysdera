@@ -312,7 +312,9 @@ if __name__ == '__main__':
             j = []
             for i in x_pos:
                 j += [i + last_x_pos]
-            last_x_pos = int(j[-1])
+            # Extreu la última posició plotejada del cromosoma que
+            # acaba de ser plotejat, per sumar-li a la X del pròxim crm.
+            last_x_pos = int(max(j))
 
             # Plot either length or amount...
             #~scatterplot_repeats(j, y_len, 'Length of repeats found in window', crm, axL)
