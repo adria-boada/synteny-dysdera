@@ -245,6 +245,10 @@ if __name__ == '__main__':
     # (no s'ha trobat cap cromosoma dins la llista unique_refids):
     if unique_main_refid(rmfile) == []:
         sys.exit("No s'ha trobat cap cromosoma principal (amb etiqueta 'chr' a la columna refid.) dins el fitxer RepeatMasker.")
+    else:
+        # Procedeix a fer anàlisi: ensenya els main chr que ha agafat, per si de cas.
+        print("Els següents refids contenen 'chr' i se'ls hi farà l'anàlisi:")
+        for x in unique_main_refid(rmfile): print(x)
 
     # Per a cada cromosoma principal que hagis trobat:
     # si els vols tots, substituir unique_main_refid() per la funció unique_refid_list().
@@ -319,13 +323,18 @@ if __name__ == '__main__':
 
             # Get a colour to plot this specific chromosome:
             c = next(colour)
-            # Si hi han pocs punts (<100), fes línia.
-            if len(j) < 100:
-                axes.plot(j, y_len, '.-', label=crm, c=c)  
-                # '.-' is the format string: points joint by lines.
-            # Si hi han molts punts, scatterplot sense línies:
-            else:
-                axes.plot(j, y_len, '.', label=crm, c=c)  # '.' is the format string.
+            
+            # El bloc de sota feia línies per a gràfiques amb pocs punts...
+            ### ### ### ###
+#            # Si hi han pocs punts (<100), fes línia.
+#            if len(j) < 100:
+#                axes.plot(j, y_len, '.-', label=crm, c=c)  
+#                # '.-' is the format string: points joint by lines.
+#            # Si hi han molts punts, scatterplot sense línies:
+#            else:
+            ### ### ### ###
+            # Millor que sempre siguin scatter-plots.
+            axes.plot(j, y_len, '.', label=crm, c=c)  # '.' is the format string.
 
         # Plot the cutoffs (superior perc., mean, inferior perc.)
         # color for each cutoff:
