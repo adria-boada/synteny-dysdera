@@ -83,7 +83,7 @@ class Repeat(object):
                 self.Super_family,
                 self.notes # MITE or nMITE?
         ) = ln
-        # int-ize the reference coordinates
+        # int-ize the coordinates of the repeat inside the genome.
         self.begin, self.end = int(self.begin), int(self.end)
         # Calculate the repetitive element's length:
         self.replen = abs(self.end - self.begin) + 1
@@ -106,7 +106,7 @@ class Repeat(object):
         else:
             repout = repclasses[:-3]
 
-        self.repclass = repout
+        self.repclass = repclasses
 
 
 def parse_repeats_with_results(fn, crm='all'):
@@ -119,7 +119,7 @@ def parse_repeats_with_results(fn, crm='all'):
 
     Parse the results only from crm. argument...
     only includes line if crm. arg. matches regularly
-    with self.refid column.
+    with line.refid column.
     The default value parses all scaffolds, not taking
     into account if it is either main or secondary.
     """
@@ -129,39 +129,8 @@ def parse_repeats_with_results(fn, crm='all'):
     # Create a results dict.
     results = {}
 
-    """ Initialize the results list, in a JSON format.
-    """
-    # Init class (first column)
     for i in unique_list:
-        if len(i) == 1:
-            results[i[0]] = {'amount': 0, 'length': 0}
-        elif len(i) > 1:
-            results[i[0]] = {}
-            results[i[0]]['amount'] = 0
-            results[i[0]]['length'] = 0
-    # Init subclass (second column)
-    for i in unique_list:
-        if len(i) == 2:
-            results[i[0]][i[1]] = {'amount': 0, 'length': 0}
-        elif len(i) > 2:
-            results[i[0]][i[1]] = {}
-            results[i[0]][i[1]]['amount'] = 0
-            results[i[0]][i[1]]['length'] = 0
-    # Init Order (third col.)
-    for i in unique_list:
-        if len(i) == 3:
-            results[i[0]][i[1]][i[2]] = {'amount': 0, 'length': 0}
-        elif len(i) > 3:
-            results[i[0]][i[1]][i[2]] = {}
-            results[i[0]][i[1]][i[2]]['amount'] = 0
-            results[i[0]][i[1]][i[2]]['length'] = 0
-    # Init Super-Family (fourth col.)
-    for i in unique_list:
-        if len(i) == 4:
-            results[i[0]][i[1]][i[2]][i[3]] = {'amount': 0, 'length': 0}
-
-    # DEBUG:
-    # print(results)
+        results[i] = {'amount': 0, 'length': 0}
 
     # List of filtered in scaffolds.
     scaffolds = []
@@ -177,28 +146,9 @@ def parse_repeats_with_results(fn, crm='all'):
             for line in fh:
                 # Create a Repeat obj.
                 obj = Repeat(line)
-                # Get the repclass from them.
-                x = obj.repclass
-                if len(x) == 1:
-                    # DEBUG:
-                    # print("1.", x)
-                    results[x[0]]['amount'] += 1
-                    results[x[0]]['length'] += obj.replen
-                elif len(x) == 2:
-                    # DEBUG:
-                    # print("2.", x)
-                    results[x[0]][x[1]]['amount'] += 1
-                    results[x[0]][x[1]]['length'] += obj.replen
-                elif len(x) == 3:
-                    # DEBUG:
-                    # print("3.", x)
-                    results[x[0]][x[1]][x[2]]['amount'] += 1
-                    results[x[0]][x[1]][x[2]]['length'] += obj.replen
-                elif len(x) == 4:
-                    # DEBUG:
-                    # print("4.", x)
-                    results[x[0]][x[1]][x[2]][x[3]]['amount'] += 1
-                    results[x[0]][x[1]][x[2]][x[3]]['length'] += obj.replen
+                # Create the results entry.
+                results[obj.repclass]['amount'] += 1
+                results[obj.repclass]['length'] += obj.replen
 
     else:
         """ Parse the repeatmasker file. For each line, append
@@ -218,31 +168,11 @@ def parse_repeats_with_results(fn, crm='all'):
                     # Get the unique and allowed REFIDs into a list.
                     if not obj.refid in scaffolds:
                         scaffolds += [ obj.refid ]
-                    # Get the repclass from them.
-                    x = obj.repclass
-                    if len(x) == 1:
-                        # DEBUG:
-                        # print("1.", x)
-                        results[x[0]]['amount'] += 1
-                        results[x[0]]['length'] += obj.replen
-                    elif len(x) == 2:
-                        # DEBUG:
-                        # print("2.", x)
-                        results[x[0]][x[1]]['amount'] += 1
-                        results[x[0]][x[1]]['length'] += obj.replen
-                    elif len(x) == 3:
-                        # DEBUG:
-                        # print("3.", x)
-                        results[x[0]][x[1]][x[2]]['amount'] += 1
-                        results[x[0]][x[1]][x[2]]['length'] += obj.replen
-                    elif len(x) == 4:
-                        # DEBUG:
-                        # print("4.", x)
-                        results[x[0]][x[1]][x[2]][x[3]]['amount'] += 1
-                        results[x[0]][x[1]][x[2]][x[3]]['length'] += obj.replen
 
-    # DEBUG:
-    # print(results)
+                        # Now, do the same as the last block:
+                        # Create an entry for the results dict.
+                        results[obj.repclass]['amount'] += 1
+                        results[obj.repclass]['length'] += obj.replen
 
     # Return the dictionary with the computed results.
     return (results, scaffolds)
@@ -280,13 +210,38 @@ def walkresults(r, i=0):
 
         out += [ TE_name + [v['amount'], v['length'], round(avg_length, 1)] ]
     return out
-        
+
+
+def walkresults_version2(r):
+    """Arreglos que s'han de fer...
+    """
+    out = []
+
+    for k, v in r.items():
+        TE_name = [k[0], k[1], k[2], k[3]]
+
+        # Calcula average length de l'element repetitiu:
+        if int(v['amount']) != 0:
+            avg_length = v['length'] / v['amount']
+        else:
+            avg_length = 0
+
+        out += [ TE_name + [v['amount'], v['length'], round(avg_length, 1)] ]
+    
+    return out
+
 
 if __name__ == '__main__':
 
     # Instruccions respecte els arguments necessaris per cridar l'script:
-    if len(sys.argv) < 2:
-        sys.exit('\nCrit script: script.py <repeatmasker.parseable.out> [<Match-this-scaffold-regex>]\n')
+    if len(sys.argv) < 3:
+        sys.exit(f'\nCorrectly calling the script: \n{sys.argv[0].split("/")[-1]} <repeatmasker.parseable.out> <Genome-size:"dcat35":"dsil"> [<Match-this-scaffold-regex>]\n')
+
+    # get the gsize, either for Dcatalonica or Dsilvatica:
+    if sys.argv[2]=="dcat35":
+        gsize = 3554714677
+    elif sys.argv[2]=="dsil":
+        gsize = 1365686336
 
     # Load repeatmasker file as a list of "line" classes.
     # repeats = parse_repeat_masker_db(sys.argv[1])
@@ -294,13 +249,14 @@ if __name__ == '__main__':
     # FREEZES AND CRASHES THE PC).
 
     # Si hi han més de dos arguments a la terminal:
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 3:
         # Usa el 2n argv. per buscar REFID, doncs:
-        (results, scaffolds) = parse_repeats_with_results( sys.argv[1], sys.argv[2] )
+        (results, scaffolds) = parse_repeats_with_results( sys.argv[1], sys.argv[3] )
         # Comença a printar header de resultats.
         print()
         print("Analysed File:", sys.argv[1])
-        print("Filtered case-insensitively by '", sys.argv[2], "' in the refid column. Allowed scaffolds list:", sep="")
+        print("Genome size used:", gsize, "bp")
+        print("Filtered case-insensitively by '", sys.argv[3], "' in the refid column. Allowed scaffolds list:", sep="")
         [print(x) for x in scaffolds]
         print()
     else:
@@ -309,14 +265,21 @@ if __name__ == '__main__':
         # Comença a printar header de resultats.
         print()
         print("Analysed File:", sys.argv[1])
+        print("Genome size used:", gsize, "bp")
         print()
     
     # Crea capçalera:
-    capçalera = ["Class", "Sub-Class", "Order", "Super-family",
-            "Amount", "Base-pair-len", "Avg. Length"]
+    capçalera = ["Class", "Sub-Class", "Order", "Super-family", # Columnes que classifiquen repeats.
+            "# Amount", 
+            "# Sum-BP-len", 
+            "% Relative Amt.",
+            "% Relative-BP",    # (bp-repeat)/(sum-bp-repeats) # relative to total repeats
+            "% Masked-Genome", # (bp-repeat)/(genome-size)    # relative to genome size
+            "Avg-Length"]
+
     # print the actual results?
     # tabulated thanks to tabulate() module (tabulates a given list).
-    data_listed = walkresults(results)
+    data_listed = walkresults_version2(results)
 
     # Add, at the end of the list, a sum of each column:
     # First, loop through the result list and compute it:
@@ -333,16 +296,45 @@ if __name__ == '__main__':
             # o utilitza len(data_listed) com a comptador...
             total['avg.counter'] += 1
 
+    # Add the new colum results...
+    total['col_perc_amount']=100
+    total['col_bp_repeats']=100
+    total['col_masked_genome']=round( (total['BP-Total']/gsize)*100, 4)
+
+    # Further computations which were done manually in a spreadsheet:
+    # Create a new list in order to add more columns...
+    more_cols_data_listed = []
+    for i in data_listed:
+        # i[4]: amount
+        # i[5]: base-pair-len.
+        # i[6]: avg. len.
+        col_perc_amount = round( (i[4]/total['amount'])*100, 4)
+        col_bp_repeats = round( (i[5]/total['BP-Total'])*100, 4)
+        # use the gsize given as an argument:
+        col_masked_genome = round( (i[5]/gsize)*100, 4)
+        more_cols_data_listed += [ i[0:6] + [col_perc_amount, col_bp_repeats, col_masked_genome] + [i[6]] ]
+
+    data_listed = more_cols_data_listed
 
     # Separate it from the rest of the table:
-    data_listed += [ ('----------', '----------', '----------', '----------', '----------', '----------', '----------') ]
-    data_listed += [ ('', '', '', '', '', '', '') ]
+    data_listed += [ ('----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------') ]
 
-    # DEBUG
     if total['avg.counter']!=0:
-        data_listed += [ ('Total', '.', '.', '.', total['amount'], total['BP-Total'], round(total['avg']/total['avg.counter'], 1) ) ]
+        data_listed += [ ('Total', '.', '.', '.', 
+            total['amount'], 
+            total['BP-Total'], 
+            total['col_perc_amount'], 
+            total['col_bp_repeats'], 
+            total['col_masked_genome'], 
+            round(total['avg']/total['avg.counter'], 1) ) ]
     else:
-        data_listed += [ ('Total', '.', '.', '.', total['amount'], total['BP-Total'], 0) ]
+        data_listed += [ ('Total', '.', '.', '.', 
+            total['amount'], 
+            total['BP-Total'], 
+            total['col_perc_amount'], 
+            total['col_bp_repeats'], 
+            total['col_masked_genome'], 
+            0) ]
 
     print( tabulate.tabulate (data_listed, headers=capçalera, tablefmt='pipe') )
 
