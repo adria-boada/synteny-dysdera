@@ -97,14 +97,14 @@ class Repeat(object):
         # [3]: Transposable Element Super-family.
         (a, b, c, d) = repclasses
 
-        if d != 'N/A':
-            repout = repclasses
-        elif c != 'N/A':
-            repout = repclasses[:-1] 
-        elif b != 'N/A':
-            repout = repclasses[:-2] 
-        else:
-            repout = repclasses[:-3]
+#        if d != 'N/A':
+#            repout = repclasses
+#        elif c != 'N/A':
+#            repout = repclasses[:-1] 
+#        elif b != 'N/A':
+#            repout = repclasses[:-2] 
+#        else:
+#            repout = repclasses[:-3]
 
         self.repclass = repclasses
 
@@ -129,6 +129,7 @@ def parse_repeats_with_results(fn, crm='all'):
     # Create a results dict.
     results = {}
 
+    # Crea una entrada per a cada repetició dins el fitxer.
     for i in unique_list:
         results[i] = {'amount': 0, 'length': 0}
 
@@ -169,10 +170,10 @@ def parse_repeats_with_results(fn, crm='all'):
                     if not obj.refid in scaffolds:
                         scaffolds += [ obj.refid ]
 
-                        # Now, do the same as the last block:
-                        # Create an entry for the results dict.
-                        results[obj.repclass]['amount'] += 1
-                        results[obj.repclass]['length'] += obj.replen
+                    # Now, do the same as the last block:
+                    # Create an entry for the results dict.
+                    results[obj.repclass]['amount'] += 1
+                    results[obj.repclass]['length'] += obj.replen
 
     # Return the dictionary with the computed results.
     return (results, scaffolds)
