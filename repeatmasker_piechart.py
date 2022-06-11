@@ -149,7 +149,7 @@ if __name__ == '__main__':
             autopct=lambda p: '{:.2f}%'.format(p),
             explode=[0 for x in len_values[:-1]] + [.1]
             )
-    axl.set_title(f'Length of repeats (tot: {sum([x[1] for x in len_values])} bp)')
+    axl.set_title(f'Length of repeats (tot: {round(sum([x[1] for x in len_values])/(10**6), 1)} Mbp)')
     fig.suptitle(f'Chromosome: {args.chr_name}')
     plt.savefig(f"pchart.png", 
                 dpi=100,
