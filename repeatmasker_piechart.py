@@ -12,6 +12,7 @@ analyze it and create a pie-chart.
 import sys
 import repeatmasker_tandem as rmt
 import repeatmasker_parser3 as rm3
+import numpy as np
 
 # Save figs inside wsl.
 import matplotlib
@@ -105,35 +106,55 @@ if __name__ == '__main__':
 
     # Delete small values and pool them in a new class called 'All the rest':
     all_the_rest = 0
-    new_values = []
+    amt_values = []
     for key, am, length in values:
         if (am/values[-1][1])*100 <= 5:
             all_the_rest += am
         elif key=='Total':
             pass
         else:
-            new_values += [ [key, am, length] ]
-    new_values += [ ['All the rest', all_the_rest, 0.0] ]
+            amt_values += [ [key, am] ]
+    amt_values += [ ['All the rest', all_the_rest] ]
+
+    # Do the same pooling for length:
+    all_the_rest = 0
+    len_values = []
+    for key, am, length in values:
+        if (length/values[-1][2])*100 <= 5:
+            all_the_rest += length
+        elif key=='Total':
+            pass
+        else:
+            len_values += [ [key, length] ]
+    len_values += [ ['All the rest', all_the_rest] ]
 
     # first plot: get amount (x[1]) and plot with labels (x[0]).
-    plt.pie([x[1] for x in new_values], 
+    fig, (axam, axl) = plt.subplots(2, 1)
+    fig.set_size_inches = 20,20
+
+    axam.pie([x[1] for x in amt_values], 
             # get all first values
-            labels=[x[0] for x in new_values],
+            labels=[x[0] for x in amt_values],
             # formatting of numbers in the piechart.
-            autopct=lambda p: '{:.2f}% ({:,.0f})'.format(p, p* sum([x[1] for x in new_values])/100)
+            autopct=lambda p: '{:.2f}%'.format(p),
+            explode=[0 for x in amt_values[:-1]] + [.1]
             )
-    plt.title(f'Amount of repeats for Crm. {args.chr_name}')
-    plt.savefig(f"amount_pchart.png", bbox_inches='tight')
+    axam.set_title(f'Amount of repeats (tot: {sum([x[1] for x in amt_values])} eles)')
 
     # second plot: get length (x[2]) and plot with labels (x[0]).
-    plt.pie([x[2] for x in new_values],
+    axl.pie([x[1] for x in len_values],
             # zip with labels:
-            labels=[x[0] for x in new_values],
+            labels=[x[0] for x in len_values],
             # formatting of numbers in the piechart.
-            autopct=lambda p: '{:.2f}% ({:,.0f})'.format(p, p* sum([x[1] for x in new_values])/100)
+            autopct=lambda p: '{:.2f}%'.format(p),
+            explode=[0 for x in len_values[:-1]] + [.1]
             )
-    plt.title(f'Length of repeats for Crm. {args.chr_name}')
-    plt.savefig(f"len_pchart.png", bbox_inches='tight')
+    axl.set_title(f'Length of repeats (tot: {sum([x[1] for x in len_values])} bp)')
+    fig.suptitle(f'Chromosome: {args.chr_name}')
+    plt.savefig(f"pchart.png", 
+                dpi=100,
+                bbox_inches='tight'
+                )
     
 
     # Aconsegueix la mida cromosòmica per calcular %masked vals.
