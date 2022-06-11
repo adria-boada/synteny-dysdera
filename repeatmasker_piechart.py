@@ -156,9 +156,9 @@ if __name__ == '__main__':
                 bbox_inches='tight'
                 )
     
-
     # Aconsegueix la mida cromosòmica per calcular %masked vals.
     gsize = rmt.refid_to_length(refid_name=args.chr_name, indexed_fasta=args.index_file)
+    print(f'For {args.chr_name}, gsize = {gsize}')
 
     for val in resume_rmtable(args.repeat_tbl): pass
         # the function resume_rmtable outputs a list of
