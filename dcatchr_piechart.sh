@@ -5,7 +5,7 @@ repeat_file="/home/adria/Escritorio/Data/RepeatMasker/Dcat35_V0.92.fasta_renamed
 idx_file="/home/adria/Escritorio/Data/RepeatMasker/Dcat09_final_multiline_0.91.fasta.idx"
 
 # per a tots els cromosomes principals:
-for crm in DcatChr1 DcatChr2 DcatChr3 DcatChr4 DcatChr5 DcatChrx; do
+for crm in DcatChr1 DcatChr2 DcatChr3 DcatChr4 DcatChr5 DcatChrx Scaffold; do
 	# create a table file
 	python3 ~/Dipogits/synteny-dysdera/repeatmasker_parser3.py "$repeat_file" dcat35 "$crm" > tbl
 	# show the table to the terminal (least its head:)
