@@ -137,7 +137,7 @@ if __name__ == '__main__':
             labels=[x[0] for x in amt_values],
             # formatting of numbers in the piechart.
             autopct=lambda p: '{:.2f}%'.format(p),
-            explode=[0 for x in amt_values[:-1]] + [.1]
+            explode=[0 for x in amt_values[:-1]] + [.3]
             )
     axam.set_title(f'Amount of repeats (tot: {sum([x[1] for x in amt_values])} eles)')
 
