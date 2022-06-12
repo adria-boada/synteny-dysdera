@@ -141,15 +141,20 @@ if __name__ == '__main__':
             )
     axam.set_title(f'Amount of repeats (tot: {sum([x[1] for x in amt_values])} eles)')
 
+    # Aconsegueix la mida cromosòmica per calcular %masked vals.
+    gsize = rmt.refid_to_length(refid_name=args.chr_name, indexed_fasta=args.index_file)
+    # non-repeated-gsize = gsize - sum(len-repeats):
+    nonrepeated = int(gsize) - sum([x[1] for x in len_values])
+
     # second plot: get length (x[2]) and plot with labels (x[0]).
-    axl.pie([x[1] for x in len_values],
+    axl.pie([x[1] for x in len_values]+[nonrepeated],
             # zip with labels:
-            labels=[x[0] for x in len_values],
+            labels=[x[0] for x in len_values]+['Non-Repeated'],
             # formatting of numbers in the piechart.
             autopct=lambda p: '{:.2f}%'.format(p),
-            explode=[0 for x in len_values[:-1]] + [.1]
+            explode=[0 for x in len_values[:-1]] + [.3] + [0]
             )
-    axl.set_title(f'Length of repeats (tot: {round(sum([x[1] for x in len_values])/(10**6), 1)} Mbp)')
+    axl.set_title(f'Repeats: {round(sum([x[1] for x in len_values])/(10**6), 1)} Mbp, Non-Repeats: {round((nonrepeated)/(10**6), 1)} Mpb')
     fig.suptitle(f'Chromosome: {args.chr_name}')
     plt.savefig(f"pchart.png", 
                 dpi=100,
@@ -157,15 +162,6 @@ if __name__ == '__main__':
                 )
     
 
-    # Aconsegueix la mida cromosòmica per calcular %masked vals.
-    gsize = rmt.refid_to_length(refid_name=args.chr_name, indexed_fasta=args.index_file)
+    ############ computar non-repeat-gsize (gsize - total)
 
-    for val in resume_rmtable(args.repeat_tbl): pass
-        # the function resume_rmtable outputs a list of
-        # sublists: each sublist contains:
-            # [0]: list of labels
-            # [1]: list of amount for each label
-            # [2]: list of length for each label
-
-    
 

@@ -69,17 +69,25 @@ def unique_main_refid(rmfile):
 
 def refid_to_length(refid_name, indexed_fasta):
     """
-    Inputs: chromosome/scaffold name and an indexed fasta;
+    Inputs: chromosome/scaffold regex name and an indexed fasta;
     a file with tabulated pairs of (chr, length).
 
+    Will search case-insensitively.
+
     Returns the length of the inputted chromosome.
+    If there are multiple matches by regex, returns
+    their summed length ('scaff' returns all scaffolds)
     """
+    # List to append multiple matches:
+    summer=[]
     # Obre el fitxer indexed_fasta:
     with open(indexed_fasta) as idx:
         for line in idx:
             # Si la línia conté el 'chr' d'interès:
-            if refid_name in line:
-                return line.split()[1]
+            if refid_name.casefold() in line.casefold():
+                summer += [int(line.split()[1])]
+        
+    return sum(summer)
 
 
 #def matplotlib_abline(slope, intercept):

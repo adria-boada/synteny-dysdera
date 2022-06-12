@@ -1,11 +1,11 @@
 
 #! bin/bash
 
-repeat_file="~/"
-idx_file=""
+repeat_file="/home/adria/Dsil_V2.3_genome.fasta_renamed.out"
+idx_file="/home/adria/Dsil_V2.3_genome.fasta.idx"
 
 # per a tots els cromosomes principals:
-for crm in dsilchr1 dsilchr2 dsilchr3 dsilchr4 dsilchr5 dsilchr6 dsilchru1 dsilchru2 dsilchrx; do
+for crm in Dsilchr1 Dsilchr2 Dsilchr3 Dsilchr4 Dsilchr5 Dsilchr6 Dsilchru1 Dsilchru2 Dsilchrx Scaffold; do
 	# create a table file
 	python3 ~/Dipogits/synteny-dysdera/repeatmasker_parser3.py "$repeat_file" dsil "$crm" > tbl
 	# show the table to the terminal (least its head:)
@@ -13,7 +13,7 @@ for crm in dsilchr1 dsilchr2 dsilchr3 dsilchr4 dsilchr5 dsilchr6 dsilchru1 dsilc
 	# read the table file with piechart.py and create a piechart.
 	python3 ~/Dipogits/synteny-dysdera/repeatmasker_piechart.py tbl -i "$idx_file" -c "$crm"
 	# move the output
-	mv piechart.png "${crm}_piechart.png"
+	mv pchart.png "${crm}_piechart.png"
 done
 
 # remove tmp tble files...
