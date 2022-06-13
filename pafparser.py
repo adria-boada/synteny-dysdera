@@ -21,10 +21,6 @@ import overlap_paf_parse as papaf
 # Aids in adding a default value of zero to newly created dict-keys.
 from collections import defaultdict
 
-# Instruccions respecte els arguments necessaris per cridar l'script:
-if len(sys.argv) < 2:
-    sys.exit('\nCrit script: script.py <input-paf-file.paf>\n')
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -308,6 +304,10 @@ def parse_paf_alignment_db (filename: "Send the path to file"):
 
 
 if __name__ == "__main__":
+
+    # Instruccions respecte els arguments necessaris per cridar l'script:
+    if len(sys.argv) < 2:
+        sys.exit('\nCrit script: script.py <input-paf-file.paf>\n')
 
     # Define paf-file
     paf_file = sys.argv[1]
