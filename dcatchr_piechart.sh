@@ -16,6 +16,9 @@ for crm in DcatChr1 DcatChr2 DcatChr3 DcatChr4 DcatChr5 DcatChrx Scaffold; do
 	mv pchart.png "${crm}_piechart.png"
 done
 
+# Rename scaffold so they do not overwrite between silvatica's and catalonica's.
+mv Scaffold_piechart.png DsilScff_piechart.png
+
 # remove tmp tble files...
 rm tbl
 

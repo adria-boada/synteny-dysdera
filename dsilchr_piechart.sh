@@ -13,8 +13,11 @@ for crm in DsilChr1 DsilChr2 DsilChr3 DsilChr4 DsilChr5 DsilChr6 DsilChru1 DsilC
 	# read the table file with piechart.py and create a piechart.
 	python3 ~/Dipogits/synteny-dysdera/repeatmasker_piechart.py tbl -i "$idx_file" -c "$crm"
 	# move the output
-	mv pchart.png "cat_${crm}_piechart.png"
+	mv pchart.png "${crm}_piechart.png"
 done
+
+# Rename scaffold so they do not overwrite between silvatica's and catalonica's.
+mv Scaffold_piechart.png DcatScff_piechart.png
 
 # remove tmp tble files...
 rm tbl
