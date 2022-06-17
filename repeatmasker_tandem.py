@@ -285,14 +285,14 @@ if __name__ == '__main__':
 
 
     ### AFAGEIX AL DICCIONARI DE RESULTATS LA LLARGADA MÀXIMA DE CADA CRM. ###
-    for rep_type, rep_type_val in results.items():
-        for rep_class, rep_class_val in rep_type_val.items():
-            for crm, crm_val in rep_class_val.items():
-                # find max-chr-len with the below function.
-                crm_len = refid_to_length(crm, args.fasta_idx)
-                # create a new position as the max_crm_len.
-                results[rep_type][rep_class][crm][crm_len]['a'] = 0
-                results[rep_type][rep_class][crm][crm_len]['l'] = 0
+#    for rep_type, rep_type_val in results.items():
+#        for rep_class, rep_class_val in rep_type_val.items():
+#            for crm, crm_val in rep_class_val.items():
+#                # find max-chr-len with the below function.
+#                crm_len = refid_to_length(crm, args.fasta_idx)
+#                # create a new position as the max_crm_len.
+#                results[rep_type][rep_class][crm][crm_len]['a'] = 0
+#                results[rep_type][rep_class][crm][crm_len]['l'] = 0
 
 
     ### SCATTER-PLOT OF REPEAT FAM LENGTH FOR THE WHOLE GENOME ###
@@ -319,6 +319,10 @@ if __name__ == '__main__':
                 x_pos += [int(pos)]
                 y_len += [int(val['l'])]
                 y_amt += [int(val['a'])]
+
+            # TEMP SWITCH TO DISPLAY EITHER AMOUNT OR REP-LENGTHS INSIDE THE
+            # WINDOW.
+            #~y_len=y_amt
             
             cutoffs += [matplotlib_cutoffs(x_pos, y_len)]
             j = []
@@ -375,7 +379,90 @@ if __name__ == '__main__':
         axes.set_title(title)
 
         # Save a fig for each Repeat class in the results['gen'] dict. 
-        plt.savefig(f"length_{cls.replace('/', '')}.png", bbox_inches='tight')
+        plt.savefig(f"{args.rmfile}_length_{cls.replace('/', '')}.png", bbox_inches='tight')
+
+    
+    ### COPY FOR AMOUNT FIG ###
+    # agafa els resultats de classes generals...
+    for cls, cls_val in results['general'].items():
+        # initialize vars to capture results we're interested in...
+        last_x_pos = 0
+        # Create a new figure for each repeat class.
+        fig, axes = plt.subplots()
+        # List with cutoffs for each chr.
+        cutoffs = []
+        # Create an iterable object with all the required colours.
+        # You need a colour for each main chromosome/scaffold (~ refid).
+        colour = iter(cm.rainbow(np.linspace(0, 1, len(unique_main_refid(rmfile)))))
+
+        # Include all chromosomes in a single figure:
+        # Plot the length by position of each chromosome.
+        for crm, crm_val in cls_val.items():
+            x_pos = []
+            y_amt = []
+            for pos, val in crm_val.items():
+                # Recopilar valors:
+                x_pos += [int(pos)]
+                y_amt += [int(val['a'])]
+
+            cutoffs += [matplotlib_cutoffs(x_pos, y_amt)]
+            j = []
+            for i in x_pos:
+                j += [i + last_x_pos]
+            # Extreu la última posició plotejada del cromosoma que
+            # acaba de ser plotejat, per sumar-li a la X del pròxim crm.
+            last_x_pos = int(max(j))
+
+            # Plot either length or amount...
+            #~scatterplot_repeats(j, y_amt, 'Length of repeats found in window', crm, axL)
+
+            # Get a colour to plot this specific chromosome:
+            c = next(colour)
+            
+            # El bloc de sota feia línies per a gràfiques amb pocs punts...
+            ### ### ### ###
+#            # Si hi han pocs punts (<100), fes línia.
+#            if len(j) < 100:
+#                axes.plot(j, y_amt, '.-', label=crm, c=c)  
+#                # '.-' is the format string: points joint by lines.
+#            # Si hi han molts punts, scatterplot sense línies:
+#            else:
+            ### ### ### ###
+            # Millor que sempre siguin scatter-plots.
+            axes.plot(j, y_amt, '.', label=crm, c=c)  # '.' is the format string.
+
+        # Plot the cutoffs (superior perc., mean, inferior perc.)
+        # color for each cutoff:
+        colour = iter(cm.rainbow(np.linspace(0, 1, len(unique_main_refid(rmfile)))))
+        for cut in cutoffs:
+            # L'ordre de les llistes de color i cutoffs haurien de coincidir;
+            # el primer valor de cada llista és pel cromosoma A,
+            # el segon valor de cada llista és pel cromosoma B...
+            c = next(colour)
+
+            # Dibuixa les tres línies horitzontals:
+            # La mitjana al centre, el cutoff superior i l'inferior.
+            # intercept: a on intercepta la línia horitzontal i eix Y.
+            for intercept in (cut[0], cut[1], cut[2]):
+                # valors x: la gràfica sencera (de 0 a last val.)
+                x_vals = np.array((0, last_x_pos))
+                # valors y: el mateix per a tots els punts, l'intercept.
+                y_vals = intercept + 0 * x_vals
+                axes.plot(x_vals, y_vals, '--', c=c)
+
+        # Crea una llegenda a partir de les etiquetes subministrades 
+        # (variable label dins la funció axes.plot()).
+        axes.legend()
+        axes.set_xlabel('Posició dins el cromosoma (b)')
+        axes.set_ylabel('Amount of repeats found in window (b)')
+        
+        title = f"Repeat: {cls.replace('/', '')} \
+        \nW. Size: {window_size} ; Percentil Cutoffs: {percent}"
+
+        axes.set_title(title)
+
+        # Save a fig for each Repeat class in the results['gen'] dict. 
+        plt.savefig(f"{args.rmfile}_amount_{cls.replace('/', '')}.png", bbox_inches='tight')
 
 #    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #    last_x_pos = 0
