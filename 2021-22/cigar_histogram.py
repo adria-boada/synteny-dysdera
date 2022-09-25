@@ -53,7 +53,7 @@ def paf_cighist (cigar: "A cigar string"):
     # Split the cig.
     for i in "MID":
         cigar = cigar.replace(i, i+' ' )
-    
+
     # Remove last space and split by the added separations.
     cigar = cigar.split(' ')[:-1]
 
@@ -65,9 +65,9 @@ def paf_cighist (cigar: "A cigar string"):
             results[i[-1]][int(i[:-1])] += 1
         except:
             results[i[-1]][int(i[:-1])] = 1
-            
+
     for key, val in results.items():
-        
+
         results[key] = sorted( val.items() )
 
     return results
@@ -81,7 +81,7 @@ def paf_parse_hist (paf_file: "A *.paf minimap2 alignment"):
     """
 
     with open(paf_file) as paf:
-            
+
         # El material s'acumula a results.
         results = {
                 "M": {},
@@ -102,7 +102,7 @@ def paf_parse_hist (paf_file: "A *.paf minimap2 alignment"):
                         results[hit_type][x[0]] += int(x[1])
                     except:
                         results[hit_type][x[0]] = int(x[1])
-        
+
         for hit_type, histo in results.items():
             # Sort the resulting histogram-like data.
             results[hit_type] = (sorted(histo.items()))
@@ -131,7 +131,7 @@ def plot_cighist (title: "plot super title"= "CIGAR histogram",
     # Add each arg to the histogram
     # as a set of data-points with different tags.
     for cigar_type, d in cig_histlike_dict.items():
-        
+
         names = [] # list(data.keys())
         values = [] # list(data.values())
 
@@ -154,7 +154,7 @@ def plot_cighist (title: "plot super title"= "CIGAR histogram",
         axs[counter].set_ylabel('Frequency')
         axs[counter].set_xlabel('Length of match/gap, in bp')
         counter+=1
-        
+
 
     # Add title and show the plot.
     fig.suptitle(title)
@@ -170,12 +170,12 @@ def chr_dict_paf (paf_file: "path/to/file to a minimap2 paf alignment output"):
 
     OUTPUT
     ------
-    
-    A list with all the scaffolds/contigs/chromosomes 
-    included in the alignment, paired in
-    sublists with their chromosomal length. 
 
-    [ [DsilChr1, length1], [DsilChr2, length2], *[...] ]   
+    A list with all the scaffolds/contigs/chromosomes
+    included in the alignment, paired in
+    sublists with their chromosomal length.
+
+    [ [DsilChr1, length1], [DsilChr2, length2], *[...] ]
 
     """
 
@@ -188,7 +188,7 @@ def chr_dict_paf (paf_file: "path/to/file to a minimap2 paf alignment output"):
             # (line = one alignment/hit)
             qname = "Q." + line.split("\t")[0]
             qlen = int( line.split("\t")[1] )
-    
+
             tname = "T." + line.split("\t")[5]
             tlen = int( line.split("\t")[6] )
 
@@ -219,12 +219,12 @@ def locate_transposon (paf_file: "pa/th/file to a minimap2 alignment output" ):
     [ [position, type, length, chromosome], *[...] ]
 
     """
-    
+
     # Output list.
     out = []
 
     with open(paf_file) as paf:
-        
+
         # Per cada línia del fitxer.
         for line in paf:
 
@@ -235,11 +235,11 @@ def locate_transposon (paf_file: "pa/th/file to a minimap2 alignment output" ):
             # Cut out name of aligned CRM.
             qname = "Q.{}".format( line.split("\t")[0] )
             tname = "T.{}".format( line.split("\t")[5] )
-            
+
             # Split the cig. by adding spaces.
             for i in "MID":
                 c = c.replace(i, i+' ' )
-    
+
             # Remove last space and split by the added separations.
             c = c.split(' ')[:-1]
 
@@ -250,14 +250,14 @@ def locate_transposon (paf_file: "pa/th/file to a minimap2 alignment output" ):
                 # i[:-1] -> '123'
                 out += [ [start_coord['Q'], i[-1], int( i[:-1] ), qname], # Query -> [0]
                         [start_coord['T'], i[-1], int( i[:-1] ), tname] ] # Target -> [1]
-    
+
     return out
 
 
 
 # If it's called as the main script;
 # run and plot a cig histogram.
-if __name__ == '__main__': 
+if __name__ == '__main__':
 
     # Switch 'where is my indel' on/off.
     if True:
@@ -319,11 +319,8 @@ if __name__ == '__main__':
         prova = paf_parse_hist( sys.argv[1] )
         # Format of the test.
         #print(prova['M'])
-        
+
         # Create plots from the dataset. 
         plot_cighist( "CIGAR histogram", Match= prova['M'], Deletion= prova['D'], Insertion= prova['I'] )
         plot_cighist( "CIGAR histogram", Deletion= prova['D'], Insertion= prova['I'] )
-  
-
-
 

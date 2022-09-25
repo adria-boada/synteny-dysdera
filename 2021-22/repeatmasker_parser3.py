@@ -309,8 +309,14 @@ if __name__ == '__main__':
         # i[4]: amount
         # i[5]: base-pair-len.
         # i[6]: avg. len.
-        col_perc_amount = round( (i[4]/total['amount'])*100, 4)
-        col_bp_repeats = round( (i[5]/total['BP-Total'])*100, 4)
+        if total['amount']!=0:
+            col_perc_amount = round( (i[4]/total['amount'])*100, 4)
+        else:
+            col_perc_amount = 0
+        if total['BP-Total']!=0:
+            col_bp_repeats = round( (i[5]/total['BP-Total'])*100, 4)
+        else:
+            col_bp_repeats = 0
         # use the gsize given as an argument:
         col_masked_genome = round( (i[5]/gsize)*100, 4)
         more_cols_data_listed += [ i[0:6] + [col_perc_amount, col_bp_repeats, col_masked_genome] + [i[6]] ]

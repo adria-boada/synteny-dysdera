@@ -24,9 +24,8 @@ from collections import defaultdict
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-# Transforma un nombre ( x*10**6 ) bases a x Megabasepairs.
+# Transforma un nombre de bases a Mbps.
 # fins a 'decims' decimals mostrats.
-# Emprat per convertir els resultats de parelles de bases...
 # Facilita visualització de les dades.
 def round_to_Mbps(number:"Amount of bases", decims:"Nº of trailing decimals"=2):
     return round( number/(10**6), decims)
@@ -37,7 +36,7 @@ class Mapping( object ):
         """ Parse fields given a line
         from a paf-file.
         """
-        
+
         (self.qname,        # query name
             self.qlen,      # query length
             self.qstart,    # query start coord
@@ -53,22 +52,23 @@ class Mapping( object ):
         ) = line.split()[:12]
 
         # int-ize numeric values...
-        self.qlen = int(self.qlen) 
-        self.qstart = int(self.qstart) 
-        self.qend = int(self.qend) 
-        self.tlen = int(self.tlen) 
-        self.tstart = int(self.tstart) 
-        self.tend = int(self.tend) 
-        self.matches = int(self.matches) 
-        self.n_bases = int(self.n_bases) 
-        self.mapQ = int(self.mapQ) 
+        self.qlen = int(self.qlen)
+        self.qstart = int(self.qstart)
+        self.qend = int(self.qend)
+        self.tlen = int(self.tlen)
+        self.tstart = int(self.tstart)
+        self.tend = int(self.tend)
+        self.matches = int(self.matches)
+        self.n_bases = int(self.n_bases)
+        self.mapQ = int(self.mapQ)
 
-        # add a header to distinguish query and target:
+        # add a header to visually distinguish query and target when printed to
+        # the terminal:
         self.qname = "Q." + self.qname
         self.tname = "T." + self.tname
 
         # find and add the other lines we're
-        # interested in:
+        # interested in (some measures might not always be present???):
         for i in line.split()[12:]:
             if 'NM:i:' in i:
                 # sum of mismatches and gaps in alig.
@@ -81,7 +81,7 @@ class Mapping( object ):
                 self.ambiguous = int(i[5:])
             elif 'cg:' in i:
                 # CIGAR-string.
-                # the [5:] slicing strips beggining 'cg:Z:' 
+                # the [5:] slicing strips beggining 'cg:Z:'
                 # the strip() method removes ending '\n'.
                 self.cigar = i[5:].strip("\n")
 #            elif 'dv:' in i:
@@ -100,7 +100,7 @@ class Results(object):
         the 'self.r' results-storage dictionary-object.
 
         These results are stored as the sum for all variables
-        inside the chromosome under scrutiny. 
+        inside the chromosome under scrutiny.
         """
         # Template to create many 'results' dicts.
 #        self.entry_template = {'ll': 0, # llargada
@@ -151,7 +151,7 @@ class Results(object):
         # Define scaffold's length
         self.r[scaff_name]['ll'] = ll_bases
 
-        
+
     def update_entry(self,
             scaff: "scaffold's name where results should be added",
             cgm: "sum of cigarMatches" = 0,
@@ -229,17 +229,17 @@ class Results(object):
         # Compute percentual variables:
 
         # matches throughout the chromosome.
-        covg = round( 
-                    (x['cgMatch'] / x['ll'])*100, 
-                4 ) 
+        covg = round(
+                    (x['cgMatch'] / x['ll'])*100,
+                4 )
         # identity: correct vs incorrect matches
         blast_id = round(
-                    (x['col10'] / x['col11'])*100, 
-                    4 ) 
+                    (x['col10'] / x['col11'])*100,
+                    4 )
         # identity: correct vs incorrect matches
         gap_comp = round(
-                    (x['col10'] / (x['cgMatch'] + x['cgCompressed']) )*100, 
-                    4 ) 
+                    (x['col10'] / (x['cgMatch'] + x['cgCompressed']) )*100,
+                    4 )
         # Compute sum of gaps and only misses:
         sum_of_gaps = int( x['cgAdded'] + x['cgLost'] )
         # Misses is 'NM'-'tot_gaps' or 'cg_Matches' - 'col10'
@@ -271,12 +271,12 @@ def parse_paf_alignment_db (filename: "Send the path to file"):
 
     colnames are the same as the manual for minimap2.
     colnames are explained in detail inside the
-    'Mapping' class. 
+    'Mapping' class.
 
     Returns a tuple with (parseable-paf, unique-list-of-scaffolds)
     Select one or the other with tuple-slicing (i.e. func(input)[1])
     """
-    
+
     # Parseable paf-file:
     paf = []
 
@@ -288,7 +288,7 @@ def parse_paf_alignment_db (filename: "Send the path to file"):
 
         for line in fn:
             # Use the mapping class to create
-            # a 'line' object. Append it to 'paf'list. 
+            # a 'line' object. Append it to 'paf'list.
             paf.append( Mapping( line ))
 
             # Last Class/line entry is:
@@ -300,7 +300,7 @@ def parse_paf_alignment_db (filename: "Send the path to file"):
             if not x.tname in unique_scaff:
                 unique_scaff += [ [x.tname, int(x.tlen)] ]
 
-    return paf, unique_scaff 
+    return paf, unique_scaff
 
 
 if __name__ == "__main__":
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     # amb llargada inicial de zero.
     results.new_entry('general', 0)
 
-    # Inclou ja les entrades per a la 
+    # Inclou ja les entrades per a la
     # mescla d'Scaffolds petits:
     # (( SI EXISTEIXEN SCAFFOLDS MINORITARIS! ))
     # Fa una passada pels scaffolds únics i si troba
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     # Afegeix-ho a general:
     results.update_entry('general', ll=ll_total)
 
-    # Parse and extract results. 
+    # Parse and extract results.
     # Add them to the above populated results dictionary.
     for line in parse_paf_alignment_db(paf_file)[0]:
         # Analyze with "overlap" module.
@@ -423,19 +423,19 @@ if __name__ == "__main__":
                 nn=line.ambiguous,
                 n_ali=1
                 )
-    
+
 
     # Create a CSV to easily export unto a spreadsheet:
     print(paf_file) # print the name of the analyzed *.paf
 
     # Print the headers of the CSV:
     results.print_header()
-    
+
     # For all chromosomes:
     for crm in results.r.keys():
     # Print the results:
         results.print_results( crm )
-    
+
     print() # Espai estètic per separar múltiples resultats.
 
 

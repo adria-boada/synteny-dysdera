@@ -27,15 +27,18 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-            description='Coordinate extraction from FASTA')
+            description='Given a FASTA file, extract the sequence found between\
+        given coordinates.')
     # file-name: positional arg.
     parser.add_argument('fasta', type=str, help='FASTA file-path')
     # file-name: positional arg.
-    parser.add_argument('coordinates', type=str, help='coordinate file-path')
+    parser.add_argument('coordinates', type=str, help='Coordinate file-path\
+                        with the format "$pattern, $begin, $end, $tag". Include\
+                        header (will skip first line).')
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
-    
+
 
     # Acquire regions of interesting coordinates...
     # from the specified coordinate file.
