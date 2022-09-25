@@ -15,9 +15,6 @@ Module for paf_analyzer2.py
 
 import sys
 
-# overlap_module with CIGAR function...
-import overlap_paf_parse as papaf
-
 # Aids in adding a default value of zero to newly created dict-keys.
 from collections import defaultdict
 
@@ -31,10 +28,64 @@ def round_to_Mbps(number:"Amount of bases", decims:"Nº of trailing decimals"=2)
     return round( number/(10**6), decims)
 
 
-class Mapping( object ):
+def cig_analysis (cig: "CIGAR string"):
+    """
+    INPUT
+    -----
+
+    A cigar string: A string of letters symbolizing the composition of an
+    alignment. Accepts a string with 'M', 'I', 'D' (and no other type).
+
+    OUTPUT
+    ------
+
+    Returns a dictionary with total length for matches, insertions and deletions
+    ('M', 'I', 'D'). It also returns the amount of insertions and deletions as a
+    key named 'compressed' (good for calculating compressed sequence identity;
+    refer to
+    <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
+    for an in-depth explanation.
+    """
+
+    # Split string by adding ' ' to the end of any letter:
+    for i in 'MID':
+        c = cig.replace(i, i+' ')
+
+    # Transform spaces into list separations:
+    c = c.split(' ')
+
+    # Elimina un espai buit al final:
+    # c = c[:-1]
+    # (Ja es sol fer abans d'entrar a la func.)
+    c = c.strip()  # ...Fes .strip() igualment.
+
+    # Prepara retorn:
+    answer = {
+            'M': 0,
+            'I': 0,
+            'D': 0,
+            'compressed': 0
+            }
+
+    # Recompte:
+    for i in c:
+        if 'M' in i:
+            answer['M'] += int(i[:-1])
+        elif 'D' in i:
+            answer['D'] += int(i[:-1])
+        elif 'I' in i:
+            answer['I'] += int(i[:-1])
+
+    # Tingues en compte el nombre de gaps
+    # i no tant la seva llargada (comprimeix-los).
+    answer['compressed'] = cig.count('D') + cig.count('I')
+
+    return answer
+
+
+class Mapping(object):
     def __init__(self, line):
-        """ Parse fields given a line
-        from a paf-file.
+        """ Parse fields given a line from a PAF formatted file.
         """
 
         (self.qname,        # query name
@@ -369,7 +420,7 @@ if __name__ == "__main__":
     # Add them to the above populated results dictionary.
     for line in parse_paf_alignment_db(paf_file)[0]:
         # Analyze with "overlap" module.
-        c = papaf.cig_analysis(line.cigar)
+        c = cig_analysis(line.cigar)
 
         # Change qname or tname if they're generic Scaffolds:
         if 'caffold' in line.qname:

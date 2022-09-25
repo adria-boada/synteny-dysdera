@@ -150,53 +150,10 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
                 # Tanca l'interval previ
                 currentOpen = -1
                 added = False
-  
-    return answer
-
-
-# Accepts a CIGAR string and calculates total and percent M, I and D. 
-def cig_analysis (cig: "CIGAR string"):
-    """ Returns a dictionary with 'tM', 'tI','tD'.
-    Accepts a string with Matches, Deletions and Insertions 
-    (and no other type).
-
-    """
-    # Input:
-    c = cig
-
-    # Split string by adding ' ' to the end of any letter:
-    for i in 'MID':
-        c = c.replace(i, i+' ')
-
-    # Transform spaces into list separations:
-    c = c.split(' ')
-
-    # Elimina un espai buit al final:
-    # c = c[:-1]
-    # (Ja es sol fer abans d'entrar a la func.)
-
-    # Prepara retorn:
-    answer = {
-            'M': 0,
-            'I': 0,
-            'D': 0,
-            'compressed': 0
-            }
-
-    # Recompte:
-    for i in c:
-        if 'M' in i:
-            answer['M'] += int(i[:-1])
-        elif 'D' in i:
-            answer['D'] += int(i[:-1])
-        elif 'I' in i:
-            answer['I'] += int(i[:-1])
-
-    # Tingues en compte el nombre de gaps
-    # i no tant la seva llargada (comprimeix-los).
-    answer['compressed'] = cig.count('D') + cig.count('I')
 
     return answer
+
+
 
 
 if __name__ == '__main__':
