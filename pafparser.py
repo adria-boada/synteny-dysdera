@@ -85,7 +85,8 @@ def cig_analysis (cig: "CIGAR string"):
 
 class Mapping(object):
     def __init__(self, line):
-        """ Parse fields given a line from a PAF formatted file.
+        """ Parse fields given a line from a PAF formatted file. Creates an
+        instance of the "Mapping" class from a single line of a PAF file.
         """
 
         (self.qname,        # query name
@@ -182,7 +183,7 @@ class Results(object):
         the paf-file is parsed.
         """
         # Create entry
-        self.r[scaff_name] = {'ll': 0,
+        self.r[scaff_name] = {'ll': ll_bases,
                 'cgMatch': 0,
                 'cgLost': 0,
                 'cgAdded': 0,
@@ -192,15 +193,17 @@ class Results(object):
                 'NM': 0,
                 'ambiguous': 0,
                 'amount_maps': 0,
-                'type': defaultdict(lambda: 0), # amount of each type of alignment.
+                'type': {'tp:A:P': 0,   # 1ary alignments (one hit)
+                         'tp:A:S': 0,   # 2ary alignments (multiple hit)
+                         'tp:A:i':0,    # inverted alignments
+                         'tp:A:I': 0},  # inverted alignments
+                # previously employed a defaultdic... not anymore.
                 # employing a defaultdict means that '+=' can be used with
                 # newly created keys without throwing errors.
                 'default_dv': 0,      # divergence
                 'default_de': 0,      # compressed-dv.
                 'number_additions': 0 # sum one for each parsing pass.
                 }
-        # Define scaffold's length
-        self.r[scaff_name]['ll'] = ll_bases
 
 
     def update_entry(self,
@@ -235,8 +238,11 @@ class Results(object):
         x['col11'] += col11
         # Add No-Matches (mismatches and gaps in alig.)
         x['NM'] += NM
-        # type of alignment? add one to it.
-        x['type'][tp] += 1
+        # type of alignment?
+        # if `tp` is not the 'None' given by default...
+        if tp:
+            # add one to such type.
+            x['type'][tp] += 1
         # ambiguous bases (NNNs)
         x['ambiguous'] += nn
         # number of mappings for each crm:
