@@ -10,6 +10,22 @@ Transforms a paf-file into a more manageable Python3 object.
 
 Afterwards, create a pandas dataframe from the refined and translated Python
 objects.
+
+--30-09-22--
+Intenció: emprar 'pandas' per gestionar les anàlisis. Crear un dataframe similar
+al PAF cru, que difereixi en el seu refinament exquisit.
+  1. class Mapping(): eat a raw line from a PAF file and spit out a refined obj.
+  2. parse file: create a list of refined obj, one for each line.
+  3. get results: print out data thanks to pandas from the created dataframe
+  (mean, max, plots...).
+
+  Pandas can eat a list of dictionaries with keys as column names, and values as
+cells. Each dictionary in the list is a row.
+
+  Def function_parser(): open the file. for each line, create a Mapping() obj.
+Append these obj to a list. From it, create a dataframe. Now: which columns am
+I interested in? A chromosome tag. BLAST-id and compressed-id. Number of bases
+hit (col11).
 """
 
 import sys
