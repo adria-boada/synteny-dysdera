@@ -5,18 +5,21 @@
 #
 # 27 abr 2022  <adria@molevol-OptiPlex-9020>
 
-"""Parse a paf-file. Uses a class to store values inside a Python object.
-Transforms a paf-file into a more manageable Python3 object.
+""" Parse a paf-file. Store its values in a class.
+Transforms a paf-file into a more manageable
+Python3 object.
 
-Afterwards, create a pandas dataframe from the refined and translated Python
-objects.
+Module for paf_analyzer2.py
+
 """
 
 import sys
 
-import pandas as pd
+# Aids in adding a default value of zero to newly created dict-keys (RELICT).
+#from collections import defaultdict
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 def round_to_Mbps(number:"Amount of bases", decims:"Nº of trailing decimals"=2):
     """Transforma una mesura qualsevol al prefixe d'unitats `Mega`, que denota
@@ -26,99 +29,68 @@ def round_to_Mbps(number:"Amount of bases", decims:"Nº of trailing decimals"=2)
     """
     return round( number/(10**6), decims)
 
+
+def cig_analysis (cig: "CIGAR string"):
+    """
+    INPUT
+    -----
+
+    A cigar string: A string of letters symbolizing the composition of an
+    alignment. Accepts a string with 'M', 'I', 'D' (and no other type).
+
+    OUTPUT
+    ------
+
+    Returns a dictionary with total length for matches, insertions and deletions
+    ('M', 'I', 'D'). It also returns the amount of insertions and deletions as a
+    key named 'compressed' (good for calculating compressed sequence identity;
+    refer to
+    <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
+    for an in-depth explanation of the 'compressed-identity' concept).
+    """
+
+    # Split string by adding ' ' to the end of any letter:
+    for i in 'MID':
+        cig = cig.replace(i, i+' ')
+
+    # Transform spaces into list separations:
+    c = cig.strip().split(' ')
+    # ...Fes .strip() igualment per eliminar espai buit.
+
+    # Elimina un espai buit al final:
+    # c = c[:-1]
+    # (Ja es sol fer abans d'entrar a la func.)
+
+    # Prepara retorn:
+    answer = {
+            'M': 0,
+            'I': 0,
+            'D': 0,
+            'compressed': 0
+            }
+
+    # Recompte:
+    for i in c:
+        if 'M' in i:
+            answer['M'] += int(i[:-1])
+        elif 'D' in i:
+            answer['D'] += int(i[:-1])
+        elif 'I' in i:
+            answer['I'] += int(i[:-1])
+
+    # Tingues en compte el nombre de gaps
+    # i no tant la seva llargada (comprimeix-los).
+    answer['compressed'] = cig.count('D') + cig.count('I')
+
+    return answer
+
+
 class Mapping(object):
     """ Parse fields given a line from a PAF formatted file. Creates an
     instance of the "Mapping" class from a single line of a PAF file.
     """
-    def cig_analysis (self, cig: "CIGAR string"):
-        """
-        INPUT
-        -----
-
-        A cigar string: A string of letters symbolizing the composition of an
-        alignment. Accepts a string with 'M', 'I', 'D' (and no other type).
-
-        OUTPUT
-        ------
-
-        Returns a dictionary with total length for matches, insertions and deletions
-        ('M', 'I', 'D'). It also returns the amount of insertions and deletions as a
-        key named 'compressed' (good for calculating compressed sequence identity;
-        refer to
-        <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
-        for an in-depth explanation of the 'compressed-identity' concept).
-        """
-
-        # Split string by adding ' ' to the end of any letter:
-        for i in 'MID':
-            cig = cig.replace(i, i+' ')
-
-        # Transform spaces into list separations:
-        c = cig.strip().split(' ')
-        # ...Fes .strip() igualment per eliminar espai buit.
-
-        # Elimina un espai buit al final:
-        # c = c[:-1]
-        # (Ja es sol fer abans d'entrar a la func.)
-
-        # Prepara retorn:
-        answer = {
-                'M': 0,
-                'I': 0,
-                'D': 0,
-                'compressed': 0
-                }
-
-        # Recompte:
-        for i in c:
-            if 'M' in i:
-                answer['M'] += int(i[:-1])
-            elif 'D' in i:
-                answer['D'] += int(i[:-1])
-            elif 'I' in i:
-                answer['I'] += int(i[:-1])
-
-        # Tingues en compte el nombre de gaps
-        # i no tant la seva llargada (comprimeix-los).
-        answer['compressed'] = cig.count('D') + cig.count('I')
-
-        return answer
-
     def __init__(self, line):
-        """Create Python variables from the given file columns...
-
-        INPUT
-        -----
-
-        A line from a PAF formatted file.
-
-        OUTPUT
-        ------
-
-        A Python object of the Mapping() class, hopefully more manageable and
-        refined than the raw data.
-
-        Small documentation of alignment measures:
-         * Column 10 (self.matches) is the number of exactly matching bases in
-         the alignment.
-
-         * Column 11 (self.ali_len) are the total number of bases forming part of the
-         alignment (including gaps, matches and no-matches).
-
-         * mapQ (self.mapQ) scores how likely is it that a mapping is correctly aligned.
-         Low scores mean that there are many possible mappings for the
-         read/query inside the targeted database. High scores mean fewer ways in
-         which the read/query could be mapped to the targeted database.
-
-         * Non-Matching (self.no_match) is the number of incorrect matches in
-         the alignment (the sum of mismatches and gaps).
-
-         * Ambiguous bases (self.ambiguous) are bases left as "N" inside the
-         alignment.
-
-        In summary:
-        no_match + match = ali_len = cigM + cigI + cigD
-        """
+        # Create variables from the given file-line. 
         (self.qname,        # query name
             self.qlen,      # query length
             self.qstart,    # query start coord
@@ -129,7 +101,7 @@ class Mapping(object):
             self.tstart,
             self.tend,
             self.matches,   # number of matching bases
-            self.ali_len,   # nº of matches+ misses+ gaps
+            self.n_bases,   # nº of matches+ misses+ gaps
             self.mapQ       # mapping quality
         ) = line.split()[:12]
 
@@ -141,30 +113,29 @@ class Mapping(object):
         self.tstart = int(self.tstart)
         self.tend = int(self.tend)
         self.matches = int(self.matches)
-        self.ali_len = int(self.ali_len)
+        self.n_bases = int(self.n_bases)
         self.mapQ = int(self.mapQ)
 
         # Detect whether the given scaffold is a chromosome or a minor
         # unassembled contig. If it is the later, change its name to a generic
         # tag (`Scaff`) which groups all of them under a single name: 
-        if 'scaffold' in self.qname.lower():
-            self.qname = 'Minor_Scaffold'
-        if 'scaffold' in self.tname.lower():
-            self.tname = 'Minor_Scaffold'
-        # `Scaff` results will be a mean/sum of all minor contigs. The lower
-        # function makes the string lowercase (case-insensitive matching).
+        if 'Scaffold' in self.qname:
+            self.qname = 'Scaff'
+        if 'Scaffold' in self.tname:
+            self.tname = 'Scaff'
+        # `Scaff` results will be a mean/sum of all minor contigs.
 
         # add a small tag to visually distinguish query and target when printed to
         # the terminal:
         self.qname = "Q." + self.qname
         self.tname = "T." + self.tname
 
-        # Find and add the other lines we're interested in (some measures might
-        # not always be present in the PAF-file... misterious?):
+        # find and add the other lines we're
+        # interested in (some measures might not always be present???):
         for i in line.split()[12:]:
             if 'NM:i:' in i:
                 # sum of mismatches and gaps in alig.
-                self.no_match = int(i[5:])
+                self.mismatch = int(i[5:])
             elif 'tp:A:' in i:
                 # tipus d'alineament; 1ari o 2ari.
                 self.typeA = i
@@ -176,18 +147,13 @@ class Mapping(object):
                 # the [5:] slicing strips beggining 'cg:Z:'
                 # the strip() method removes ending '\n'.
                 self.cigar = i[5:].strip("\n")
-                # analyze the amount of matches and indels in the `CIGAR` string
-                # refer to the above function "cig_analysis" to see the keys of
-                # the returned dictionary.
-                self.cig_summary = self.cig_analysis(self.cigar)
-
-#            # No l'he aconseguit fer funcionar ......
 #            elif 'dv:' in i:
 #                # divergencia (si es troba)
 #                self.divergence = i[5:]
 #            elif 'de:' in i:
 #                # divergencia gap-compressed (si es troba)
 #                self.comp_div = i[5:]
+
 
 class Results(object):
     def __init__(self):
@@ -495,8 +461,8 @@ if __name__ == "__main__":
                 cga=c['I'],
                 cgc=c['compressed'],
                 col10=line.matches,
-                col11=line.ali_len,
-                NM=line.no_match,
+                col11=line.n_bases,
+                NM=line.mismatch,
                 tp=line.typeA,
                 nn=line.ambiguous,
                 n_ali=1
@@ -509,8 +475,8 @@ if __name__ == "__main__":
                 cga=c['D'],
                 cgc=c['compressed'],
                 col10=line.matches,
-                col11=line.ali_len,
-                NM=line.no_match,
+                col11=line.n_bases,
+                NM=line.mismatch,
                 tp=line.typeA,
                 nn=line.ambiguous,
                 n_ali=1
@@ -523,8 +489,8 @@ if __name__ == "__main__":
                 cga=c['I'],
                 cgc=c['compressed'],
                 col10=line.matches,
-                col11=line.ali_len,
-                NM=line.no_match,
+                col11=line.n_bases,
+                NM=line.mismatch,
                 tp=line.typeA,
                 nn=line.ambiguous,
                 n_ali=1
