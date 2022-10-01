@@ -245,25 +245,28 @@ def parse_paf_alignment_db (filename: "Path to PAF formatted file"):
     # Parsing paf-file into Mapping() Python3 object:
     paf = []
 
-    # LLista de cromosomes i contigs únics:
-    unique_scaff = []
+    # LLista de cromosomes i contigs únics, emparellats amb la seva llargada:
+    unique_scaff = {'Q.Minor_Scaffold': 0, 'T.Minor_Scaffold': 0}
 
     # In theory, could open both gzipped or normal files:
     with gzip.open(filename) if filename.endswith('.gz') else open(filename) as fn:
 
         for line in fn:
-            # Use the mapping class to create an object from 'line'. Append it
-            # to 'paf' list.
-            paf.append(Mapping(line))
+            # Use the mapping class to create an object from 'line'.
+            x = Mapping(line)
 
-            # Last Class/line entry is:
-            x = paf[-1]
+            # Apend it to 'paf' return list.
+            paf.append(x.df)
 
             # Si és el primer cop que trobem el cromosoma/contig:
-            if not [x.qname, int(x.qlen)] in unique_scaff:
-                unique_scaff += [ [x.qname, int(x.qlen)] ]
-            if not [x.tname, int(x.tlen)] in unique_scaff:
-                unique_scaff += [ [x.tname, int(x.tlen)] ]
+            if x.qname == 'Q.Minor_Scaffold':
+                unique_scaff['Q.Minor_Scaffold'] += x.qlen
+            elif not x.qname in unique_scaff.keys():
+                unique_scaff[x.qname] = x.qlen
+            if x.tname == 'T.Minor_Scaffold':
+                unique_scaff['T.Minor_Scaffold'] += x.tlen
+            elif not x.tname in unique_scaff.keys():
+                unique_scaff[x.tname] = x.tlen
 
     return paf, unique_scaff
 
@@ -278,8 +281,16 @@ if __name__ == "__main__":
 
     # List of unique scaffolds and list of 'rows':
     list_paf_rows, unique_scaff = parse_paf_alignment_db(paf_file)
-    print(unique_scaff) ##DEBUG
-    print(list_paf_rows[0]) ##DEBUG
-    print(list_paf_rows[1].df) ##DEBUG
+    #print(unique_scaff) ##DEBUG
+    #print(list_paf_rows[0]) ##DEBUG
+    #print(list_paf_rows[1].df) ##DEBUG
+
+    # Create a mighty dataframe.
+    df = pd.DataFrame(list_paf_rows)
+
+    # Options to fully view and print tables:
+    pd.set_option('display.max_columns', None)
+
+    print(df.describe())
 
 
