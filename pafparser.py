@@ -36,7 +36,11 @@ finds the non-overlapping ranges. Then we could compute the real coverage for ch
 
 import sys
 
+# Dataframes manipulation, akin to the R project
 import pandas as pd
+
+# Plotting data into barplots, histograms, etc.
+import matplotlib.pyplot as plt
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -291,6 +295,26 @@ if __name__ == "__main__":
     # Options to fully view and print tables:
     pd.set_option('display.max_columns', None)
 
-    print(df.describe())
+    # Veure la capçalera.
+    print(df.head(5), '----------', sep='\n', end='\n\n')
+
+    # Descripció d'estadístiques bàsiques.
+    print(df.describe(), '----------', sep='\n', end='\n\n')
+
+    # Count the amount of rows for each chromosome tag.
+    print(df['Qname'].value_counts(normalize=True), '----------', sep='\n', end='\n\n')
+    print(df['Tname'].value_counts(normalize=True), '----------', sep='\n', end='\n\n')
+
+    ## Plotting section ##
+
+    # Box plot of mapping quality for each chromosome.
+    # Create a 'list' of paired 'crm' and 'mapq' values.
+    df_mapq = pd.concat([df[['Tname', 'MapQ.']].rename(columns={'Tname': 'crm'}),
+                         df[['Qname', 'MapQ.']].rename(columns={'Qname': 'crm'})
+                         ])
+    print(df_mapq, '----------', sep='\n', end='\n\n')  ###DEBUG
+    # Plot `df_mapq` with matplotlib.
+    df_mapq.plot.box(by='crm')
+    plt.savefig("mapq-boxplot.jpg")
 
 
