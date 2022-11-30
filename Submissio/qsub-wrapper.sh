@@ -24,16 +24,16 @@ for i in "$ncpu" "$NAME" "$NODE" ; do
 	if [ -z "$i" ] ; then 
 		echo "A variable has not been set properly"
 		echo 'Call the script as follows:'
-		echo "${0##*/} -N 'job-name' -n 'node[8..13]' -t 'threads' -s 'script-to-submit.sh' 'SCRIPT-ARGS'"
+		echo "${0##*/} -N 'job-name' -n 'node[1; 8..13]' -t 'threads' 'SCRIPT-and-ARGS'"
 		echo # move to a new line
 		echo "Example:" 
-		echo "${0##*/} -N prova -n 8 -t 2 -s script.sh all the other script args"
+		echo "${0##*/} -N prova -n 8 -t 2 script.sh all the other script args"
 		exit 1
 	fi 
 done
 
-# detect to which hostname have you been submitted:
-# Read single digits as cluster addresses.
+# detect to which hostname was the query submitted to:
+# Read single digits and translate to cluster addresses.
 if [[ $NODE -eq 8 ]]; then
 	Q_NODO="h0809.q"
 	L_NODO="hostname=hercules08"
@@ -65,10 +65,10 @@ elif [[ $NODE -eq 13 ]]; then
 	THREADS="ompi255h13"
 	INFO_NODE="Enviat a hercules13, a la cua ompi255h13 amb $ncpu CPUs"
 elif [[ $NODE -eq 1 ]]; then
-	Q_NODO="h0107.q"
-	L_NODO="(auto)"  # Tant fa, on pugui...
-	THREADS="(auto)"  # Amb un, de sobres...
-	ncpu="(1)"  # Amb un, de sobres...
+	Q_NODO="h0107.q"  # cas especial de la cua h0107...
+	L_NODO="(auto)"   # El node tant fa, qui estigui lliure...
+	THREADS="(auto)"  # Amb un thread, de sobres...
+	ncpu="(1)"        # Amb un thread, de sobres...
 	INFO_NODE="Enviat a la cua h0107.q"
 else
 	# Not a single case has been found to match...
@@ -85,6 +85,8 @@ STDOUT="$(date +%y%m%d-%H%M)-${NAME}.log"
 echo "La ordre que es llançarà és la següent (s'han eludit algunes opcions 'bàsiques' dins els punts suspensius):"
 echo "qsub (...) -N $NAME -q $Q_NODO -l $L_NODO -pe $THREADS $ncpu -o $STDOUT bash $ARGS"
 echo # move to a new line
+echo "El cas h0107 és especial. Recorda escriure '-b yes bash -x' com si fós un argument (al final) per invocar shellscripts."
+echo "La opció '-b yes' avisa que crides binaris. No esta predefinida dins h0107 per poder enviar ordres més simples."
 read -p "Desitja continuar? [S/n]" -n 1 -r # La opció -n 1 deixa entrar tan sols un caràcter.
 echo # move to a new line
 
@@ -104,7 +106,7 @@ if [[ $REPLY =~ ^[YS]$ ]]; then
 	if [[ $NODE != 1 ]]; then  # Si NO envies a la cua h0107.q ...
 		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -l "$L_NODO" -pe "$THREADS" "$ncpu" -o "$STDOUT" -j yes -b yes bash "$ARGS"
 	else  # Si envies a la cua h0107.q, comanda qsub diferent...
-		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -o "$STDOUT" -j yes -b yes bash "$ARGS"
+		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -o "$STDOUT" -j yes "$ARGS"
 	fi
 
 	# La opció '-h' llança la ordre en espera... no comença fins a sotmetre `qalter -h U "$j_id" `.

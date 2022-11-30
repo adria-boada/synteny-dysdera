@@ -122,7 +122,7 @@ grep "^COV" ${fn}.stats.tmp | cut -f3- |
 	tr '\t' ',' >>${fn}_covg_histogram.csv # subst. tabs per comes
 # Empra el guió de python3 per fer l'anàlisis estadístic.
 # (imprimeix als mateixos logs, directament).
-python3 /users-d3/adria.boada/home/Submissio/m_histo_coverage_stats.py ${fn}_covg_histogram.csv
+python3 /users-d3/adria.boada/home/Submissio/covfreq_tomeans.py ${fn}_covg_histogram.csv
 echo
 
 # Once the analyses are finished, remove tmp files...

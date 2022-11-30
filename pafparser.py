@@ -314,7 +314,7 @@ if __name__ == "__main__":
                          ])
     print(df_mapq, '----------', sep='\n', end='\n\n')  ###DEBUG
     # Plot `df_mapq` with matplotlib.
-    df_mapq.plot.box(by='crm')
+    df_mapq.plot.box(by='crm', figsize=(20,10))
     plt.savefig("mapq-boxplot.jpg")
 
 
