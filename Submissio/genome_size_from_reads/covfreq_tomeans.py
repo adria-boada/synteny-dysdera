@@ -132,10 +132,10 @@ if __name__ == '__main__':
     print(df.dtypes)
 
     # Do analyses.
-    print(f"* Covg. values range: {df['covg'].iloc[0]} -- {df['covg'].iloc[-1]}")
-    print(f"* Mean: {frequency_pandasdf_mean(df, 'covg', 'freq')}")
-    print(f"* Median: {frequency_pandasdf_median(df, 'covg', 'freq')}")
-    print(f"* Max: {frequency_pandasdf_max(df, 'covg', 'freq')}")
-    print(f"* Min: {frequency_pandasdf_min(df, 'covg', 'freq')}")
-    print(f"* Stdev: {frequency_pandasdf_stdev(df, 'covg', 'freq')}")
+    print(f"+ Covg. values range: {df['covg'].iloc[0]} -- {df['covg'].iloc[-1]}")
+    print(f"+ Mean: {frequency_pandasdf_mean(df, 'covg', 'freq')}")
+    print(f"+ Median: {frequency_pandasdf_median(df, 'covg', 'freq')}")
+    print(f"+ Max: {frequency_pandasdf_max(df, 'covg', 'freq')}")
+    print(f"+ Min: {frequency_pandasdf_min(df, 'covg', 'freq')}")
+    print(f"+ Stdev: {frequency_pandasdf_stdev(df, 'covg', 'freq')}")
 
