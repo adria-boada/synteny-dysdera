@@ -16,17 +16,17 @@
 # PATH
 source /users-d3/adria.boada/.bashrc
 # Comprova que uses la versió adequada del soft. que necessites...
-echo "SAMTOOLS (tested with version 1.14):"
-echo "$(which samtools)"
-echo "PYTHON3 (tested with version 3.9.7)"
-echo "$(python3 --version)"
+echo "Samtools (tested with version 1.14):"
+echo "  $(which samtools)"
+echo "Python3 (tested with version 3.9.7)"
+echo "  $(python3 --version)"
 # Per a còrrer un script.py, activa'l amb chmod i busca'l al path amb
 # `which script.py` per assegurar que usa la direcció adequada. Evita
 # a tot cost direccions absolutes.
-echo "homemade script nº 1 (calculates means):"
-echo "$(which covfreq_tomeans.py)"
-echo "homemade script nº 2 (seeks info.):"
-echo "$(which samstats_ofinterest.sh)"
+echo "Homemade script nº 1 (calculates means):"
+echo "  $(which covfreq_tomeans.py)"
+echo "Homemade script nº 2 (seeks info.):"
+echo "  $(which samstats_ofinterest.sh)"
 echo
 
 # INPUT PARSING
@@ -67,10 +67,13 @@ if [ -z "$threads" ] ; then
     threads=11
 fi
 echo "threads used: $threads"
+echo "$report_fname will be overwritten"
+echo
 
 # IMPRIMEIX LES OPCIONS YAML
 # Permet convertir de manera àgil a format pdf.
-echo "---" >> $report_fname
+echo "---" > $report_fname # Sobrescriu el fitxer $report_fname;
+# '>' buida qualsevol fitxer anterior i el sobrescriu per '---'
 echo "documentclass: extarticle" >> $report_fname
 echo "author: Adrià Boada" >> $report_fname
 echo "" >> $report_fname
