@@ -27,6 +27,7 @@ echo "homemade script nº 1 (calculates means):"
 echo "$(which covfreq_tomeans.py)"
 echo "homemade script nº 2 (seeks info.):"
 echo "$(which samstats_ofinterest.sh)"
+echo
 
 # INPUT PARSING
 while [ "$1" != "" ]; do
@@ -96,7 +97,8 @@ echo "\newpage{}" >> $report_fname
 echo "" >> $report_fname
 
 # PER A CADA BAM-FILE:
-for fn in "$ARGS" ; do
+# echo $ARGS fa clars els espais pel bon funcionament del for-loop.
+for fn in $(echo "$ARGS") ; do
     # Elimina la extensió final (.bam) del fitxer:
     fn=${fn%\.*}
     echo "Etapa: $fn"
@@ -125,7 +127,7 @@ for fn in "$ARGS" ; do
         # és un rang que inclou totes les freqs superior a 1000).
         tr '\t' ',' >> ${fn}_covg_histogram.tmp.csv # subst. TABS per comes
     # Empra el guió de python3 per fer l'anàlisis estadístic.
-    echo -e "\n## Coverage frequencies\n"
+    echo -e "\n## Coverage frequencies\n" >> $report_fname
     covfreq_tomeans.py ${fn}_covg_histogram.tmp.csv >> $report_fname
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
