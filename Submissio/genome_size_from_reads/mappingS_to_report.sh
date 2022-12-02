@@ -63,6 +63,34 @@ if [ -z "$threads" ] ; then
 fi
 echo "threads used: $threads"
 
+# IMPRIMEIX LES OPCIONS YAML
+# Permet convertir de manera àgil a format pdf.
+echo "---" >> $report_fname
+echo "documentclass: extarticle" >> $report_fname
+echo "author: Adrià Boada" >> $report_fname
+echo "" >> $report_fname
+echo "geometry:" >> $report_fname
+echo " - left=3.5cm" >> $report_fname
+echo " - right=3.5cm" >> $report_fname
+echo " - top=3cm" >> $report_fname
+echo " - bottom=3cm" >> $report_fname
+echo "linestretch: 1.15" >> $report_fname
+echo "papersize: a4" >> $report_fname
+echo "fontfamily: arev" >> $report_fname
+echo "" >> $report_fname
+echo "colorlinks: true" >> $report_fname
+echo "numbersections: true" >> $report_fname
+echo "toc: true" >> $report_fname
+echo "toc-title: Report Index" >> $report_fname
+echo "" >> $report_fname
+echo "header-includes: |" >> $report_fname
+echo "	\usepackage{numprint}" >> $report_fname
+echo "	\npthousandsep{,}\npthousandthpartsep{}\npdecimalsign{.}" >> $report_fname
+echo "..." >> $report_fname
+echo "" >> $report_fname
+echo "\newpage{}" >> $report_fname
+echo "" >> $report_fname
+
 # PER A CADA BAM-FILE:
 for fn in "$ARGS" ; do
     # Elimina la extensió final (.bam) del fitxer:
