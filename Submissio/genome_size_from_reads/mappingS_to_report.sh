@@ -30,13 +30,19 @@ while [ "$1" != "" ]; do
   case $1 in
       -t )    shift
               threads=$1
+              shift
               ;;
       -r )    shift
               report_fname=$1
+              shift
+              ;;
+      # La palanca '-h' activa la impressio
+      # d'un histograma inicial [INHABILITAT]
+      -h )    shift
+              histo='TRUE'
               ;;
       * )     ARGS+=" $1"
   esac
-  shift
 done
 
 # DO NOT RUN WITHOUT A GIVEN OUTPUT FILENAME
@@ -99,6 +105,7 @@ for fn in "$ARGS" ; do
 done
 
 # HISTOGRAMA PER A CADA SET DE DADES BAM
-# un sol plot amb tots els histogrames recollits
-# possiblement millor si es troba a l'inici del report...
+# Un sol plot amb tots els histogrames recollits.
+# Possiblement millor si el plot es troba a l'inici (pag.1) del report...
+# Associar una palanca per incloure o excloure la figura...
 
