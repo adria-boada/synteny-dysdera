@@ -26,5 +26,4 @@ insert=$(grep "^SN" $fn|cut -f2-|grep "insert size")
 echo "+ Insert size and its standard deviation: $(echo $insert|cut -f4 -d' ') \$\pm\$ $(echo $insert|cut -f9 -d' ')"
 perc=$(grep "primary mapped" $fn|cut -f6 -d' '|tr -d '(')
 echo "+ Percentage of primary reads mapped: $perc"
-echo
 
