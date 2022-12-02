@@ -72,11 +72,6 @@ samtools flagstat ${fn}.bam > ${fn}.stats.tmp
 # Extreu els stats de samtools i guarda'ls en un arxiu.
 samtools stats --threads "$threads" ${fn}.bam >> ${fn}.stats.tmp
 
-# Imprimeix el nom de l'arxiu, d'entrada.
-# (no es perdi sobre qui fas l'anàlisi)
-echo
-echo "# INPUT: ${fn}"
-echo
 # Obtén i imprimeix les dades d'interés:
 # Assegurar-se de que els fitxers $reads i $mates
 # son fitxers comprimits (*gz, comanda zcat).
@@ -89,21 +84,21 @@ echo "## General mapping stats"
 echo
 # Treure'ls dels stats generals:
 qr=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "raw total sequences")
-echo "* Number of raw reads queried: $(echo $qr|cut -f4 -d' ')"
+echo "+ Number of raw reads queried: $(echo $qr|cut -f4 -d' ')"
 prim=$(grep "primary mapped" ${fn}.stats.tmp|cut -f1 -d' '|tr -d '(')
-echo "* Primary alignments: $prim"
+echo "+ Primary alignments: $prim"
 nprim=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "non-primary alignments")
-echo "* Non-primary alignments: $(echo $nprim|cut -f3 -d' ')"
+echo "+ Non-primary alignments: $(echo $nprim|cut -f3 -d' ')"
 supp=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "supplementary alignments")
-echo "* Supplementary alignments: $(echo $supp|cut -f3 -d' ')"
+echo "+ Supplementary alignments: $(echo $supp|cut -f3 -d' ')"
 nuc=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "total length:")
-echo "* Raw read length: $(echo $nuc|cut -f3 -d' ')"
+echo "+ Raw read length: $(echo $nuc|cut -f3 -d' ')"
 nuc=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "(cigar):")
-echo "* Bases mapped (more accurate): $(echo $nuc|cut -f4 -d' ')"
+echo "+ Bases mapped (more accurate): $(echo $nuc|cut -f4 -d' ')"
 err=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "error rate")
-echo "* Error rate: $(echo $err|cut -f3 -d' ')"
+echo "+ Error rate: $(echo $err|cut -f3 -d' ')"
 insert=$(grep "^SN" ${fn}.stats.tmp|cut -f2-|grep "insert size")
-echo "* Insert size and its standard deviation: $(echo $insert|cut -f4 -d' ') ~~$(echo $insert|cut -f9 -d' ')"
+echo "+ Insert size and its standard deviation: $(echo $insert|cut -f4 -d' ') ~~$(echo $insert|cut -f9 -d' ')"
 perc=$(grep "primary mapped" ${fn}.stats.tmp|cut -f6 -d' '|tr -d '(')
 echo "* Percentage of primary reads mapped: $perc"
 echo
@@ -118,8 +113,9 @@ grep "^COV" ${fn}.stats.tmp | cut -f3- |
 	# del guió de python3...
 	head -n-1 | # Elimina la última fila (reads >1000 profunditat)
 	# No els podem incorporar a l'anàlisi pq no es pot multiplicar
-	# profunditat de '>1000' per cap freqüència.
-	tr '\t' ',' >>${fn}_covg_histogram.csv # subst. tabs per comes
+	# profunditat de '>1000' per cap freqüència (no és un número,
+	# és un rang que inclou totes les freqs superior a 1000).
+	tr '\t' ',' >>${fn}_covg_histogram.csv # subst. TABS per comes
 # Empra el guió de python3 per fer l'anàlisis estadístic.
 # (imprimeix als mateixos logs, directament).
 python3 /users-d3/adria.boada/home/Submissio/covfreq_tomeans.py ${fn}_covg_histogram.csv

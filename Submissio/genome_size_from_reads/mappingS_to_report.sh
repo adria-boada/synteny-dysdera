@@ -19,6 +19,11 @@ source /users-d3/adria.boada/.bashrc
 echo "samtools path: $(which samtools)" # samtools-1.14
 echo "bwa path: $(which bwa)"						# /soft/bwa/bwa
 echo "$(python3 --version)"							# python3.9.7 (at least >=3.6?)
+# Per a còrrer un script.py, activa'l amb chmod i busca'l al path amb
+# `which script.py` per assegurar que usa la direcció adequada. Evita
+# a tot cost direccions absolutes.
+echo "homemade script: $(which covfreq_tomeans.py)"
+echo "homemade script: $(which samstats_ofinterest.sh)"
 
 # INPUT PARSING
 while [ "$1" != "" ]; do
@@ -41,21 +46,59 @@ if [ -z "$report_fname" ] ; then
     echo
     echo "Example:"
     echo "${0##*/} -r 'out-report-filename.md' -t 'threads' BAM-1 BAM-2 ... BAM-N"
+
     exit 1
 fi
 
-# DEFAULT THREADS IF LEFT UNSET IN ARGS
+# DEFAULT THREADS
+# (if the var is not set as an arg.)
 if [ -z "$threads" ] ; then
     threads=11
 fi
 echo "threads used: $threads"
 
 # PER A CADA BAM-FILE:
-# Extreu les banderes del mapatge
-# (ha anat bé, el mapatge? percentatges mapats?)
-samtools flagstat ${fn}.bam > ${fn}.stats.tmp
+for fn in "$ARGS" ; do
+    # Elimina la extensió final (.bam) del fitxer:
+    fn=${fn%\.*}
+    echo "Etapa: $fn"
+    # Extreu les 'banderes' del mapatge
+    # (ha anat bé, el mapatge? -> percentatge de lectures mapades)
+    samtools flagstat --threads "$threads" ${fn}.bam > ${fn}.stats.tmp
+    # Continua amb l'anàlisi de l'histograma de coverage (samtools stats):
+    # Extreu els stats de samtools i guarda'ls en un arxiu.
+    samtools stats --threads "$threads" ${fn}.bam >> ${fn}.stats.tmp
 
-# Continua amb l'anàlisi de l'histograma de coverage (samtools stats):
-# Extreu els stats de samtools i guarda'ls en un arxiu.
-samtools stats --threads "$threads" ${fn}.bam >> ${fn}.stats.tmp
+    # Append els resultats de .stats.tmp al report, 
+    # en ordre i en format markdown.
+    echo -e "\n# INPUT: ${fn}\n" >> $report_fname
+    echo -e "## General mapping stats\n" >> $report_fname
+    samstats_ofinterest.sh ${fn}.stats.tmp >> $report_fname
+    
+    # Modifica el format de l'histograma cru per adequar-lo als
+    # requeriments del guió python3 que en calcula la freqüència mitjana.
+    # El fitxer amb l'histograma adequat és ${fn}_covg_histogram.tmp.csv
+    echo "Coverage,Frequency" > ${fn}_covg_histogram.tmp.csv
+    # Recull la secció 'COVERAGE' dels stats i retalla'n les columnes:
+    grep "^COV" ${fn}.stats.tmp | cut -f3- |
+    	  head -n-1 | # Elimina la última fila (reads >1000 profunditat)
+        # No els podem incorporar a l'anàlisi pq no es pot multiplicar
+        # profunditat de '>1000' per cap freqüència (no és un número,
+        # és un rang que inclou totes les freqs superior a 1000).
+        tr '\t' ',' >> ${fn}_covg_histogram.tmp.csv # subst. TABS per comes
+    # Empra el guió de python3 per fer l'anàlisis estadístic.
+    echo -e "\n## Coverage frequencies\n"
+    covfreq_tomeans.py ${fn}_covg_histogram.tmp.csv >> $report_fname
+
+    # Un cop els anàlisis acaben, elimina els fitxers temporals:
+    ##rm --force ${fn}_covg_histogram.tmp.csv
+    ##rm --force ${fn}.stats.tmp
+    # Recorda que més tard vols fer el plotting amb pandas
+    # dels histogrames un sobre l'altre.
+
+done
+
+# HISTOGRAMA PER A CADA SET DE DADES BAM
+# un sol plot amb tots els histogrames recollits
+# possiblement millor si es troba a l'inici del report...
 
