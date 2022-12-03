@@ -29,6 +29,7 @@ of 1, etc.
 import sys
 # DataFrame reading, parsing, manip...
 import pandas as pd
+import numpy as np
 # Plotting
 import matplotlib.pyplot as plt
 # Square root for stdev
@@ -120,17 +121,18 @@ if __name__ == '__main__':
     for (columnName, columnData) in df.items():
         df = df.astype({columnName: 'int'})
 
-    # Make sure that each csv contains a column tagged with 'freq'.
+    # Make sure that each csv contains two columns: one tagged with 'freq'
+    # and the other will be interpreted as coverage at the given 'freq'.
     #~print(df.dtypes)
 
-    # Translate columns.
+    # Translate columns. If it cannot translate to integer, throw error.
     for col in df.columns:
         if 'freq' in col.lower():
             df = df.rename(columns={col: 'freq'})
         else:
             df = df.rename(columns={col: 'covg'})
-    # Make sure the translation was correct:
-    print(df.dtypes)
+    # Make sure the translation was correct, and columns are
+    # entirely of integer type.
 
     # Do analyses.
     print(f"+ Covg. values range: {df['covg'].iloc[0]} -- {df['covg'].iloc[-1]}")
