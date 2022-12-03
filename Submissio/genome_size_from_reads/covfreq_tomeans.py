@@ -1,6 +1,7 @@
-#!/usr/bin/python3
+#! /users-d3/adria.boada/anaconda3/bin/python3 
 # -*- coding: utf-8 -*-
 #
+# cas especial: shebang modificat per a hercules...
 # coverage.py
 #
 # 05 de nov. 2022  <adria@molevol-OptiPlex-9020>

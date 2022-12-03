@@ -120,21 +120,21 @@ for fn in $(echo "$ARGS") ; do
     
     # Modifica el format de l'histograma cru per adequar-lo als
     # requeriments del guió python3 que en calcula la freqüència mitjana.
-    # El fitxer amb l'histograma adequat és ${fn}_covg_histogram.tmp.csv
-    echo "Coverage,Frequency" > ${fn}_covg_histogram.tmp.csv
+    # El fitxer amb l'histograma adequat és ${fn}_covg_histogram.csv
+    echo "Coverage,Frequency" > ${fn}_covg_histogram.csv
     # Recull la secció 'COVERAGE' dels stats i retalla'n les columnes:
     grep "^COV" ${fn}.stats.tmp | cut -f3- |
     	  head -n-1 | # Elimina la última fila (reads >1000 profunditat)
         # No els podem incorporar a l'anàlisi pq no es pot multiplicar
         # profunditat de '>1000' per cap freqüència (no és un número,
         # és un rang que inclou totes les freqs superior a 1000).
-        tr '\t' ',' >> ${fn}_covg_histogram.tmp.csv # subst. TABS per comes
+        tr '\t' ',' >> ${fn}_covg_histogram.csv # subst. TABS per comes
     # Empra el guió de python3 per fer l'anàlisis estadístic.
     echo -e "\n## Coverage frequencies\n" >> $report_fname
-    covfreq_tomeans.py ${fn}_covg_histogram.tmp.csv >> $report_fname
+    covfreq_tomeans.py ${fn}_covg_histogram.csv >> $report_fname
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
-    ##rm --force ${fn}_covg_histogram.tmp.csv
+    ##rm --force ${fn}_covg_histogram.csv
     ##rm --force ${fn}.stats.tmp
     # Recorda que més tard vols fer el plotting amb pandas
     # dels histogrames un sobre l'altre.
