@@ -1,4 +1,4 @@
-#! /users-d3/adria.boada/anaconda3/bin/python3 
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # cas especial: shebang modificat per a hercules...
@@ -29,7 +29,6 @@ of 1, etc.
 import sys
 # DataFrame reading, parsing, manip...
 import pandas as pd
-import numpy as np
 # Plotting
 import matplotlib.pyplot as plt
 # Square root for stdev
