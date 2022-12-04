@@ -13,6 +13,7 @@
 # --------
 
 # Inicialitzem algunes opcions...
+
 # PATH
 source /users-d3/adria.boada/.bashrc
 # Comprova que uses la versió adequada del soft. que necessites...

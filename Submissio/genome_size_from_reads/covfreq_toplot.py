@@ -8,6 +8,12 @@
 """
 Creates an interactive matplotlib plot with multiple csv dataframes of paired
 coverage and frequency values.
+
+The naming process is unstable and prone to bugs and errors; naming should be
+handled through the file header instead of the filename (processing) itself.
+
+Not ready to run with Hercules, it's better to run the script manually, once the
+.csv files have already been created.
 """
 
 import sys
