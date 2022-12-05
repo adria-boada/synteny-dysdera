@@ -1,28 +1,90 @@
+#! /bin/bash
 
-# !/bin/bash
+# OBJECTIVE
+# ---------
+#
+# Create bwa mem mappings from many pairs of FQ--FASTA files,
+# each with a newly given name (by a third variable with BAM extension).
+#
+# Example:
+# ./bwa_mem.sh reads.fq mates.fq assembly.fasta outname.bam \
+#    outname.bam mates.fq assembly.fasta reads.fq
+# The above command would create two mappings with filenames `outname.bam`
+#
+# ---------
 
-# Threads
-threads=11
+# Initialize options...
 
-# Exporta els camins fins a la ultima versio del soft.
-# Es posa al davant del $PATH perque prengui prioritat.
-export PATH="/soft/bwa:$PATH"
-export PATH="/users-d3/adria.boada/bin/samtools-1.14:$PATH"
-which samtools
-which bwa
+# PATH
+source /users-d3/adria.boada/.bashrc
+# Comprova que uses la versió adequada del soft. que necessites...
+echo "Samtools (tested with version 1.14):"
+echo "  PATH: $(which samtools)"
+echo "  ver.: $(samtools --version)"
+echo "Burrows-Wheeler Aligner (bwa)"
+echo "  PATH: $(which bwa)"
+echo
 
-# Ref assembly.
-ref_asm=$1
+# INPUT PARSING
+while [ "$1" != "" ]; do
+	case $1 in
+		-t )
+			shift
+			threads=$1
+			;;
+		# Enumerar possibles extensions de reads and mates
+		*fq | *fq.gz )
+			if [ -z "$reads" ]; then
+				reads=$1
+			else
+				mates=$1
+			fi
+			;;
+		# Enumerar possibles extensions d'assemblies
+		*fasta | *fas | *fa | *fa.gz )
+			ref_asm=$1
+			;;
+		# Anomena al bam output
+		*bam )
+			output=$1
+			;;
+		* )
+			echo "A file with an unrecognised extension was detected"
+			echo "Make sure the arguments or the script are correct"
+			exit 1
+	esac
+	# shift moves to the next argv. ($1 <- $2 <- $3 etc.)
+	shift
 
-# Read-file(s) queried to map (one file for single-end or two files for paired-ends)
-reads=$2
-mates=$3
+	if [ -z "$threads" ]; then
+		echo "Amount of threads has not been set as the first variable."
+		echo "Remember to set threads with the '-t INT' option."
+		exit 1
+	fi
 
-# Prepare filenames for the output.
-# The filename gets the first four characters from $ref_asm and $lec1.
-name_ref=${ref_asm##*/}
-name_read=${reads##*/}
-fn="RF_${name_ref:0:4}_LC_${name_read:0:4}"
+	# MAIN ALIGNMENT SCRIPT
+	# Si totes les vars necessàries per fer alignment han sigut definides:
+	if [[ "$reads" && "$mates" && "$ref_asm" && "$output" ]]; then
+		# Endavant.
+		echo "Starting alignment..."
+		echo "Reads: $reads"
+		echo "Mates: $mates"
+		echo "Reference assembly: $ref_asm"
+		echo "Output name: $output"
+		echo
+
+	bwa mem -a -t $threads $ref_asm $reads $mates |
+		# Possibilitat d'evaluar la canonada de bwa gracies a tee:
+		# canalitza i al mateix temps escriu una còpia del que surt de bwa mem
+		# al fitxer tmp.sam.
+		#tee tmp.sam |
+		# Compress from SAM to BAM format (-u)
+		samtools view -T $ref_asm -@ $threads -u - |
+		# Sort the BAM file.
+    samtools sort -@ $threads -o $output -
+	# Delete reads variable...
+	fi
+done
 
 # Launch bwa-mem and transmutate its SAM output to BAM thanks to samtools.
 # Make sure you have updated samtools' software and you also have it incorporated in your $PATH variable.
@@ -48,11 +110,4 @@ fn="RF_${name_ref:0:4}_LC_${name_read:0:4}"
 # -o    : Sense especificar res, la opció predeterminada és `stdout`.
 # -T    : Fitxer FASTA de referència.
 # El guionet '-' al final de la ordre de samtools li diu que llegeixi stdin.
-
-# -F'4' method... envia a un fitxer temporal (tmp.sam).
-bwa mem -a -t $threads $ref_asm "$reads" "$mates" |
-	# Possibilitat d'evaluar la canonada de bwa gracies a tee:
-	#tee tmp.sam |
-	samtools view -F 4 -T $ref_asm -@ "$threads" -u - |
-        samtools sort -@ "$threads" -o ${fn}.bam -
 

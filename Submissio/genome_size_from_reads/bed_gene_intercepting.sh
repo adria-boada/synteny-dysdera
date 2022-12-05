@@ -14,6 +14,7 @@
 source /users-d3/adria.boada/.bashrc
 echo "Bedtools (tested with v2.30.0)"
 echo "$(which bedtools) $(bedtools --version|cut -f2 -d' ')"
+echo
 
 # INPUT PARSING
 # Mentre existeixi argument nº 1:
@@ -42,6 +43,10 @@ while [ "$1" != "" ]; do
 		# exó, un pel gen sencer, el mateix BAM, output sobrescrit)
 		# solució: córrer en dos etapes i reanomenar manualment.
 		newfile_name="BUSCO_intersct_${bamfile}"
+		echo "Creating $newfile_name"
+		echo "from BED $bedfile"
+		echo "and BAM $bamfile"
+		echo
 		bedtools intersect -a $bamfile \
 			-b $bedfile > $newfile_name
 	fi
