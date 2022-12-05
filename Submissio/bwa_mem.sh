@@ -83,6 +83,9 @@ while [ "$1" != "" ]; do
 		# Sort the BAM file.
     samtools sort -@ $threads -o $output -
 	# Delete reads variable...
+	reads=""
+	mates=""
+	output=""
 	fi
 done
 
