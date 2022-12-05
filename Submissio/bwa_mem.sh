@@ -41,7 +41,7 @@ while [ "$1" != "" ]; do
 			fi
 			;;
 		# Enumerar possibles extensions d'assemblies
-		*fasta | *fas | *fa | *fa.gz )
+		*fasta | *fas | *fa | *fa.gz | *fasta.gz )
 			ref_asm=$1
 			;;
 		# Anomena al bam output
