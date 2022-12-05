@@ -33,7 +33,7 @@ while [ "$1" != "" ]; do
 			threads=$1
 			;;
 		# Enumerar possibles extensions de reads and mates
-		*fq | *fq.gz )
+		*fq | *fq.gz | *fastq.gz | *fastq )
 			if [ -z "$reads" ]; then
 				reads=$1
 			else
