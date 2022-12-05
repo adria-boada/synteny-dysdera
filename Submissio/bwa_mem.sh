@@ -28,7 +28,7 @@ echo
 # INPUT PARSING
 while [ "$1" != "" ]; do
 	case $1 in
-		-t )
+		--threads )
 			shift
 			threads=$1
 			;;
