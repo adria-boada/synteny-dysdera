@@ -85,6 +85,7 @@ while [ "$1" != "" ]; do
 	# Delete reads variable...
 	reads=""
 	mates=""
+	ref_asm=""
 	output=""
 	fi
 done
