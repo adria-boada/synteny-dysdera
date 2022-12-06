@@ -49,6 +49,7 @@ while [ "$1" != "" ]; do
 		echo
 		bedtools intersect -a $bamfile \
 			-b $bedfile > $newfile_name
+		bedfile=""
 	fi
 done
 
