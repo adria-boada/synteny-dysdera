@@ -69,38 +69,10 @@ fi
 if [ -z "$threads" ] ; then
     threads=11
 fi
-echo "threads used: $threads"
-echo "$report_fname will be overwritten"
+echo "Threads used: $threads"
+echo "The file '$report_fname' will be overwritten"
 echo
-
-# IMPRIMEIX LES OPCIONS YAML
-# Permet convertir de manera àgil a format pdf.
-echo -e "\n---" > $report_fname # Sobrescriu el fitxer $report_fname;
-# '>' buida qualsevol fitxer anterior i el sobrescriu per '---'
-echo "documentclass: extarticle" >> $report_fname
-echo "author: Adrià Boada" >> $report_fname
-echo "" >> $report_fname
-echo "geometry:" >> $report_fname
-echo " - left=3.5cm" >> $report_fname
-echo " - right=3.5cm" >> $report_fname
-echo " - top=3cm" >> $report_fname
-echo " - bottom=3cm" >> $report_fname
-echo "linestretch: 1.15" >> $report_fname
-echo "papersize: a4" >> $report_fname
-echo "fontfamily: arev" >> $report_fname
-echo "" >> $report_fname
-echo "colorlinks: true" >> $report_fname
-echo "numbersections: true" >> $report_fname
-echo "toc: true" >> $report_fname
-echo "toc-title: Report Index" >> $report_fname
-echo "" >> $report_fname
-echo "header-includes: |" >> $report_fname
-echo "	\usepackage{numprint}" >> $report_fname
-echo "	\npthousandsep{,}\npthousandthpartsep{}\npdecimalsign{.}" >> $report_fname
-echo "..." >> $report_fname
-echo "" >> $report_fname
-echo "\newpage{}" >> $report_fname
-echo "" >> $report_fname
+echo '' > $report_fname
 
 # PER A CADA BAM-FILE:
 # echo $ARGS fa clars els espais pel bon funcionament del for-loop.
