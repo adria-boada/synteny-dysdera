@@ -20,7 +20,7 @@ source /users-d3/adria.boada/.bashrc
 # Comprova que uses la versió adequada del soft. que necessites...
 echo "Samtools (tested with version 1.14):"
 echo "  PATH: $(which samtools)"
-echo "  ver.: $(samtools --version)"
+echo "  ver.: $(samtools --version|head -n2)"
 echo "Burrows-Wheeler Aligner (bwa)"
 echo "  PATH: $(which bwa)"
 echo
