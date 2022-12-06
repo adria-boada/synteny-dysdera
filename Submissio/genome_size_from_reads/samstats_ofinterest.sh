@@ -19,7 +19,8 @@ echo "+ Supplementary alignments: $(echo $supp|cut -f3 -d' ')"
 nuc=$(grep "^SN" $fn|cut -f2-|grep "total length:")
 echo "+ Raw reads' cumulative length: $(echo $nuc|cut -f3 -d' ')"
 nuc=$(grep "^SN" $fn|cut -f2-|grep "(cigar):")
-echo "+ Bases mapped (more accurate): $(echo $nuc|cut -f4 -d' ')"
+nuc=$(echo $nuc|cut -f4 -d' ')
+echo "+ Bases mapped (more accurate): $nuc"
 err=$(grep "^SN" $fn|cut -f2-|grep "error rate")
 echo "+ Error rate: $(echo $err|cut -f3 -d' ')"
 insert=$(grep "^SN" $fn|cut -f2-|grep "insert size")
