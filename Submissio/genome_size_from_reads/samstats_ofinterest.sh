@@ -27,3 +27,12 @@ echo "+ Insert size and its standard deviation: $(echo $insert|cut -f4 -d' ') \$
 perc=$(grep "primary mapped" $fn|cut -f6 -d' '|tr -d '(')
 echo "+ Percentage of primary reads mapped: $perc"
 
+# Seria interessant calcular "Expected(Coverage)" per a mides
+# genòmiques de 3 Gb i 1.5 Gb.
+# E(cov.) = Mapped bases / Expected gensize
+# Empraria la variable $nuc de bases mapades del samtools stats.
+est30=$(python3 -c "print($nuc/3000000000)")
+est15=$(python3 -c "print($nuc/1500000000)")
+echo "+ Expected coverage for 3.0 Gb: $est30"
+echo "+ Expected coverage for 1.5 Gb: $est15"
+
