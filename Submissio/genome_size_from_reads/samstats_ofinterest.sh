@@ -17,7 +17,7 @@ echo "+ Non-primary alignments: $(echo $nprim|cut -f3 -d' ')"
 supp=$(grep "^SN" $fn|cut -f2-|grep "supplementary alignments")
 echo "+ Supplementary alignments: $(echo $supp|cut -f3 -d' ')"
 readlen=$(grep "^SN" $fn|cut -f2-|grep "total length:")
-readlen=$(echo $nuc|cut -f3 -d' ')
+readlen=$(echo $readlen|cut -f3 -d' ')
 echo "+ Raw reads' cumulative length: $readlen"
 nuc=$(grep "^SN" $fn|cut -f2-|grep "(cigar):")
 nuc=$(echo $nuc|cut -f4 -d' ')
