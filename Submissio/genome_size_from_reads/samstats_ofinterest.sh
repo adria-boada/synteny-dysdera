@@ -33,16 +33,16 @@ echo "+ Percentage of primary reads mapped: $perc"
 # genòmiques de 3 Gb i 1.5 Gb.
 # E(cov.) = Mapped bases / Expected gensize
 # Empraria la variable $nuc de bases mapades del samtools stats.
-est30=$(python3 -c "print($nuc/3000000000)")
-est15=$(python3 -c "print($nuc/1500000000)")
+est30=$(python3 -c "print(round($nuc/3000000000), 4)")
+est15=$(python3 -c "print(round($nuc/1500000000), 4)")
 echo ''
 echo 'Expected coverages when bases = mapped-reads:'
 echo "+ For 3.0 Gb: $est30"
 echo "+ For 1.5 Gb: $est15"
 # E(cov.) = Raw reads' cumulative length / Expected gensize
 # Empraria la variable $readlen prèvia.
-est30=$(python3 -c "print($readlen/3000000000)")
-est15=$(python3 -c "print($readlen/1500000000)")
+est30=$(python3 -c "print(round($readlen/3000000000), 4)")
+est15=$(python3 -c "print(round($readlen/1500000000), 4)")
 echo ''
 echo 'Expected coverages when bases = raw-reads:'
 echo "+ For 3.0 Gb: $est30"
