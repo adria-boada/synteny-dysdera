@@ -84,7 +84,7 @@ def frequency_pandasdf_max(df, values_colname, freqs_colnames):
     # the maximum(s) values. In case there are multiple frequency maximums.
     max_subset = df[df[freqs_colnames] == df[freqs_colnames].max()]
     # Return the list of coverages with maximum frequency.
-    return max_subset[values_colname].tolist()
+    return max_subset[values_colname].tolist()[0]
 
 def frequency_pandasdf_min(df, values_colname, freqs_colnames):
     """
@@ -93,7 +93,7 @@ def frequency_pandasdf_min(df, values_colname, freqs_colnames):
     # the minimum(s) values. In case there are multiple frequency minimums.
     min_subset = df[df[freqs_colnames] == df[freqs_colnames].min()]
     # Return the list of coverages with minimum frequency.
-    return min_subset[values_colname].tolist()
+    return min_subset[values_colname].tolist()[0]
 
 def frequency_pandasdf_stdev(df, values_colname, freqs_colnames):
     """
@@ -105,8 +105,43 @@ def frequency_pandasdf_stdev(df, values_colname, freqs_colnames):
     """
     denominador = df[freqs_colnames].sum()
     mean = frequency_pandasdf_mean(df, values_colname, freqs_colnames)
-    numerador = (((df[values_colname]-mean)**2) * df[freqs_colnames]).sum()
+    numerador = (((df[values_colname] - mean)**2) * df[freqs_colnames]).sum()
     return math.sqrt(numerador/denominador)
+
+def frequency_pandasdf_localmodes(df, values_colname, freqs_colnames):
+    """
+    Get the local maxima/minima from an array.
+    Max.: a value preceded and succeded by other values lower than itself.
+    Min.: a value preceded and succeded by other values higher than itself.
+
+    Example:
+    [1, 3, 5, 4, 9] -> Third and last values are local maxima.
+    [1, 3, 5, 4, 9] -> First and second to last (fourth)
+    values are local minima.
+    """
+    idx_local_maxima=[]
+    idx_local_minima=[]
+    for i, row in df.iterrows():
+        if i==0:
+            if df.loc[i,freqs_colnames] < df.loc[i+1,freqs_colnames]:
+                idx_local_minima.append(i)
+            elif df.loc[i,freqs_colnames] > df.loc[i+1,freqs_colnames]:
+                idx_local_maxima.append(i)
+        elif i == len(df)-1:
+            if df.loc[i,freqs_colnames] < df.loc[i-1,freqs_colnames]:
+                idx_local_minima.append(i)
+            elif df.loc[i,freqs_colnames] > df.loc[i-1,freqs_colnames]:
+                idx_local_maxima.append(i)
+        else:
+            if df.loc[i,freqs_colnames] < df.loc[i-1,freqs_colnames] and df.loc[i,freqs_colnames] < df.loc[i+1,freqs_colnames]:
+                idx_local_minima.append(i)
+            elif df.loc[i,freqs_colnames] > df.loc[i-1,freqs_colnames] and df.loc[i,freqs_colnames] > df.loc[i+1,freqs_colnames]:
+                idx_local_maxima.append(i)
+    return {'idx_max': idx_local_maxima,
+            'idx_min': idx_local_minima,
+            'val_max': [df.loc[val, values_colname] for val in idx_local_maxima],
+            'val_min': [df.loc[val, values_colname] for val in idx_local_minima],
+    }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -135,9 +170,11 @@ if __name__ == '__main__':
 
     # Do analyses.
     print(f"+ Covg. values range: {df['covg'].iloc[0]} -- {df['covg'].iloc[-1]}")
-    print(f"+ Mean: {frequency_pandasdf_mean(df, 'covg', 'freq')}")
+    print(f"+ Mean: {round(frequency_pandasdf_mean(df, 'covg', 'freq'), 3)}")
     print(f"+ Median: {frequency_pandasdf_median(df, 'covg', 'freq')}")
-    print(f"+ Max: {frequency_pandasdf_max(df, 'covg', 'freq')}")
-    print(f"+ Min: {frequency_pandasdf_min(df, 'covg', 'freq')}")
-    print(f"+ Stdev: {frequency_pandasdf_stdev(df, 'covg', 'freq')}")
+    print(f"+ First abs. max.: {frequency_pandasdf_max(df, 'covg', 'freq')}")
+    print(f"+ First ten Local max.: {frequency_pandasdf_localmodes(df, 'covg', 'freq')['val_max'][0:9]}")
+    print(f"+ First abs. min.: {frequency_pandasdf_min(df, 'covg', 'freq')}")
+    print(f"+ First ten Local min.: {frequency_pandasdf_localmodes(df, 'covg', 'freq')['val_min'][0:9]}")
+    print(f"+ Stdev: {round(frequency_pandasdf_stdev(df, 'covg', 'freq'), 3)}")
 
