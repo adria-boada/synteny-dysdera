@@ -16,8 +16,9 @@ nprim=$(grep "^SN" $fn|cut -f2-|grep "non-primary alignments")
 echo "+ Non-primary alignments: $(echo $nprim|cut -f3 -d' ')"
 supp=$(grep "^SN" $fn|cut -f2-|grep "supplementary alignments")
 echo "+ Supplementary alignments: $(echo $supp|cut -f3 -d' ')"
-nuc=$(grep "^SN" $fn|cut -f2-|grep "total length:")
-echo "+ Raw reads' cumulative length: $(echo $nuc|cut -f3 -d' ')"
+readlen=$(grep "^SN" $fn|cut -f2-|grep "total length:")
+readlen=$(echo $nuc|cut -f3 -d' ')
+echo "+ Raw reads' cumulative length: $readlen"
 nuc=$(grep "^SN" $fn|cut -f2-|grep "(cigar):")
 nuc=$(echo $nuc|cut -f4 -d' ')
 echo "+ Bases mapped (more accurate): $nuc"
@@ -34,6 +35,16 @@ echo "+ Percentage of primary reads mapped: $perc"
 # Empraria la variable $nuc de bases mapades del samtools stats.
 est30=$(python3 -c "print($nuc/3000000000)")
 est15=$(python3 -c "print($nuc/1500000000)")
-echo "+ Expected coverage for 3.0 Gb: $est30"
-echo "+ Expected coverage for 1.5 Gb: $est15"
+echo ''
+echo 'Expected coverages when bases = mapped-reads:'
+echo "+ For 3.0 Gb: $est30"
+echo "+ For 1.5 Gb: $est15"
+# E(cov.) = Raw reads' cumulative length / Expected gensize
+# Empraria la variable $readlen prèvia.
+est30=$(python3 -c "print($readlen/3000000000)")
+est15=$(python3 -c "print($readlen/1500000000)")
+echo ''
+echo 'Expected coverages when bases = raw-reads:'
+echo "+ For 3.0 Gb: $est30"
+echo "+ For 1.5 Gb: $est15"
 
