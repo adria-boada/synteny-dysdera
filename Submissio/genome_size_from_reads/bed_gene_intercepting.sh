@@ -42,7 +42,7 @@ while [ "$1" != "" ]; do
 		# del mateix BAM amb diversos BEDs (un pel primer
 		# exó, un pel gen sencer, el mateix BAM, output sobrescrit)
 		# solució: córrer en dos etapes i reanomenar manualment.
-		newfile_name="BUSCO_intersct_${bamfile}"
+		newfile_name="BUSCO_intersct_${bamfile##*/}"
 		echo "Creating $newfile_name"
 		echo "from BED $bedfile"
 		echo "and BAM $bamfile"

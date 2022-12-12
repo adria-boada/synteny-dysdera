@@ -51,6 +51,12 @@ while [ "$1" != "" ]; do
 		* )
 			echo "A file with an unrecognised extension was detected"
 			echo "Make sure the arguments or the script are correct"
+			echo "Reads & mates exts.:"
+			echo "*fq | *fq.gz | *fastq.gz | *fastq"
+			echo "Reference genome extensions:"
+			echo "*fasta | *fas | *fa | *fa.gz | *fasta.gz"
+			echo "Output mapping extension:"
+			echo "*bam"
 			exit 1
 	esac
 	# shift moves to the next argv. ($1 <- $2 <- $3 etc.)
