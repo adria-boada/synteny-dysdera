@@ -36,7 +36,8 @@ echo "+ Percentage of primary reads mapped: $perc"
 est30=$(python3 -c "print(round(($readlen/3000000000), 4))")
 est15=$(python3 -c "print(round(($readlen/1500000000), 4))")
 echo ''
-echo "Expected coverages (valid if input is not filtered by BUSCOs):"
-echo "+ For 3.0 Gb: $est30"
-echo "+ For 1.5 Gb: $est15"
+echo "Expected coverages (valid if input is not filtered by regions, e.g. BUSCOs):"
+echo ''
+echo "+ If Gsize == 3.0 Gb, Exp(Cvg.) = $est30"
+echo "+ If Gsize == 1.5 Gb, Exp(Cvg.) = $est15"
 

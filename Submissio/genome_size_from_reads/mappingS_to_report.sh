@@ -89,8 +89,8 @@ for fn in $(echo "$ARGS") ; do
 
     # Append els resultats de .stats.tmp al report, 
     # en ordre i en format markdown.
-    echo -e "\n# INPUT: ${fn}\n" >> $report_fname
-    echo -e "## General mapping stats\n" >> $report_fname
+    echo -e "\n## INPUT: ${fn}\n" >> $report_fname
+    echo -e "### General mapping stats\n" >> $report_fname
     samstats_ofinterest.sh ${fn}.stats.tmp >> $report_fname
     
     # Modifica el format de l'histograma cru per adequar-lo als
@@ -105,7 +105,7 @@ for fn in $(echo "$ARGS") ; do
         # és un rang que inclou totes les freqs superior a 1000).
         tr '\t' ',' >> ${fn}_covg_histogram.csv # subst. TABS per comes
     # Empra el guió de python3 per fer l'anàlisis estadístic.
-    echo -e "\n## Coverage frequencies\n" >> $report_fname
+    echo -e "\n### Coverage frequencies\n" >> $report_fname
     covfreq_tomeans.py ${fn}_covg_histogram.csv >> $report_fname
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
