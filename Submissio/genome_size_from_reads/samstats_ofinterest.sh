@@ -31,27 +31,12 @@ echo "+ Percentage of primary reads mapped: $perc"
 
 # Seria interessant calcular "Expected(Coverage)" per a mides
 # genòmiques de 3 Gb i 1.5 Gb.
-# E(cov.) = Mapped bases / Expected gensize
-# Empraria la variable $nuc de bases mapades del samtools stats.
-est30=$(python3 -c "print(round(($nuc/3000000000), 4))")
-est15=$(python3 -c "print(round(($nuc/1500000000), 4))")
-    # format bullet-point
-#~echo ''
-#~echo 'Expected coverages when bases = mapped-reads:'
-#~echo "+ For 3.0 Gb: $est30"
-#~echo "+ For 1.5 Gb: $est15"
-    # format taula
-echo ''
-echo '| Type of bases employed | 3.0 Gb hypothesis | 1.5 Gb hypothesis |'
-echo '| :--------------------: | :---------------: | :---------------: |'
-echo "| bases from mapped-reads| $est30 | $est15 |"
-# E(cov.) = Raw reads' cumulative length / Expected gensize
-# Empraria la variable $readlen prèvia.
+# E(cov.) = Raw-read-cumulative-len / Expected-gensize
+# Empraria la variable $readlen.
 est30=$(python3 -c "print(round(($readlen/3000000000), 4))")
 est15=$(python3 -c "print(round(($readlen/1500000000), 4))")
-#~echo ''
-#~echo 'Expected coverages when bases = raw-reads:'
-#~echo "+ For 3.0 Gb: $est30"
-#~echo "+ For 1.5 Gb: $est15"
-echo "| bases from raw-reads   | $est30 | $est15 |"
+echo ''
+echo "Expected coverages (valid if input is not filtered by BUSCOs):"
+echo "+ For 3.0 Gb: $est30"
+echo "+ For 1.5 Gb: $est15"
 
