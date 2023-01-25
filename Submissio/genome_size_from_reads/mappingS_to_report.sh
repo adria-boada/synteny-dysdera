@@ -28,7 +28,7 @@ echo "  $(which python3)"
 # a tot cost direccions absolutes.
 echo "Homemade script nº 1 (calculates means):"
 echo "  $(which covfreq_tomeans.py)"
-echo "Homemade script nº 2 (seeks info.):"
+echo "Homemade script nº 2 (parses alignment info.):"
 echo "  $(which samstats_ofinterest.sh)"
 echo
 
@@ -89,7 +89,7 @@ for fn in $(echo "$ARGS") ; do
 
     # Append els resultats de .stats.tmp al report, 
     # en ordre i en format markdown.
-    echo -e "\n## INPUT: ${fn}\n" >> $report_fname
+    echo -e "\n## INPUT-FILE: ${fn}\n" >> $report_fname
     echo -e "### General mapping stats\n" >> $report_fname
     samstats_ofinterest.sh ${fn}.stats.tmp >> $report_fname
     
