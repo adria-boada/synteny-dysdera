@@ -91,8 +91,11 @@ for fn in $(echo "$ARGS") ; do
     # en ordre i en format markdown.
     echo -e "\n## INPUT-FILE: ${fn}\n" >> $report_fname
     echo -e "### General mapping stats\n" >> $report_fname
-    samstats_ofinterest.sh ${fn}.stats.tmp >> $report_fname
-    
+    ssi=$(samstats_ofinterest.sh ${fn}.stats.tmp)
+    echo $ssi >> $report_fname
+    # Talla dades d'interés (read bp cuml. sum).
+    readcumsum=$(echo $ssi | grep "Raw reads' cum" | cut -d' ' -f6)
+
     # Modifica el format de l'histograma cru per adequar-lo als
     # requeriments del guió python3 que en calcula la freqüència mitjana.
     # El fitxer amb l'histograma adequat és ${fn}_covg_histogram.csv
@@ -106,7 +109,13 @@ for fn in $(echo "$ARGS") ; do
         tr '\t' ',' >> ${fn}_covg_histogram.csv # subst. TABS per comes
     # Empra el guió de python3 per fer l'anàlisis estadístic.
     echo -e "\n### Coverage frequencies\n" >> $report_fname
-    covfreq_tomeans.py ${fn}_covg_histogram.csv >> $report_fname
+    spy=$(covfreq_tomeans.py ${fn}_covg_histogram.csv)
+    echo $spy >> $report_fname
+    obscov=$(echo $spy | grep "Mean: " | cut -d' ' -f3)
+
+    # Resumeix les dades més importants, per a una ràpida obtenció:
+    gensize=$(python3 -c "print($readcumsum / $obscov)")
+    echo "| $fn | \\numprint{$readcumsum} | x\\numprint{$obscov} | \\numprint{$gensize} |" >> $report_fname
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
     ##rm --force ${fn}_covg_histogram.csv

@@ -29,15 +29,3 @@ echo "+ Insert size and its standard deviation: $(echo $insert|cut -f4 -d' ') \$
 perc=$(grep "primary mapped" $fn|cut -f6 -d' '|tr -d '(')
 echo "+ Percentage of primary reads mapped: $perc"
 
-# Seria interessant calcular "Expected(Coverage)" per a mides
-# genòmiques de 3 Gb i 1.5 Gb.
-# E(cov.) = Raw-read-cumulative-len / Expected-gensize
-# Empraria la variable $readlen.
-est30=$(python3 -c "print(round(($readlen/3000000000), 4))")
-est15=$(python3 -c "print(round(($readlen/1500000000), 4))")
-echo ''
-echo "Expected coverages (valid if input is not filtered by regions, e.g. BUSCOs):"
-echo ''
-echo "+ If Gsize == 3.0 Gb, Exp(Cvg.) = $est30"
-echo "+ If Gsize == 1.5 Gb, Exp(Cvg.) = $est15"
-
