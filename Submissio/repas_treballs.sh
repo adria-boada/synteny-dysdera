@@ -35,6 +35,7 @@ for i in `qstat -u "$user" | tail -n+3 | cut -d " " -f1`; do
 	qstat -u "$user" -j "$i" | grep "job_number"
 	qstat -u "$user" -j "$i" | grep "job_name"
 	qstat -u "$user" -j "$i" | grep "submission_time"
+	qstat -u "$user" -j "$i" | grep "owner"
 
 	# Atrapa l'estat que mostra qstat (running...).
 	# [FALTA]
