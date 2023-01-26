@@ -7,6 +7,14 @@
 # 256, que son els 'not primary alignment').
 # Per fer-ho amb samtools: opció -F (filtrar fora) 256 (lectures no primàries).
 #
+# Per a còrrer l'script: 
+# `filter_alignment.sh file1.bam file2.bam ... fileN.bam [-t $threads]`
+#
+# Output names: 'primary_file1.bam'
+# Run with -cwd (current working directory) being the folder storing the
+# bamfiles, otherwise the path might get jammed by the name change.
+# (i.e. primary_folder/bamfile.bam -> Error)
+#
 # --------
 
 # Inicialitzem algunes opcions...
@@ -25,12 +33,7 @@ while [ "$1" != "" ]; do
               threads=$1
               shift
               ;;
-      -o )    shift
-              out_primary_ali=$1
-              shift
-              ;;
-      -i )    shift
-              inpbam=$1
+      * )     ARGS+=" $1"
               shift
   esac
 done
@@ -42,6 +45,9 @@ if [ -z "$threads" ] ; then
 fi
 echo "Threads used: $threads"
 
-# -F: exclude reads with any flag of 256 or 2048 (their sum)
-samtools view -@ $threads -bF 2304 $inpbam > $out_primary_ali
+for fn in $(echo "$ARGS") ; do
+  echo "Input: $fn\nOutput: primary_$fn"
+  # -F: exclude reads with any flag of 256 or 2048 (their sum)
+  samtools view -@ $threads -bF 2304 $fn > primary_${fn}
+done
 
