@@ -25,6 +25,8 @@ source /users-d3/adria.boada/.bashrc
 echo "Samtools (tested with version 1.14):"
 echo "  $(which samtools)"
 echo
+echo "Current working directory:"
+echo "  $(pwd)"
 
 # INPUT PARSING
 while [ "$1" != "" ]; do
@@ -46,7 +48,7 @@ fi
 echo "Threads used: $threads"
 
 for fn in $(echo "$ARGS") ; do
-  echo "Input: $fn\nOutput: primary_$fn"
+  echo -e "Input: $fn\nOutput: primary_$fn"
   # -F: exclude reads with any flag of 256 or 2048 (their sum)
   samtools view -@ $threads -bF 2304 $fn > primary_${fn}
 done
