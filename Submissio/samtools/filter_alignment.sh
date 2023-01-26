@@ -49,8 +49,8 @@ echo "Threads used: $threads"
 
 for fn in $(echo "$ARGS") ; do
   out="primary_$(basename $fn)"
-  echo -e "Input: $fn\nOutput: primary_${out}"
+  echo -e "Input: $fn\nOutput: ${out}"
   # -F: exclude reads with any flag of 256 or 2048 (their sum)
-  samtools view -@ $threads -bF 2304 $fn > primary_${out}
+  samtools view -@ $threads -bF 2304 $fn > ${out}
 done
 
