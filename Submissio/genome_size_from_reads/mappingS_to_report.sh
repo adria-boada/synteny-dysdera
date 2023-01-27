@@ -117,7 +117,9 @@ for fn in $(echo "$ARGS") ; do
     # Resumeix les dades més importants, per a una ràpida obtenció:
     # '\numprint{}' és una funció de LaTeX per presentar nombres grans.
     gensize=$(python3 -c "print($readcumsum / $obscov)")
-    echo ''; echo "| $(basename $fn) | \\numprint{$readcumsum} | x\\numprint{$obscov} | \\numprint{$gensize} |" >> $report_fname
+    echo ''; echo "| $(basename $fn) | \\numa{$readcumsum} | x\\numa{$obscov} | \\numa{$gensize} |" >> $report_fname
+    # Necessitem pandas per còrrer anàlisis...!!!
+    # Aquesta mena de fer taules és el pitjor tuestón.
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
     ##rm --force ${fn}_covg_histogram.csv
