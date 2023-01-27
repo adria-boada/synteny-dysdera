@@ -94,8 +94,7 @@ for fn in $(echo "$ARGS") ; do
     samstats_ofinterest.sh ${fn}.stats.tmp >> $report_fname
 
     # Retalla dades d'interés (read bp cuml. sum).
-    ssi=$(samstats_ofinterest.sh ${fn}.stats.tmp)
-    readcumsum=$(echo $ssi | grep "Raw reads' cum" | cut -d' ' -f6)
+    readcumsum=$(tail $report_fname | grep "Raw reads' cum" | cut -d' ' -f6)
 
     # Modifica el format de l'histograma cru per adequar-lo als
     # requeriments del guió python3 que en calcula la freqüència mitjana.
@@ -113,13 +112,12 @@ for fn in $(echo "$ARGS") ; do
     covfreq_tomeans.py ${fn}_covg_histogram.csv >> $report_fname
 
     # Retalla dades d'interés (observed coverage)
-    spy=$(covfreq_tomeans.py ${fn}_covg_histogram.csv)
-    obscov=$(echo $spy | grep "Mean: " | cut -d' ' -f3)
+    obscov=$(tail $report_fname | grep "Mean: " | cut -d' ' -f3)
 
     # Resumeix les dades més importants, per a una ràpida obtenció:
     # '\numprint{}' és una funció de LaTeX per presentar nombres grans.
     gensize=$(python3 -c "print($readcumsum / $obscov)")
-    echo ''; echo "| $fn | \\numprint{$readcumsum} | x\\numprint{$obscov} | \\numprint{$gensize} |" >> $report_fname
+    echo ''; echo "| $(basename $fn) | \\numprint{$readcumsum} | x\\numprint{$obscov} | \\numprint{$gensize} |" >> $report_fname
 
     # Un cop els anàlisis acaben, elimina els fitxers temporals:
     ##rm --force ${fn}_covg_histogram.csv
