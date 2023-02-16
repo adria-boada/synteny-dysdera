@@ -5,8 +5,8 @@
 #
 # 27 abr 2022  <adria@molevol-OptiPlex-9020>
 
-"""Parse a paf-file. Uses a class to store values inside a Python object.
-Transforms a paf-file into a more manageable Python3 object.
+"""Parse a PAF file. Uses a class to store values inside a Python object.
+Transforms a PAF file into a more manageable Python3 object.
 
 Afterwards, create a pandas dataframe from the refined and translated Python
 objects.
@@ -38,6 +38,7 @@ import sys
 
 # Dataframes manipulation, akin to the R project
 import pandas as pd
+import numpy as np
 
 # Plotting data into barplots, histograms, etc.
 import matplotlib.pyplot as plt
@@ -169,9 +170,9 @@ class Mapping(object):
         # unassembled contig. If it is the later, change its name to a generic
         # tag (`Scaff`) which groups all of them under a single name: 
         if 'scaffold' in self.qname.lower():
-            self.qname = 'Minor_Scaffold'
+            self.qname = 'Scf'
         if 'scaffold' in self.tname.lower():
-            self.tname = 'Minor_Scaffold'
+            self.tname = 'Scf'
         # `Scaff` results will be a mean/sum of all minor contigs. The lower
         # function makes the string lowercase (case-insensitive matching).
 
@@ -250,7 +251,7 @@ def parse_paf_alignment_db (filename: "Path to PAF formatted file"):
     paf = []
 
     # LLista de cromosomes i contigs únics, emparellats amb la seva llargada:
-    unique_scaff = {'Q.Minor_Scaffold': 0, 'T.Minor_Scaffold': 0}
+    unique_scaff = {'Q.Scf': 0, 'T.Scf': 0}
 
     # In theory, could open both gzipped or normal files:
     with gzip.open(filename) if filename.endswith('.gz') else open(filename) as fn:
@@ -263,12 +264,12 @@ def parse_paf_alignment_db (filename: "Path to PAF formatted file"):
             paf.append(x.df)
 
             # Si és el primer cop que trobem el cromosoma/contig:
-            if x.qname == 'Q.Minor_Scaffold':
-                unique_scaff['Q.Minor_Scaffold'] += x.qlen
+            if x.qname == 'Q.Scf':
+                unique_scaff['Q.Scf'] += x.qlen
             elif not x.qname in unique_scaff.keys():
                 unique_scaff[x.qname] = x.qlen
-            if x.tname == 'T.Minor_Scaffold':
-                unique_scaff['T.Minor_Scaffold'] += x.tlen
+            if x.tname == 'T.Scf':
+                unique_scaff['T.Scf'] += x.tlen
             elif not x.tname in unique_scaff.keys():
                 unique_scaff[x.tname] = x.tlen
 
@@ -296,25 +297,44 @@ if __name__ == "__main__":
     pd.set_option('display.max_columns', None)
 
     # Veure la capçalera.
-    print(df.head(5), '----------', sep='\n', end='\n\n')
+    print("# Printing first five rows of the PAF file...")
+    print("----------")
+    print(df.head(5), end='\n\n')
 
     # Descripció d'estadístiques bàsiques.
-    print(df.describe(), '----------', sep='\n', end='\n\n')
+    print("# Printing a description of the 'dataset' (PAF file).")
+    print("----------")
+    print(df.describe(), end='\n\n')
 
-    # Count the amount of rows for each chromosome tag.
-    print(df['Qname'].value_counts(normalize=True), '----------', sep='\n', end='\n\n')
-    print(df['Tname'].value_counts(normalize=True), '----------', sep='\n', end='\n\n')
+    print("# Amount of rows for each chromosome tag...")
+    print("----------")
+    print(df['Qname'].value_counts(normalize=True), end='\n\n')
+    print(df['Tname'].value_counts(normalize=True), end='\n\n')
 
     ## Plotting section ##
 
     # Box plot of mapping quality for each chromosome.
-    # Create a 'list' of paired 'crm' and 'mapq' values.
-    df_mapq = pd.concat([df[['Tname', 'MapQ.']].rename(columns={'Tname': 'crm'}),
-                         df[['Qname', 'MapQ.']].rename(columns={'Qname': 'crm'})
-                         ])
-    print(df_mapq, '----------', sep='\n', end='\n\n')  ###DEBUG
+    # Create a dataframe in which each column is the mapping qualities of a
+    # single chromosome/scaffold.
+    df_mapq = pd.DataFrame()
+    for name in ['Tname', 'Qname']:
+        for crm in df[name].unique():
+            df_crm_mapq = df[df[name]==crm].reset_index()['MapQ.']
+            df_crm_mapq = df_crm_mapq.rename(crm)
+            df_mapq = pd.concat([df_mapq, df_crm_mapq], axis=1)
+
+    print("# List of map-qualities with which creating a boxplot...")
+    print("----------")
+#    df_mapq = pd.concat([df[['Tname', 'MapQ.']].rename(columns={'Tname': 'crm'}),
+#                         df[['Qname', 'MapQ.']].rename(columns={'Qname': 'crm'})
+#                         ])
+    print(df_mapq, end='\n\n')  ###DEBUG
     # Plot `df_mapq` with matplotlib.
-    df_mapq.plot.box(by='crm', figsize=(20,10))
-    plt.savefig("mapq-boxplot.jpg")
+    df_mapq.plot.box(
+                     #figsize=(20,10),
+        )
+    plt.xticks(rotation = 30) # Rotates X-Axis Ticks by 30-degrees
+    plt.title('Mapping qualities for individual chromosomes')
+    plt.savefig("mapqual-boxplot.jpg")
 
 

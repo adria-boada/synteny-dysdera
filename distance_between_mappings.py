@@ -95,16 +95,15 @@ if __name__ == '__main__':
     ali_len_list = dict(sorted(ali_len_list.items()))
 
     # Let us print an informative header.
-    print("INFO DISTANCE BETWEEN MAPPINGS:")
-    print("Minimum distance displays the lowest difference between beginning and end \
+    print("# INFO MAPPING INTERDISTANCES\n")
+    print("'Minimum distance' displays the lowest difference between beginning and end \
 of contiguous mappings.")
-    print("Maximum distance displays the biggest difference between beginning \
+    print("'Maximum distance' displays the biggest difference between beginning \
 and end of contiguous mappings.")
-    print("Mean distance displays the mean difference between beginning and end \
+    print("'Mean distance' displays the mean difference between beginning and end \
 of contiguous mappings.")
-    print("Standard deviation distance displays the dispersion of the \
-aforementioned variable, differences between beginning and end of \
-contiguous mappings.")
+    print("'Standard deviation distance' displays the dispersion of the \
+aforementioned variable.\n")
 
     # header of the table...
     capD = ["Chromosomes", "Min. dist.", "Max. dist.", "Mean dist.",
@@ -134,7 +133,7 @@ contiguous mappings.")
         for val in lst:
             sms.add_measure(val)
 
-        tableL += [[crm, 
+        tableL += [[crm,
                    min(lst),
                    max(lst),
                    sms.get_mean(),
@@ -145,14 +144,16 @@ contiguous mappings.")
         # reinicia mesures
         sms.reinitialize()
 
+    print("# INTERDISTANCES TABLE\n")
     print(tabulate.tabulate(tableD, tablefmt='pipe', headers=capD))
     print()
-    print("INFO ALI-LEN:")
-    print("Minimum ali-len displays the lowest length of an alignment")
-    print("Maximum ali-len displays the biggest length of an alignment") 
-    print("Mean ali-len displays the mean alignment length")
-    print("Standard deviation displays the dispersion of the \
-aforementioned variable")
+    print("# INFO ALIGNMENT LENGTH\n")
+    print("'Minimum ali-len' displays the lowest length of an alignment.")
+    print("'Maximum ali-len' displays the biggest length of an alignment.")
+    print("'Mean ali-len' displays the mean alignment length.")
+    print("'Standard deviation' displays the dispersion of the \
+aforementioned variable.\n")
+    print("# ALIGNMENT LENGTH TABLE\n")
     print(tabulate.tabulate(tableL, tablefmt='pipe', headers=capL))
 
 
