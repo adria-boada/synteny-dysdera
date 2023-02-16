@@ -85,7 +85,9 @@ while [ "$1" != "" ]; do
 		# al fitxer prova.sam.
 		#tee prova.sam |
 		# Compress from SAM to BAM format (-u)
-		samtools view -T $ref_asm -@ $threads -u - |
+		# -F 2304:
+		# Excludes supplementary and secondary mappings.
+		samtools view -F 2304 -T $ref_asm -@ $threads -u - |
 		# Sort the BAM file.
     samtools sort -@ $threads -o $output -
 	# Delete reads variable...
