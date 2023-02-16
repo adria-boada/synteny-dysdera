@@ -7,7 +7,7 @@
 # each with a newly given name (by a third variable with BAM extension).
 #
 # Example:
-# ./bwa_mem.sh reads.fq mates.fq assembly.fasta outname.bam \
+# ./bwa_mem.sh --threads 12 reads.fq mates.fq assembly.fasta outname.bam \
 #    outname.bam mates.fq assembly.fasta reads.fq
 # The above command would create two mappings with filenames `outname.bam`
 #
@@ -82,8 +82,8 @@ while [ "$1" != "" ]; do
 	bwa mem -a -t $threads $ref_asm $reads $mates |
 		# Possibilitat d'evaluar la canonada de bwa gracies a tee:
 		# canalitza i al mateix temps escriu una còpia del que surt de bwa mem
-		# al fitxer tmp.sam.
-		#tee tmp.sam |
+		# al fitxer prova.sam.
+		#tee prova.sam |
 		# Compress from SAM to BAM format (-u)
 		samtools view -T $ref_asm -@ $threads -u - |
 		# Sort the BAM file.
