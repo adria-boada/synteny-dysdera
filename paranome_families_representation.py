@@ -80,6 +80,47 @@ class Paranome(object):
         # once the whole file with paralogous families has been parsed.
         return stored_genes
 
+    def basic_properties(
+        file_parg: "Path to an MCL-like file in which each line is a family of paralogous genes",):
+        # print a table with number of paralogous genes, etc.
+
+        genes_in_families = []
+        families = 0
+        with open(file_parg) as fparg:
+            for line in fparg:
+                # recupera el nombre de paràlegs dins la família d'aquesta línia
+                genes_in_families += [len(line.split())]
+                # recupera el nombre de línies al fitxer (núm. famílies + orfes)
+                families += 1
+
+        # recompta famílies amb "membres >= 2" (sols famílies de paralogia)
+        paralogous_families = 0
+        with open(file_parg) as fparg:
+            for line in fparg:
+                if len(line.split()) == 1:
+                    break
+                else:
+                    paralogous_families += 1
+
+        # recompta el nombre total de gens paràlegs
+        # (suma els membres de cada família)
+        paralogous_genes = 0
+        for i in range(2, max(genes_in_families)+1):
+            paralogous_genes += i*genes_in_families.count(i)
+
+        return {
+            "Màxim de membres en una sola família":
+            max(genes_in_families),
+            "Núm. de gens paràlegs":
+            paralogous_genes,
+            "Núm. de gens paràlegs + no paràlegs":
+            paralogous_genes + genes_in_families.count(1),
+            "Núm. de famílies paralogues + gens orfes":
+            families,
+            "Núm. de famílies paralogues":
+            paralogous_families,
+        }
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Si es crida com a script:
@@ -105,13 +146,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
+    for key, val in Paranome.basic_properties(args.file_parg).items():
+        print(key, ':', val)
     # parse both the GFF3 and TSV.MCL with the "Paranome" class
-    formatted_paranome_list = Paranome.parsing(args.file_gff3, args.file_parg)
-    # print the formatted list with "tabulate" module
-    capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
-                  "Start", "End", "Strand"]
-    print(tabulate.tabulate(formatted_paranome_list, tablefmt='pipe',
-                            headers=capçalera))
+#    formatted_paranome_list = Paranome.parsing(args.file_gff3, args.file_parg)
+#    # print the formatted list with "tabulate" module
+#    capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
+#                  "Start", "End", "Strand"]
+#    print(tabulate.tabulate(formatted_paranome_list, tablefmt='pipe',
+#                            headers=capçalera))
 #    for gene_fields in formatted_paranome_list:
 #        for field in gene_fields:
 #            print(field, end='\t')
