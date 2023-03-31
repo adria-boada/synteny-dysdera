@@ -22,7 +22,75 @@ import sys, tabulate
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-class Paranome(object):
+class Paranome:
+    def __init__(self, file1, file2):
+        """
+        Accepts two files and defines which one contains the *.gff3 extension
+        """
+        if ".gff3" in file1:
+            self.file_gff = file1
+            self.file_paralogy = file2
+        elif ".gff3" in file2:
+            self.file_gff = file2
+            self.file_paralogy = file1
+        else:
+            print("Error in creating the Paranome class: no file with gff3",
+                  "extension found")
+
+    # define all fields of a given GFF3 line thanks to a nested class
+    class GFF3_line:
+        def __init__(self, line):
+            (self.sequid,           # scaffold or chromosome ID or name
+             self.source,           # source of annotation
+             self.feature_type,     # type of feature
+             self.start,
+             self.end,
+             self.score,
+             self.strand,
+             self.phase,
+             self.attributes,
+             ) = line.split()
+
+            # int-ize numeric values:
+            self.start = int(self.start)
+            self.end = int(self.end)
+
+    def parsing(self):
+        """
+        For each family, find all of their paralogous genes inside the gff3 and
+        pull out information about them.
+        """
+        family = 0
+        stored_genes = []
+        with open(self.file_paralogy) as fp:
+            for line_par in fp:
+                family += 1
+                print(f"Status: processing family number {family}")
+                for gene_par in line_par.split():
+                    with open(self.file_gff) as fg:
+                        for line_gff in fg:
+                            # "gene_gff3" stores the gene ID from a given gff3 line.
+                            gene_gff = line_gff.split()[8].split('=')[1].split(';')[0]
+                            # if both genes are concordant and feature type is "gene"
+                            if str(gene_par) == str(gene_gff) and line_gff.split()[2] == "mRNA":
+                                # create a "Paranome" object from the gff3 line:
+                                paralog = GFF3_line(line_gff)
+                                # store values of interest in a list
+                                # each object from the list is another list of fields
+                                stored_genes += [[paralog.sequid,   # chromosome/scaff
+                                                  gene_par,        # gene ID
+                                                  family,           # arbitrary family number
+                                                  paralog.start,    # gff3 start
+                                                  paralog.end,      # gff3 end
+                                                  paralog.strand,   # gff3 strand
+                                            ]]
+                                break
+
+        # return the list of fields of interest for each gene
+        # once the whole file with paralogous families has been parsed.
+        return stored_genes
+
+class Paranome2:
     """ Parse fields given a GFF3 and MCL formatted files. Create an instance of
     the "Paranome" class from a single line of the GFF3 file, and store it in a
     list. Return this list with the parsing() function.
@@ -50,36 +118,6 @@ class Paranome(object):
                 ):
         # for each family, find all of their paralogous genes inside
         # the gff3 and pull out information about them.
-        family = 0
-        stored_genes = []
-        with open(file_parg) as fparg:
-            for line_parg in fparg:
-                family += 1
-                print(f"Status: processing family number {family}")
-                for gene_parg in line_parg.split():
-                    with open(file_gff3) as fgff3:
-                        for line_gff3 in fgff3:
-                            # "gene_gff3" stores the gene ID from a given gff3 line.
-                            gene_gff3 = line_gff3.split()[8].split('=')[1].split(';')[0]
-                            # if both genes are concordant and feature type is "gene"
-                            if str(gene_parg) == str(gene_gff3) and line_gff3.split()[2] == "mRNA":
-                                # create a "Paranome" object from the gff3 line:
-                                paralog = Paranome(line_gff3)
-                                # store values of interest in a list
-                                # each object from the list is another list of fields
-                                stored_genes += [[paralog.sequid,   # chromosome/scaff
-                                                  gene_parg,        # gene ID
-                                                  family,           # arbitrary family number
-                                                  paralog.start,    # gff3 start
-                                                  paralog.end,      # gff3 end
-                                                  paralog.strand,   # gff3 strand
-                                            ]]
-                                break
-
-        # return the list of fields of interest for each gene
-        # once the whole file with paralogous families has been parsed.
-        return stored_genes
-
     def basic_properties(
         file_parg: "Path to an MCL-like file in which each line is a family of paralogous genes",):
         # print a table with number of paralogous genes, etc.
@@ -129,12 +167,11 @@ if __name__ == '__main__':
     ### PARSE ARGUMENTS ###
     import argparse
 
-    parser = argparse.ArgumentParser(description='')
+    parser = argparse.ArgumentParser(
+        description="Provide two files: (1) GFF3 annotations with *.gff3 extension and (2) paranome file (in any order)")
     # file-name: positional arg.
-    parser.add_argument('file_gff3', type=str,
-                        help='Path to GFF3 annotations file-name')
-    parser.add_argument('file_parg', type=str,
-                        help='Path to paranome file-name')
+    parser.add_argument('file1', type=str,)
+    parser.add_argument('file2', type=str,)
     # integer argument
 #    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
     # choices argument
@@ -146,18 +183,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
-    for key, val in Paranome.basic_properties(args.file_parg).items():
-        print(key, ':', val)
+#    for key, val in Paranome.basic_properties(args.file_parg).items():
+#        print(key, ':', val)
     # parse both the GFF3 and TSV.MCL with the "Paranome" class
-#    formatted_paranome_list = Paranome.parsing(args.file_gff3, args.file_parg)
-#    # print the formatted list with "tabulate" module
-#    capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
-#                  "Start", "End", "Strand"]
-#    print(tabulate.tabulate(formatted_paranome_list, tablefmt='pipe',
-#                            headers=capçalera))
-#    for gene_fields in formatted_paranome_list:
-#        for field in gene_fields:
-#            print(field, end='\t')
-#        print()
+    paranome = Paranome(args.file1, args.file2)
+    formatted_paranome_list = paranome.parsing()
+    # print the formatted list with "tabulate" module
+    capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
+                  "Start", "End", "Strand"]
+    print(tabulate.tabulate(formatted_paranome_list, tablefmt='pipe',
+                            headers=capçalera))
+    for gene_fields in formatted_paranome_list:
+        for field in gene_fields:
+            print(field, end='\t')
+        print()
 
 
