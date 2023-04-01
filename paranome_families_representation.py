@@ -25,8 +25,11 @@ import sys, tabulate
 class Paranome:
     def __init__(self, file1, file2):
         """
-        Accepts two files and defines which one contains the *.gff3 extension
+        Define which two files will create the Paranome class.
+        Assign each file to the pertinent variable by detecting the *.gff3 extension
         """
+        print("WARNING: remove all blank lines from the TSV.MCL file",
+              "with, for example, `sed '/^$/d' bad.tsv.mcl > good.tsv.mcl`")
         if ".gff3" in file1:
             self.file_gff = file1
             self.file_paralogy = file2
@@ -36,15 +39,17 @@ class Paranome:
         else:
             print("Error in creating the Paranome class: no file with gff3",
                   "extension found")
+        # verifica que el camí fins als fitxers és vàlid
         try:
             with open(self.file_gff) as fg, open(self.file_paralogy) as fp:
                 pass
+        # si no és vàlid, exit()
         except:
             sys.exit('The files have not been correctly provided')
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
-    class GFF3_line(object):
+    class GFF3_line:
         def __init__(self, line):
             (self.sequid,           # scaffold or chromosome ID or name
              self.source,           # source of annotation
@@ -80,15 +85,15 @@ class Paranome:
                             # if both genes are concordant and feature type is "gene"
                             if str(gene_par) == str(gene_gff) and line_gff.split()[2] == "mRNA":
                                 # create a "Paranome" object from the gff3 line:
-                                paralog = self.GFF3_line(line_gff)
+                                par = self.GFF3_line(line_gff)
                                 # store values of interest in a list
                                 # each object from the list is another list of fields
-                                stored_genes += [[paralog.sequid,   # chromosome/scaff
+                                stored_genes += [[par.sequid,   # chromosome/scaff
                                                   gene_par,        # gene ID
                                                   family,           # arbitrary family number
-                                                  paralog.start,    # gff3 start
-                                                  paralog.end,      # gff3 end
-                                                  paralog.strand,   # gff3 strand
+                                                  par.start,    # gff3 start
+                                                  par.end,      # gff3 end
+                                                  par.strand,   # gff3 strand
                                             ]]
                                 break
 
@@ -136,6 +141,26 @@ class Paranome:
             paralogous_families,
         }
 
+    """
+    The following two table generators parse the files independently.
+    If both are called, the parsing will be done twice.
+    """
+    def tsv_tbl(self):
+        # print the list parsed previously in parsing()
+        for gene_fields in self.parsing():
+            # imprimeix fins al penúltim camp:
+            for field in gene_fields[0:-1]:
+                print(field, end='\t')
+            # imprimeix l'últim camp amb nova línia:
+            print(gene_fields[-1])
+
+    def pipe_tbl(self):
+        # print a formatted list parsed previously in parsing()
+        capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
+                  "Start", "End", "Strand"]
+        print(tabulate.tabulate(self.parsing(), tablefmt='pipe',
+                            headers=capçalera))
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Si es crida com a script:
@@ -160,19 +185,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
-#    for key, val in Paranome.basic_properties(args.file_parg).items():
-#        print(key, ':', val)
-    # parse both the GFF3 and TSV.MCL with the "Paranome" class
-    paranome = Paranome(args.file1, args.file2)
-    formatted_paranome_list = paranome.parsing()
-    # print the formatted list with "tabulate" module
-    capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
-                  "Start", "End", "Strand"]
-    print(tabulate.tabulate(formatted_paranome_list, tablefmt='pipe',
-                            headers=capçalera))
-    for gene_fields in formatted_paranome_list:
-        for field in gene_fields:
-            print(field, end='\t')
-        print()
+    # parse both the GFF3 and TSV.MCL thanks to the "Paranome" class
 
+    # file1 and file2 have to be GFF3 and MCL (in any order):
+    paranome = Paranome(args.file1, args.file2)
+    # print table 'pipe' formatted:
+    paranome.pipe_tbl()
+    # print table 'tsv' formatted:
+    paranome.tsv_tbl()
+    # print basic stats from the MCL file:
+    for key, val in paranome.basic_parfam_properties().items():
+        print(key, ':', val)
 
