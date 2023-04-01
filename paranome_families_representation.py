@@ -36,9 +36,15 @@ class Paranome:
         else:
             print("Error in creating the Paranome class: no file with gff3",
                   "extension found")
+        try:
+            with open(self.file_gff) as fg, open(self.file_paralogy) as fp:
+                pass
+        except:
+            sys.exit('The files have not been correctly provided')
 
     # define all fields of a given GFF3 line thanks to a nested class
-    class GFF3_line:
+    # (requires to be called as 'self.Classname' inside the class)
+    class GFF3_line(object):
         def __init__(self, line):
             (self.sequid,           # scaffold or chromosome ID or name
              self.source,           # source of annotation
@@ -74,7 +80,7 @@ class Paranome:
                             # if both genes are concordant and feature type is "gene"
                             if str(gene_par) == str(gene_gff) and line_gff.split()[2] == "mRNA":
                                 # create a "Paranome" object from the gff3 line:
-                                paralog = GFF3_line(line_gff)
+                                paralog = self.GFF3_line(line_gff)
                                 # store values of interest in a list
                                 # each object from the list is another list of fields
                                 stored_genes += [[paralog.sequid,   # chromosome/scaff
@@ -90,42 +96,13 @@ class Paranome:
         # once the whole file with paralogous families has been parsed.
         return stored_genes
 
-class Paranome2:
-    """ Parse fields given a GFF3 and MCL formatted files. Create an instance of
-    the "Paranome" class from a single line of the GFF3 file, and store it in a
-    list. Return this list with the parsing() function.
-    """
-    def __init__(self, gff3_line):
-        # define all fields of the given GFF3 line
-        (self.sequid,           # scaffold or chromosome ID or name
-         self.source,           # source of annotation
-         self.feature_type,     # type of feature
-         self.start,
-         self.end,
-         self.score,
-         self.strand,
-         self.phase,
-         self.attributes,
-         ) = gff3_line.split()
-
-        # int-ize numeric values:
-        self.start = int(self.start)
-        self.end = int(self.end)
-
-    def parsing(
-        file_gff3: "Path to a GFF3 formatted file which has been filtered by 'gene' features",
-        file_parg: "Path to an MCL-like file in which each line is a family of paralogous genes",
-                ):
-        # for each family, find all of their paralogous genes inside
-        # the gff3 and pull out information about them.
-    def basic_properties(
-        file_parg: "Path to an MCL-like file in which each line is a family of paralogous genes",):
+    def basic_parfam_properties(self):
         # print a table with number of paralogous genes, etc.
 
         genes_in_families = []
         families = 0
-        with open(file_parg) as fparg:
-            for line in fparg:
+        with open(self.file_paralogy) as fp:
+            for line in fp:
                 # recupera el nombre de paràlegs dins la família d'aquesta línia
                 genes_in_families += [len(line.split())]
                 # recupera el nombre de línies al fitxer (núm. famílies + orfes)
@@ -133,8 +110,8 @@ class Paranome2:
 
         # recompta famílies amb "membres >= 2" (sols famílies de paralogia)
         paralogous_families = 0
-        with open(file_parg) as fparg:
-            for line in fparg:
+        with open(self.file_paralogy) as fp:
+            for line in fp:
                 if len(line.split()) == 1:
                     break
                 else:
