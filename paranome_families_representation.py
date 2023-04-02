@@ -37,15 +37,16 @@ class Paranome:
             self.file_gff = file2
             self.file_paralogy = file1
         else:
-            print("Error in creating the Paranome class: no file with gff3",
-                  "extension found")
+            sys.exit("ERROR: no file with *.gff3 "+
+                  "extension has been provided")
         # verifica que el camí fins als fitxers és vàlid
         try:
             with open(self.file_gff) as fg, open(self.file_paralogy) as fp:
                 pass
         # si no és vàlid, exit()
         except:
-            sys.exit('The files have not been correctly provided')
+            sys.exit('ERROR: The path to the provided files appears to be '+
+                     'incorrect')
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -143,7 +144,7 @@ class Paranome:
 
     """
     The following two table generators parse the files independently.
-    If both are called, the parsing will be done twice.
+    If both are called, the parsing will be done twice (slow)
     """
     def tsv_tbl(self):
         # print the list parsed previously in parsing()
@@ -170,7 +171,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Provide two files: (1) GFF3 annotations with *.gff3 extension and (2) paranome file (in any order)")
+        description="Provide two files: (a) GFF3 annotations with *.gff3 "+
+        "extension and (b) paranome file (in any order)")
     # file-name: positional arg.
     parser.add_argument('file1', type=str,)
     parser.add_argument('file2', type=str,)
@@ -190,7 +192,7 @@ if __name__ == '__main__':
     # file1 and file2 have to be GFF3 and MCL (in any order):
     paranome = Paranome(args.file1, args.file2)
     # print table 'pipe' formatted:
-    paranome.pipe_tbl()
+#    paranome.pipe_tbl()
     # print table 'tsv' formatted:
     paranome.tsv_tbl()
     # print basic stats from the MCL file:
