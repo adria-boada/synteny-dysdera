@@ -23,6 +23,7 @@ import sys, tabulate
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 class Paranome:
+
     def __init__(self, file1, file2):
         """
         Define which two files will create the Paranome class.
@@ -47,6 +48,7 @@ class Paranome:
         except:
             sys.exit('ERROR: The path to the provided files appears to be '+
                      'incorrect')
+        self.parsed_genes = self.parsing()
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -90,8 +92,8 @@ class Paranome:
                                 # store values of interest in a list
                                 # each object from the list is another list of fields
                                 stored_genes += [[par.sequid,   # chromosome/scaff
-                                                  gene_par,        # gene ID
-                                                  family,           # arbitrary family number
+                                                  gene_par,     # gene ID
+                                                  family,       # arbitrary family number
                                                   par.start,    # gff3 start
                                                   par.end,      # gff3 end
                                                   par.strand,   # gff3 strand
@@ -102,9 +104,65 @@ class Paranome:
         # once the whole file with paralogous families has been parsed.
         return stored_genes
 
-    def basic_parfam_properties(self):
-        # print a table with number of paralogous genes, etc.
+    def families_dict(self):
+        """
+        Get a dictionary with arbitrary family numbers as keys and lists of
+        genes in the family as items.
+        """
+        fam = 0
+        dresult = {}
+        for gene in self.parsed_genes:
+            if fam == gene[2]:
+                dresult[fam] += [list(gene)]
+            else:
+                fam = gene[2]
+                dresult[fam] = [list(gene)]
 
+        return dresult
+
+    def linkage(self):
+        """
+        Parse the items of the dictionary generated in the previous function.
+        Decipher linkage inside and between chromosomes. Return a file with the
+        linkages of interest.
+        """
+        # Define intrachromosomal ranges to detect tandem paralogs
+        # (e.g. less than 10 kbs, less than 100 kbs, less than 1 Mbs, beyond 1 Mbs)
+        intrachr_len_filter = [10**4, 10**5, 10**6]
+
+        # List the unique scaffolds/chromosomes which will be analyzed
+        unique_chr = []
+        for gene in self.parsed_genes:
+            if gene[0] not in unique_chr:
+                unique_chr += [gene[0]]
+        print("List of unique chr queried for analyses:")
+        [print(f"+ {x}") for x in unique_chr]
+
+        # List the unique possible connections between chromosomes
+        # (chr1-chr1->1Mb ; chr1-chr2 ; etc.)
+        connection = {}
+        # Intrachromosomal connections:
+        for c in unique_chr:
+            for s in intrachr_len_filter:
+                connection[f"{c}--dup<{s}"] = []
+            connection[f"{c}--dup>={s}"] = []
+        # Interchromosomal connections:
+        reduce_chr = unique_chr #Les dues variables no haurien de quedar
+        # encadenades; unique_chr hauria de romandre sense modificacions
+        for i in range(1, len(unique_chr)):
+            for c in reduce_chr[1:]:
+                connection[f"{reduce_chr[0]}--{c}"] = []
+            print("Status: connections for", reduce_chr.pop(0)) #DEBUG
+        print(connection)#DEBUG
+
+        # Find the information of linked paralogs and fill the previous list of
+        # unique connections.
+
+    def basic_parfam_properties(self):
+        """
+        Print a table with the number of paralogous genes,
+        number of families, proportion of genes/bp per family...
+        """
         genes_in_families = []
         families = 0
         with open(self.file_paralogy) as fp:
@@ -148,7 +206,7 @@ class Paranome:
     """
     def tsv_tbl(self):
         # print the list parsed previously in parsing()
-        for gene_fields in self.parsing():
+        for gene_fields in self.parsed_genes:
             # imprimeix fins al penúltim camp:
             for field in gene_fields[0:-1]:
                 print(field, end='\t')
@@ -159,7 +217,7 @@ class Paranome:
         # print a formatted list parsed previously in parsing()
         capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
                   "Start", "End", "Strand"]
-        print(tabulate.tabulate(self.parsing(), tablefmt='pipe',
+        print(tabulate.tabulate(self.parsed_genes, tablefmt='pipe',
                             headers=capçalera))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -191,11 +249,15 @@ if __name__ == '__main__':
 
     # file1 and file2 have to be GFF3 and MCL (in any order):
     paranome = Paranome(args.file1, args.file2)
+    # create a dictionary where each key-value pair are an arbitrary family of
+    # paralogy and a list of their genes
+    print(paranome.families_dict())
+    print(paranome.linkage())
     # print table 'pipe' formatted:
 #    paranome.pipe_tbl()
     # print table 'tsv' formatted:
-    paranome.tsv_tbl()
+#    paranome.tsv_tbl()
     # print basic stats from the MCL file:
-    for key, val in paranome.basic_parfam_properties().items():
-        print(key, ':', val)
+#    for key, val in paranome.basic_parfam_properties().items():
+#        print(key, ':', val)
 
