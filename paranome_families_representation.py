@@ -29,7 +29,7 @@ class Paranome:
         Define which two files will create the Paranome class.
         Assign each file to the pertinent variable by detecting the *.gff3 extension
         """
-        print("WARNING: remove all blank lines from the TSV.MCL file",
+        print("WARNING: remove all blank lines from the TSV.MCL file "+
               "with, for example, `sed '/^$/d' bad.tsv.mcl > good.tsv.mcl`")
         if ".gff3" in file1:
             self.file_gff = file1
@@ -86,7 +86,7 @@ class Paranome:
                             # "gene_gff3" stores the gene ID from a given gff3 line.
                             gene_gff = line_gff.split()[8].split('=')[1].split(';')[0]
                             # if both genes are concordant and feature type is "gene"
-                            if str(gene_par) == str(gene_gff) and line_gff.split()[2] == "mRNA":
+                            if str(gene_par) == str(gene_gff):
                                 # create a "Paranome" object from the gff3 line:
                                 par = self.GFF3_line(line_gff)
                                 # store values of interest in a list
@@ -97,8 +97,13 @@ class Paranome:
                                                   par.start,    # gff3 start
                                                   par.end,      # gff3 end
                                                   par.strand,   # gff3 strand
+                                                  par.end - par.start # gene length
                                             ]]
                                 break
+                        if str(gene_par) != str(gene_gff):
+                            print(f"WARNING: the paralogous gene {gene_par} "+
+                                  "has not found its coordinates in the GFF3 "+
+                                  "file")
 
         # return the list of fields of interest for each gene
         # once the whole file with paralogous families has been parsed.
@@ -135,28 +140,86 @@ class Paranome:
         for gene in self.parsed_genes:
             if gene[0] not in unique_chr:
                 unique_chr += [gene[0]]
-        print("List of unique chr queried for analyses:")
-        [print(f"+ {x}") for x in unique_chr]
+        print("Status: List of unique chr queried for analyses:")
+        [print(f"Status:  + {x}") for x in unique_chr]
+        print() # newline to separate previous list
 
         # List the unique possible connections between chromosomes
         # (chr1-chr1->1Mb ; chr1-chr2 ; etc.)
+        # Assign to each connection a dictionary with the variables of interest
+        # ('l' for sum of both paralogs' bp, 'n' for number of connections)
         connection = {}
         # Intrachromosomal connections:
         for c in unique_chr:
             for s in intrachr_len_filter:
-                connection[f"{c}--dup<{s}"] = []
-            connection[f"{c}--dup>={s}"] = []
+                connection[f"{c}--dup<{s}"] = {'n':0, 'l':0}
+            connection[f"{c}--dup>={s}"] = {'n':0, 'l':0}
         # Interchromosomal connections:
-        reduce_chr = unique_chr #Les dues variables no haurien de quedar
-        # encadenades; unique_chr hauria de romandre sense modificacions
-        for i in range(1, len(unique_chr)):
-            for c in reduce_chr[1:]:
-                connection[f"{reduce_chr[0]}--{c}"] = []
-            print("Status: connections for", reduce_chr.pop(0)) #DEBUG
-        print(connection)#DEBUG
+        reduce_chr = unique_chr[:]
+        while len(reduce_chr) != 1:
+            first_chr = reduce_chr.pop(0)
+            for c in reduce_chr:
+                connection[f"{first_chr}--{c}"] = {'n': 0, 'l': 0}
+            print("Status: finished interchromosomal connections for", first_chr)
+        #print(connection)#DEBUG
 
         # Find the information of linked paralogs and fill the previous list of
         # unique connections.
+        total_connection_num = 0
+        total_connection_len = 0
+        for par_gen_fam in self.families_dict().values():
+            print(f"Status: processing family {[x[1] for x in par_gen_fam]}")
+            # If there is one gene remaining, break
+            while len(par_gen_fam) != 1:
+                # Take the first gene in the family
+                first_gene = par_gen_fam.pop(0)
+                print(f"Status: comparing gene {first_gene[1]} with the rest of "+
+                      f"the family {[x[1] for x in par_gen_fam]}")
+                # Compute connections with the remaining genes
+                for gp in par_gen_fam:
+                    # if different sequid, interchromosomal connection:
+                    if first_gene[0] != gp[0]:
+                        try:
+                            connection[f"{first_gene[0]}--{gp[0]}"]['n'] += 1
+                            connection[f"{first_gene[0]}--{gp[0]}"]['l'] += first_gene[6] + gp[6]
+                            total_connection_num += 1
+                            total_connection_len += first_gene[6] + gp[6]
+                        except:
+                            connection[f"{gp[0]}--{first_gene[0]}"]['n'] += 1
+                            connection[f"{gp[0]}--{first_gene[0]}"]['l'] += first_gene[6] + gp[6]
+                            total_connection_num += 1
+                            total_connection_len += first_gene[6] + gp[6]
+                    # if the same sequid, intrachromosomal connection:
+                    else:
+                        if any([
+                        first_gene[3] <= gp[3] <= first_gene[4],
+                        gp[3] <= first_gene[3] <= gp[4]
+                        ]):
+                            # if they overlap, distance is zero
+                            distance = 0
+                        else:
+                            # otherwise...
+                            distance = int(
+                                max(first_gene[3], gp[3]) -
+                                min(first_gene[4], gp[4])
+                            )
+                        # check in which range does the computed distance fall:
+                        for s in intrachr_len_filter:
+                            if distance < s:
+                                connection[f"{first_gene[0]}--dup<{s}"]['n'] += 1
+                                connection[f"{first_gene[0]}--dup<{s}"]['l'] += first_gene[6] + gp[6]
+                                total_connection_num += 1
+                                total_connection_len += first_gene[6] + gp[6]
+                                break
+                        if distance >= s:
+                            connection[f"{first_gene[0]}--dup>={s}"]['n'] += 1
+                            connection[f"{first_gene[0]}--dup>={s}"]['l'] += first_gene[6] + gp[6]
+                            total_connection_num += 1
+                            total_connection_len += first_gene[6] + gp[6]
+
+        print(f"Status: found as many as {total_connection_num} connections, "+
+              f"with total len {total_connection_len}")
+        return connection
 
     def basic_parfam_properties(self):
         """
@@ -251,10 +314,13 @@ if __name__ == '__main__':
     paranome = Paranome(args.file1, args.file2)
     # create a dictionary where each key-value pair are an arbitrary family of
     # paralogy and a list of their genes
-    print(paranome.families_dict())
-    print(paranome.linkage())
+#    print("LIST OF GENES FOUND BY PARSING()")#DEBUG
+#    [print("+ ", gene) for gene in paranome.parsed_genes]#DEBUG
+#    print(paranome.linkage())
+    for key, val in paranome.linkage().items():
+        print(key, val)
     # print table 'pipe' formatted:
-#    paranome.pipe_tbl()
+    paranome.pipe_tbl()
     # print table 'tsv' formatted:
 #    paranome.tsv_tbl()
     # print basic stats from the MCL file:
