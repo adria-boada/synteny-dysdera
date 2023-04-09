@@ -20,6 +20,7 @@
   min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
   
 ## PALETA DE COLORS ##
+
   # 8 colors més l'afegit U2. 
   paleta_escuer = c(chrx="#f659a5", chr1="#c5090a", chr2="#ff7f07", 
                     chr3="#cabf0a", chr4="#41a62a", chr5="#4fa1ca", 
@@ -28,6 +29,11 @@
   if (FALSE) {
   barplot(c(chrx=5, chr1=5, chr2=5, chr3=5, chr4=5, chr5=5, chr6=5, chrU1=5, chrU2=5), col=paleta_escuer)
   }
+
+## CARREGA EL MAPATGE (UNIONS ENTRE CHR) ##
+
+# Cada mapatge es representa unint la parella de
+# coordenades dels dos cromosomes al gràfic CIRCOS.
 
 # Carrega el mapatge PAF de minimap2:
   aln_circos = read_paf(path_to_paf)
@@ -61,6 +67,8 @@ names(target_list) = sort(unique(target$tname))
   # Primer 'X' i després la resta.
 query_list = c(query_list[9], query_list[1:8])
 target_list = c(target_list[9], target_list[1:8])
+
+## CARREGA ÍNDEX DELS CROMOSOMES ##
 
 # Crea uns indexos que separen el cercle en sectors
 # Cada sector és un cromosoma amb la mida que indica l'index.

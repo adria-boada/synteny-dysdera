@@ -18,7 +18,8 @@ representation efforts.
 
 """
 
-import sys, tabulate
+import sys, tabulate, pandas as pd
+import matplotlib.pyplot as plt, numpy as np
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -29,8 +30,6 @@ class Paranome:
         Define which two files will create the Paranome class.
         Assign each file to the pertinent variable by detecting the *.gff3 extension
         """
-        print("WARNING: remove all blank lines from the TSV.MCL file "+
-              "with, for example, `sed '/^$/d' bad.tsv.mcl > good.tsv.mcl`")
         if ".gff3" in file1:
             self.file_gff = file1
             self.file_paralogy = file2
@@ -48,7 +47,10 @@ class Paranome:
         except:
             sys.exit('ERROR: The path to the provided files appears to be '+
                      'incorrect')
+
+        # finally, parse and withdraw paralogous genes info...
         self.parsed_genes = self.parsing()
+        self.df_tracks, self.df_links = self.linkage()
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -74,12 +76,21 @@ class Paranome:
         For each family, find all of their paralogous genes inside the gff3 and
         pull out information about them.
         """
+        # read the amount of families in the file (=number of lines)
+        with open(self.file_paralogy) as fp:
+            for i, l in enumerate(fp):
+                if len(l) == 1:
+                    print("WARNING: remove all blank lines from the TSV.MCL file "+
+                    "with, for example, `sed '/^$/d' bad.tsv.mcl > good.tsv.mcl`")
+            tot_fam = i+1
+        # start searching information through the GFF3
         family = 0
         stored_genes = []
         with open(self.file_paralogy) as fp:
             for line_par in fp:
                 family += 1
-                print(f"Status: processing family number {family}")
+                print(f"Status: Withdrawing gene information from the GFF3 "+
+                      f"for family {family}/{tot_fam}")
                 for gene_par in line_par.split():
                     with open(self.file_gff) as fg:
                         for line_gff in fg:
@@ -138,88 +149,105 @@ class Paranome:
         # List the unique scaffolds/chromosomes which will be analyzed
         unique_chr = []
         for gene in self.parsed_genes:
+            # gene[0] is sequid
             if gene[0] not in unique_chr:
                 unique_chr += [gene[0]]
+        # Sort sequids alphabetically
+        unique_chr.sort()
         print("Status: List of unique chr queried for analyses:")
         [print(f"Status:  + {x}") for x in unique_chr]
-        print() # newline to separate previous list
 
-        # List the unique possible connections between chromosomes
-        # (chr1-chr1->1Mb ; chr1-chr2 ; etc.)
-        # Assign to each connection a dictionary with the variables of interest
-        # ('l' for sum of both paralogs' bp, 'n' for number of connections)
-        connection = {}
-        # Intrachromosomal connections:
-        for c in unique_chr:
-            for s in intrachr_len_filter:
-                connection[f"{c}--dup<{s}"] = {'n':0, 'l':0}
-            connection[f"{c}--dup>={s}"] = {'n':0, 'l':0}
-        # Interchromosomal connections:
-        reduce_chr = unique_chr[:]
-        while len(reduce_chr) != 1:
-            first_chr = reduce_chr.pop(0)
-            for c in reduce_chr:
-                connection[f"{first_chr}--{c}"] = {'n': 0, 'l': 0}
-            print("Status: finished interchromosomal connections for", first_chr)
-        #print(connection)#DEBUG
+        # Create pandas DataFrame storing the results
+        list_colnames = [
+            'Chromosome length',
+            "Sum of paralogs' length",
+            'Number of paralogs',
+            'Number of interchr. conns.',
+        ]
+        for s in intrachr_len_filter:
+            list_colnames += [f'Dups < {s} bp']
+        list_colnames += [f'Dups >= {s} bp']
+        # Connections for individual sequids
+        blocks = pd.DataFrame()
+        for coln in list_colnames:
+            blocks[coln] = 0
+        for crm in unique_chr:
+            blocks.loc[crm] = [0]*len(list_colnames)
+        # Connections between sequids
+        intchr_links = pd.DataFrame()
+        for crm in unique_chr:
+            intchr_links[crm] = 0
+        for crm in unique_chr:
+            intchr_links.loc[crm] = [0]*len(unique_chr)
+        print("Status: Created the blank pandas DataFrames")
 
-        # Find the information of linked paralogs and fill the previous list of
-        # unique connections.
-        total_connection_num = 0
-        total_connection_len = 0
-        for par_gen_fam in self.families_dict().values():
-            print(f"Status: processing family {[x[1] for x in par_gen_fam]}")
+        # Fill the information of the pandas DataFrames:
+        for gene in self.parsed_genes:
+            # Sum of paralogs' length for each sequid:
+            blocks.loc[gene[0], "Sum of paralogs' length"] += gene[6]
+            # Number of paralogs for each sequid:
+            blocks.loc[gene[0], "Number of paralogs"] += 1
+
+        # Find the information of linked paralogs and keep filling the previous
+        # list with unique connections between pairs of sequids.
+        tot = len(self.families_dict().keys())
+        for fam_key, par_gen_fam in self.families_dict().items():
+            if len(par_gen_fam) == 1:
+                print(f"Status: Skipping pairwise connections between genes "+
+                      f"from the family {fam_key}/{tot} (only one member)")
+            else:
+                print(f"Status: Calculating pairwise connections between genes "+
+                      f"from family {fam_key}/{tot}")
             # If there is one gene remaining, break
             while len(par_gen_fam) != 1:
                 # Take the first gene in the family
                 first_gene = par_gen_fam.pop(0)
-                print(f"Status: comparing gene {first_gene[1]} with the rest of "+
-                      f"the family {[x[1] for x in par_gen_fam]}")
+#DBUG                print(f"Status: comparing gene {first_gene[1]} with the rest of "+
+#DBUG                      f"the family ({len(par_gen_fam)-1} connections left)")
                 # Compute connections with the remaining genes
                 for gp in par_gen_fam:
                     # if different sequid, interchromosomal connection:
                     if first_gene[0] != gp[0]:
-                        try:
-                            connection[f"{first_gene[0]}--{gp[0]}"]['n'] += 1
-                            connection[f"{first_gene[0]}--{gp[0]}"]['l'] += first_gene[6] + gp[6]
-                            total_connection_num += 1
-                            total_connection_len += first_gene[6] + gp[6]
-                        except:
-                            connection[f"{gp[0]}--{first_gene[0]}"]['n'] += 1
-                            connection[f"{gp[0]}--{first_gene[0]}"]['l'] += first_gene[6] + gp[6]
-                            total_connection_num += 1
-                            total_connection_len += first_gene[6] + gp[6]
-                    # if the same sequid, intrachromosomal connection:
+                        s = [first_gene[0], gp[0]]
+                        s.sort()
+                        # add a connection in the matrix between chr[0] and
+                        # chr[1] and add one connection for each to the 'blocks'
+                        # pd.DataFrame()
+                        intchr_links.loc[s[1], s[0]] += 1
+                        intchr_links.loc[s[0], s[1]] += 1
+                        blocks.loc[s[0], 'Number of interchr. conns.'] += 1
+                        blocks.loc[s[1], 'Number of interchr. conns.'] += 1
+                        continue
+                    # else, they are in the same chromosome (intrachr):
+                    # add in the diagonal of the matrix (connection chr1 to chr1)
+                    intchr_links.loc[first_gene[0], gp[0]] += 1
+                    # find the distance of genes in the chromosome
+                    if any([
+                    first_gene[3] <= gp[3] <= first_gene[4],
+                    gp[3] <= first_gene[3] <= gp[4]
+                    ]):
+                        # if they overlap, distance is zero
+                        distance = 0
                     else:
-                        if any([
-                        first_gene[3] <= gp[3] <= first_gene[4],
-                        gp[3] <= first_gene[3] <= gp[4]
-                        ]):
-                            # if they overlap, distance is zero
-                            distance = 0
-                        else:
-                            # otherwise...
-                            distance = int(
-                                max(first_gene[3], gp[3]) -
-                                min(first_gene[4], gp[4])
-                            )
-                        # check in which range does the computed distance fall:
-                        for s in intrachr_len_filter:
-                            if distance < s:
-                                connection[f"{first_gene[0]}--dup<{s}"]['n'] += 1
-                                connection[f"{first_gene[0]}--dup<{s}"]['l'] += first_gene[6] + gp[6]
-                                total_connection_num += 1
-                                total_connection_len += first_gene[6] + gp[6]
-                                break
-                        if distance >= s:
-                            connection[f"{first_gene[0]}--dup>={s}"]['n'] += 1
-                            connection[f"{first_gene[0]}--dup>={s}"]['l'] += first_gene[6] + gp[6]
-                            total_connection_num += 1
-                            total_connection_len += first_gene[6] + gp[6]
+                        # otherwise...
+                        distance = int(
+                            max(first_gene[3], gp[3]) -
+                            min(first_gene[4], gp[4])
+                        )
+                    # check in which range does the computed distance fall,
+                    # and add one connection to that distance range.
+                    for s in intrachr_len_filter:
+                        if distance < s:
+                            blocks.loc[first_gene[0], f'Dups < {s} bp'] += 1
+                            break
+                    if distance >= s:
+                        blocks.loc[first_gene[0], f'Dups >= {s} bp'] += 1
 
-        print(f"Status: found as many as {total_connection_num} connections, "+
-              f"with total len {total_connection_len}")
-        return connection
+        # Compute the total of each column:
+        for coln in list_colnames:
+            blocks.loc['*Total*', coln] = blocks[coln].sum()
+
+        return (blocks, intchr_links)
 
     def basic_parfam_properties(self):
         """
@@ -263,10 +291,16 @@ class Paranome:
             paralogous_families,
         }
 
-    """
-    The following two table generators parse the files independently.
-    If both are called, the parsing will be done twice (slow)
-    """
+    def heatmap(self, filename: "Output filename of the heatmap" ='linkage_heatmap.png'):
+        """
+        Create a heatmap from the pairwise connections between chr
+        """
+        df = self.df_links
+        plt.pcolormesh(df)
+        plt.yticks(np.arange(0.5, len(df.index), 1), df.index)
+        plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns)
+        plt.savefig(filename)
+
     def tsv_tbl(self):
         # print the list parsed previously in parsing()
         for gene_fields in self.parsed_genes:
@@ -279,7 +313,7 @@ class Paranome:
     def pipe_tbl(self):
         # print a formatted list parsed previously in parsing()
         capçalera = ["Sequence ID", "Gene ID", "Arbitrary paralogous family",
-                  "Start", "End", "Strand"]
+                  "Start", "End", "Strand", "Gene length"]
         print(tabulate.tabulate(self.parsed_genes, tablefmt='pipe',
                             headers=capçalera))
 
@@ -297,33 +331,22 @@ if __name__ == '__main__':
     # file-name: positional arg.
     parser.add_argument('file1', type=str,)
     parser.add_argument('file2', type=str,)
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
     # parse both the GFF3 and TSV.MCL thanks to the "Paranome" class
-
-    # file1 and file2 have to be GFF3 and MCL (in any order):
+    # file1 and file2 have to be GFF3 and MCL (vars can go in any order):
     paranome = Paranome(args.file1, args.file2)
-    # create a dictionary where each key-value pair are an arbitrary family of
-    # paralogy and a list of their genes
-#    print("LIST OF GENES FOUND BY PARSING()")#DEBUG
-#    [print("+ ", gene) for gene in paranome.parsed_genes]#DEBUG
-#    print(paranome.linkage())
-    for key, val in paranome.linkage().items():
-        print(key, val)
+    # print retrieved pandas Dataframes
+    print(paranome.df_tracks)
+    print(paranome.df_links)
+    paranome.heatmap()
     # print table 'pipe' formatted:
-    paranome.pipe_tbl()
+#    paranome.pipe_tbl()
     # print table 'tsv' formatted:
 #    paranome.tsv_tbl()
     # print basic stats from the MCL file:
-#    for key, val in paranome.basic_parfam_properties().items():
-#        print(key, ':', val)
+    for key, val in paranome.basic_parfam_properties().items():
+        print(key, ':', val)
 
