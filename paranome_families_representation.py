@@ -25,7 +25,8 @@ import matplotlib.pyplot as plt, numpy as np
 
 class Paranome:
 
-    def __init__(self, file1, file2):
+    def __init__(self, file1, file2,
+                 idx_file: 'Optional index file with chr. lengths'=0):
         """
         Define which two files will create the Paranome class.
         Assign each file to the pertinent variable by detecting the *.gff3 extension
@@ -50,7 +51,7 @@ class Paranome:
 
         # finally, parse and withdraw paralogous genes info...
         self.parsed_genes = self.parsing()
-        self.df_tracks, self.df_links = self.linkage()
+        self.df_tracks, self.df_links, self.df_circos_tracks = self.linkage(idx_file)
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -136,7 +137,8 @@ class Paranome:
 
         return dresult
 
-    def linkage(self):
+    def linkage(self,
+                crm_idx_len: 'Index file'):
         """
         Parse the items of the dictionary generated in the previous function.
         Decipher linkage inside and between chromosomes. Return a file with the
@@ -144,7 +146,8 @@ class Paranome:
         """
         # Define intrachromosomal ranges to detect tandem paralogs
         # (e.g. less than 10 kbs, less than 100 kbs, less than 1 Mbs, beyond 1 Mbs)
-        intrachr_len_filter = [10**4, 10**5, 10**6]
+        # from now on, intra=outer
+        outer_chr_len_filter = [10**4, 10**5, 10**6]
 
         # List the unique scaffolds/chromosomes which will be analyzed
         unique_chr = []
@@ -159,14 +162,17 @@ class Paranome:
 
         # Create pandas DataFrame storing the results
         list_colnames = [
-            'Chromosome length',
-            "Sum of paralogs' length",
-            'Number of paralogs',
-            'Number of interchr. conns.',
+            'chr_len',
+            'num_paralogs',
+            'sum_paralogs_len',
+            'num_outer_conn',
+            'num_interior_conn',
         ]
-        for s in intrachr_len_filter:
-            list_colnames += [f'Dups < {s} bp']
-        list_colnames += [f'Dups >= {s} bp']
+        for s in outer_chr_len_filter:
+            # Outer connections less than {s} -> putatively tandem dups.
+            list_colnames += [f'outer_conn_lt_{s}']
+        # Outer connections greater (or equal) than {s} -> probably not tandem
+        list_colnames += [f'outer_conn_gt_{s}']
         # Connections for individual sequids
         blocks = pd.DataFrame()
         for coln in list_colnames:
@@ -184,9 +190,9 @@ class Paranome:
         # Fill the information of the pandas DataFrames:
         for gene in self.parsed_genes:
             # Sum of paralogs' length for each sequid:
-            blocks.loc[gene[0], "Sum of paralogs' length"] += gene[6]
+            blocks.loc[gene[0], "sum_paralogs_len"] += gene[6]
             # Number of paralogs for each sequid:
-            blocks.loc[gene[0], "Number of paralogs"] += 1
+            blocks.loc[gene[0], "num_paralogs"] += 1
 
         # Find the information of linked paralogs and keep filling the previous
         # list with unique connections between pairs of sequids.
@@ -215,10 +221,10 @@ class Paranome:
                         # pd.DataFrame()
                         intchr_links.loc[s[1], s[0]] += 1
                         intchr_links.loc[s[0], s[1]] += 1
-                        blocks.loc[s[0], 'Number of interchr. conns.'] += 1
-                        blocks.loc[s[1], 'Number of interchr. conns.'] += 1
+                        blocks.loc[s[0], 'num_outer_conn'] += 1
+                        blocks.loc[s[1], 'num_outer_conn'] += 1
                         continue
-                    # else, they are in the same chromosome (intrachr):
+                    # else, they are in the same chromosome (outer_chr):
                     # add in the diagonal of the matrix (connection chr1 to chr1)
                     intchr_links.loc[first_gene[0], gp[0]] += 1
                     # find the distance of genes in the chromosome
@@ -236,18 +242,39 @@ class Paranome:
                         )
                     # check in which range does the computed distance fall,
                     # and add one connection to that distance range.
-                    for s in intrachr_len_filter:
+                    for s in outer_chr_len_filter:
                         if distance < s:
-                            blocks.loc[first_gene[0], f'Dups < {s} bp'] += 1
+                            blocks.loc[first_gene[0], f'outer_conn_lt_{s}'] += 1
+                            blocks.loc[first_gene[0], 'num_interior_conn'] += 1
                             break
                     if distance >= s:
-                        blocks.loc[first_gene[0], f'Dups >= {s} bp'] += 1
+                        blocks.loc[first_gene[0], f'outer_conn_gt_{s}'] += 1
+                        blocks.loc[first_gene[0], 'num_interior_conn'] += 1
+
+        # If an idx file has been given, specify length of each chr in the
+        # DataFrame...
+        if crm_idx_len:
+            with open(crm_idx_len) as idx:
+                for line in idx:
+                    crm, length = line.split()
+                    blocks.loc[crm, 'chr_len'] += float(length)
+
+        # Translate amount of connections to percentages of total
+        # Then, the CIRCOS track will be divided by these percentages:
+        perc_conn = blocks.loc[:, 'num_outer_conn':].drop('num_interior_conn', axis=1)
+        circos_blocks = pd.DataFrame()
+        circos_blocks['chr_len'] = blocks['chr_len']
+        tot_con = blocks['num_outer_conn'] + blocks['num_interior_conn']
+        for col in perc_conn:
+            circos_blocks[col] = blocks['chr_len']*(perc_conn[col]/tot_con)
 
         # Compute the total of each column:
-        for coln in list_colnames:
+        for coln in blocks:
             blocks.loc['*Total*', coln] = blocks[coln].sum()
+        for coln in circos_blocks:
+            circos_blocks.loc['*Total*', coln] = circos_blocks[coln].sum()
 
-        return (blocks, intchr_links)
+        return (blocks, intchr_links, circos_blocks)
 
     def basic_parfam_properties(self):
         """
@@ -283,9 +310,9 @@ class Paranome:
             max(genes_in_families),
             "Núm. de gens paràlegs":
             paralogous_genes,
-            "Núm. de gens paràlegs + no paràlegs":
+            "Núm. de gens paràlegs + no paràlegs (orfes, família d'un)":
             paralogous_genes + genes_in_families.count(1),
-            "Núm. de famílies paralogues + gens orfes":
+            "Núm. de famílies paralogues + 'famílies' orfes":
             families,
             "Núm. de famílies paralogues":
             paralogous_families,
@@ -331,17 +358,33 @@ if __name__ == '__main__':
     # file-name: positional arg.
     parser.add_argument('file1', type=str,)
     parser.add_argument('file2', type=str,)
+    parser.add_argument('-i', '--idx', type=str,
+                        help="Chr. index file (with lengths in basepairs)",
+                        required=False, default=0)
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
     # parse both the GFF3 and TSV.MCL thanks to the "Paranome" class
     # file1 and file2 have to be GFF3 and MCL (vars can go in any order):
-    paranome = Paranome(args.file1, args.file2)
+    paranome = Paranome(args.file1, args.file2, args.idx)
+
     # print retrieved pandas Dataframes
-    print(paranome.df_tracks)
-    print(paranome.df_links)
+    t = "GENERAL TABLE"
+    print("-"*len(t), t, paranome.df_tracks, sep='\n')
+    t = "LINK STRENGTH BETWEEN CHR"
+    print("-"*len(t), t, paranome.df_links, sep='\n')
+    t = "CIRCOS TRACK SEGMENTS LEN"
+    print("-"*len(t), t, paranome.df_circos_tracks, sep='\n')
+
+    t = "WRITING BOTH DATAFRAMES TO TSV"
+    print("-"*len(t), t, sep='\n')
+    paranome.df_tracks.to_csv('tracks.tsv', sep='\t')
+    paranome.df_links.to_csv('links.tsv', sep='\t')
+    paranome.df_circos_tracks.to_csv('circos_tracks.tsv', sep='\t')
+    # also, heatmap viz
     paranome.heatmap()
+
     # print table 'pipe' formatted:
 #    paranome.pipe_tbl()
     # print table 'tsv' formatted:
