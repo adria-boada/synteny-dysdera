@@ -4,7 +4,7 @@
 
 
 ## CARREGA DADES, OPCIONS I LLIBRERIES ##
-{
+
 # lectura i adequament de fitxers PAF (mapatges del minimap2)
   library(pafr)
 # crear gràfiques circulars partint de fitxers/data.frames BED-like
@@ -22,12 +22,13 @@
 ## PALETA DE COLORS ##
 
   # 8 colors més l'afegit U2. 
-  paleta_escuer = c(chrx="#f659a5", chr1="#c5090a", chr2="#ff7f07", 
-                    chr3="#cabf0a", chr4="#41a62a", chr5="#4fa1ca", 
-                    chr6="#4f3b97", chrU1="#a29a9c", chrU2="#a65628")
+  paleta_escuer = c(DsilChrX="#f659a5", DsilChr1="#c5090a", DsilChr2="#ff7f07",
+                    DsilChr3="#cabf0a", DsilChr4="#41a62a", DsilChr5="#4fa1ca",
+                    DsilChr6="#4f3b97", DsilChrU1="#a29a9c",
+                    DsilChrU2="#a65628")
   # Test amb un barplot per veure que els colors rutllen i són els adequats:
   if (FALSE) {
-  barplot(c(chrx=5, chr1=5, chr2=5, chr3=5, chr4=5, chr5=5, chr6=5, chrU1=5, chrU2=5), col=paleta_escuer)
+  barplot(c(DsilChrX=5, DsilChr1=5, DsilChr2=5, DsilChr3=5, DsilChr4=5, DsilChr5=5, DsilChr6=5, DsilChrU1=5, DsilChrU2=5), col=paleta_escuer)
   }
 
 ## CARREGA EL MAPATGE (UNIONS ENTRE CHR) ##
@@ -36,11 +37,11 @@
 # coordenades dels dos cromosomes al gràfic CIRCOS.
 
 # Carrega el mapatge PAF de minimap2:
-  aln_circos = read_paf(path_to_paf)
+  raw_aln_circos = read_paf(path_to_paf)
 
 # Filtrar els aliniaments per adequar el fitxer entrada a les teves necessitats.
 # Excés d'aliniaments petits dificulten la computació i interpretació.
-  aln_circos = subset(aln_circos, mapq >= min_map_qual)  # Elimina poca qualitat de mapeig
+  aln_circos = subset(raw_aln_circos, mapq >= min_map_qual)  # Elimina poca qualitat de mapeig
   aln_circos = subset(aln_circos, alen > min_align_len)  # Elimina mapatges curts
   aln_circos = filter_secondary_alignments(aln_circos)   # Elimina mapatges secundaris
 
@@ -49,24 +50,25 @@
   query = aln_circos[c("qname", "qstart", "qend", "qlen")]
   target = aln_circos[c("tname", "tstart", "tend", "tlen")]
 
-# Crea una llista ordenada de bedlike dataframes; 
-# cada objecte de la llista són tots els alineaments d'un cromosoma 
-# (un sol query o un sol target):
-query_list = c() ; target_list = c()  # Dos llistes buides
+# Crea una llista ordenada de bedlike dataframes; cada objecte de la llista són
+  # els mapatges per un cromosoma de Dsil. D'aquesta manera es podràn pintar
+  # d'un mateix color totes les unions d'un crm. de Dsil. Les línies de les
+  # dues llistes coincideixen (cada una és un mapatge).
+bed_query = c() ; bed_target = c()  # Dos llistes buides
 # Per a cada cromosoma query (qname):
 for (chr in sort(unique(query$qname))) {
   # Extreu les línies de la query que contenen 'qname==chr'
-  query_list = c(query_list, chr = list(query[query$qname == chr,]))
+  bed_query = c(bed_query, chr = list(query[query$qname == chr,]))
   # Extreu les línies de la target que contenen 'tname==chr'
-  target_list = c(target_list, chr = list(target[query$qname == chr,]))
+  bed_target = c(bed_target, chr = list(target[query$qname == chr,]))
 }
 # Anomena cada objecte de la llista correctament. 
-names(query_list) = sort(unique(query$qname))
-names(target_list) = sort(unique(target$tname))
+names(bed_query) = sort(unique(query$qname))
+names(bed_target) = sort(unique(query$qname))
 # Reordena la llista amb els aliniaments per estètica:
   # Primer 'X' i després la resta.
-query_list = c(query_list[9], query_list[1:8])
-target_list = c(target_list[9], target_list[1:8])
+bed_query = c(bed_query[9], bed_query[1:8])
+bed_target = c(bed_target[9], bed_target[1:8])
 
 ## CARREGA ÍNDEX DELS CROMOSOMES ##
 
@@ -91,11 +93,9 @@ index_cat_general = data.frame(
  
 # rbind dels dos data.frames:
 dysdera_tracks = rbind(index_cat_general, index_sil_general)
-}
 
 ## GRAFICAR CIRCOS DEL PAF INPUT ##
 
-{
 circos.clear()  # Per si de cas, s'eliminen les últimes opcions de circos abans de res...
  # (en cas de que es corri l'script interactivament i més d'una vegada)
 
@@ -125,12 +125,8 @@ highlight.chromosome(unique(target$tname),
 circos.track(ylim = c(0, 1), track.height = .1)
 
 # Posa una paleta de colors sobre els cromosomes de silvatica:
-x=1
-for (chr in names(query_list)) {
-  highlight.chromosome(chr,
-  col = paleta_escuer[x],
-  track.index = 2)
-  x = x+1
+for (fx in names(paleta_escuer)) {
+  highlight.chromosome(fx, col = paleta_escuer[[fx]], track.index = 2)
 }
 
 # Afegeix transparència a la palette pels links:
@@ -140,8 +136,8 @@ for (chr in names(query_list)) {
 paleta_escuer_transp = add_transparency(col = paleta_escuer, transparency = 0.5)
 
 # Links entre les regions aliniades:
-for (n in 1:length(query_list)) {
-  circos.genomicLink(target_list[n], query_list[n],
+for (n in 1:length(bed_query)) {
+  circos.genomicLink(bed_target[n], bed_query[n],
                      col = paleta_escuer_transp[n])
 }
 
@@ -150,7 +146,6 @@ circos.clear()
 # Text que marca quina espècie és quina: 
 text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
 text(0.9, 0.9, "D. silvatica\ngenome", col = "red", cex = 1.1)
-}
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -169,7 +164,7 @@ if (FALSE) {  # Desactivar secció de manera predeterminada
 setwd("Escritorio/Results/Synteny/circos/")
 
 # Crea una figura per a cada conjunt de links:
-for (link in 1:length(query_list)){
+for (link in 1:length(bed_query)){
   
   # Crea les figures en format .pdf:
   pdf(file = paste0("individual_circos_", link, ".pdf"), title = "Individual genomic links circos")
@@ -205,7 +200,7 @@ for (link in 1:length(query_list)){
  
   # Posa una paleta de colors sobre els cromosomes de silvatica:
   x=1
-  for (chr in names(query_list)) {
+  for (chr in names(bed_query)) {
     highlight.chromosome(chr,
                          col = paleta_escuer[x],
                          track.index = 2)
@@ -219,7 +214,7 @@ for (link in 1:length(query_list)){
   # Links entre les regions aliniades
   # (a partir de la variable link de dalt que engloba aquesta secció)
    {
-    circos.genomicLink(target_list[link], query_list[link],
+    circos.genomicLink(bed_target[link], bed_query[link],
                        col = paleta_escuer_transp[link])
   }
   
