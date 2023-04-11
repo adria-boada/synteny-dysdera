@@ -4,7 +4,8 @@ library(reshape2)
 
 ### REPRESENTING LINKS ###
 
-# load files necessary
+## Load files necessary
+# number of connections
 n_par = read.table("tracks.tsv",
   sep='\t', header=TRUE)
 # [-7,] drops the ending *total* row

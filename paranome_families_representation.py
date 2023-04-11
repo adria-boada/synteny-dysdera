@@ -51,7 +51,8 @@ class Paranome:
 
         # finally, parse and withdraw paralogous genes info...
         self.parsed_genes = self.parsing()
-        self.df_tracks, self.df_links, self.df_circos_tracks = self.linkage(idx_file)
+        (self.df_tracks, self.df_links,
+            self.df_circos_tracks, self.df_total) = self.linkage(idx_file)
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -269,12 +270,13 @@ class Paranome:
             circos_blocks[col] = blocks['chr_len']*(perc_conn[col]/tot_con)
 
         # Compute the total of each column:
+        tot = pd.DataFrame()
         for coln in blocks:
-            blocks.loc['*Total*', coln] = blocks[coln].sum()
+            tot.loc['*Total*', coln] = blocks[coln].sum()
         for coln in circos_blocks:
-            circos_blocks.loc['*Total*', coln] = circos_blocks[coln].sum()
+            tot.loc['*Total*', coln] = circos_blocks[coln].sum()
 
-        return (blocks, intchr_links, circos_blocks)
+        return (blocks, intchr_links, circos_blocks, tot)
 
     def basic_parfam_properties(self):
         """
