@@ -348,11 +348,12 @@ class Paranome:
         for fam_key, par_gen_fam in self.families_dict().items():
             if len(par_gen_fam) == 1:
                 print(f"Status: Skipping outer connections and distances "+
-                      f"of the family {fam_key}/{tot} (only one member)")
+                      f"for family {fam_key}/{tot} (only one member)")
             else:
-                print(f"Status: Calculating outer connections and distances "+
-                      f"of the family {fam_key}/{tot}")
-                outer = pd.Series(index=unique_chr)
+                print(f"Status: Calculating intrachromosomal distances and "+
+                      f"the distribution of paralogs across chromosomes "+
+                      f"for family {fam_key}/{tot}")
+                outer = pd.Series(index=unique_chr, dtype=float)
                 outer.loc[:]=0
             # If there is one gene remaining, break
             while len(par_gen_fam) != 1:
@@ -379,16 +380,17 @@ class Paranome:
                 # keep track of in which chr. can we find this family's paralogs
                 outer.loc[gene[0]]+=1
             outer.loc[par_gen_fam.pop(0)[0]]+=1
-            print(outer)
+            # take only presence of family, not the amount of genes, dividing by
+            # itself (+1 present, +0 absent family in 'column' chromosome)
+            f_outer = outer[outer!=0]/outer[outer!=0]
 
             # Compute how many outer genes from this family each chr has...
             for crm in unique_chr:
                 # suma tots els gens a `crm` menys la columna propia:
                 outsiders = outer.sum()-outer.loc[crm]
                 blocks.loc[crm, 'num_paralogs_outer']+=outsiders
-                # Compute how strong are the links between chr...
-                intchr_links[crm]+=outer.loc[crm]
-                intchr_links.loc[crm, crm]-=1
+            # Compute how strong are the links between chr...
+            intchr_links.loc[f_outer.index, f_outer.index]+=1
 
         # Compute average distances between paralogs of the same chr:
         blocks['avg_paralogs_dist']=(
