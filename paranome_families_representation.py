@@ -51,8 +51,8 @@ class Paranome:
 
         # finally, parse and withdraw paralogous genes info...
         self.parsed_genes = self.parsing()
-        (self.df_tracks, self.df_links,
-            self.df_circos_tracks, self.df_total) = self.linkage(idx_file)
+        self.pipe_tbl()
+        self.df_tracks, self.df_links = self.linkage_v2(idx_file)
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -171,9 +171,9 @@ class Paranome:
         ]
         for s in outer_chr_len_filter:
             # Outer connections less than {s} -> putatively tandem dups.
-            list_colnames += [f'outer_conn_lt_{s}']
+            list_colnames += [f'interior_conn_lt_{s}']
         # Outer connections greater (or equal) than {s} -> probably not tandem
-        list_colnames += [f'outer_conn_gt_{s}']
+        list_colnames += [f'interior_conn_gt_{s}']
         # Connections for individual sequids
         blocks = pd.DataFrame()
         for coln in list_colnames:
@@ -258,7 +258,8 @@ class Paranome:
             with open(crm_idx_len) as idx:
                 for line in idx:
                     crm, length = line.split()
-                    blocks.loc[crm, 'chr_len'] += float(length)
+                    if crm in unique_chr:
+                        blocks.loc[crm, 'chr_len'] += float(length)
 
         # Translate amount of connections to percentages of total
         # Then, the CIRCOS track will be divided by these percentages:
@@ -277,6 +278,143 @@ class Paranome:
             tot.loc['*Total*', coln] = circos_blocks[coln].sum()
 
         return (blocks, intchr_links, circos_blocks, tot)
+
+    def linkage_v2(self,
+                crm_idx_len: 'Index file'=0):
+        """
+        Second attempt at representing intrachromosomal and interchromosomal
+        (from now on 'outer' and 'interior' connections) of each family.
+        Allocate how many genes could originate from tandem dups and how many
+        from recent WGD (not a rearrangement?)
+        """
+        # Define intrachromosomal ranges to detect tandem paralogs
+        # (e.g. less than 10 kbs, less than 100 kbs, less than 1 Mbs, beyond 1 Mbs)
+        # from now on, intra=outer
+        tandem_genes_dist_filter = [10**4, 10**5, 10**6]
+
+        # List the unique scaffolds/chromosomes which will be analyzed
+        unique_chr = []
+        for gene in self.parsed_genes:
+            # gene[0] is sequid
+            if gene[0] not in unique_chr:
+                unique_chr += [gene[0]]
+        # Sort sequids alphabetically
+        unique_chr.sort()
+        print("Status: List of unique chr queried for analyses:")
+        [print(f"Status:  + {x}") for x in unique_chr]
+
+        df_colnames = [
+            'chr_len',
+            'sum_paralogs_len',
+            'sum_paralogs_dist',
+            'trials_pargs_dist',
+            'avg_paralogs_dist',
+            'num_paralogs',
+            'num_paralogs_outer',
+        ]
+        for s in tandem_genes_dist_filter:
+            # Outer connections less than {s} -> putatively tandem dups.
+           df_colnames += [f'parg_lt_{s}']
+        # Outer connections greater (or equal) than {s} -> probably not tandem
+        df_colnames += [f'parg_gt_{s}']
+        # Overall stats for each chromosome
+        blocks = pd.DataFrame(columns=df_colnames, index=unique_chr)
+        blocks.loc[:]=0
+        # Shared families between chromosomes
+        # (in how many chromosomes is this family present,
+        # and in which gene quantity?)
+        intchr_links = pd.DataFrame(columns=unique_chr, index=unique_chr)
+        intchr_links.loc[:]=0
+        print("Status: Created the blank pandas DataFrames")
+
+        # Fill the information of the pandas DataFrames:
+        for gene in self.parsed_genes:
+            # Sum of paralogs' length for each sequid:
+            blocks.loc[gene[0], "sum_paralogs_len"] += gene[6]
+            # Number of paralogs for each sequid:
+            blocks.loc[gene[0], "num_paralogs"] += 1
+        # If an idx file has been given, specify length of each chr in the
+        # DataFrame...
+        if crm_idx_len:
+            with open(crm_idx_len) as idx:
+                for line in idx:
+                    crm, length = line.split()
+                    if crm in unique_chr: #DEBUG
+                        blocks.loc[crm, 'chr_len'] += float(length)
+
+        # Compute the 'outer' column
+        # (how much are genes of the same family split between chromosomes)
+        tot = len(self.families_dict().keys())
+        for fam_key, par_gen_fam in self.families_dict().items():
+            if len(par_gen_fam) == 1:
+                print(f"Status: Skipping outer connections and distances "+
+                      f"of the family {fam_key}/{tot} (only one member)")
+            else:
+                print(f"Status: Calculating outer connections and distances "+
+                      f"of the family {fam_key}/{tot}")
+                outer = pd.Series(index=unique_chr)
+                outer.loc[:]=0
+            # If there is one gene remaining, break
+            while len(par_gen_fam) != 1:
+                # Take the first gene in the family
+                gene = par_gen_fam.pop(0)
+#DBUG                print(f"Status: comparing gene {first_gene[1]} with the rest of "+
+#DBUG                      f"the family ({len(par_gen_fam)-1} connections left)")
+                # Compute distance to the other genes if they're in the same sequid
+                for gp in par_gen_fam:
+                    if gene[0] == gp[0]: # zero index is sequid
+                        dst = self.gene_distance(gene, gp)
+                        blocks.loc[gene[0], 'sum_paralogs_dist']+=dst
+                        blocks.loc[gene[0], 'trials_pargs_dist']+=1
+                        # check in which range does the computed distance fall,
+                        # and add one connection to that distance range.
+                        for s in tandem_genes_dist_filter:
+                            if dst < s:
+                                blocks.loc[gene[0], f'parg_lt_{s}'] += 1
+                                blocks.loc[gene[0], 'num_paralogs'] += 1
+                                break
+                        if dst >= s:
+                            blocks.loc[gene[0], f'parg_gt_{s}'] += 1
+                            blocks.loc[gene[0], 'num_paralogs'] += 1
+                # keep track of in which chr. can we find this family's paralogs
+                outer.loc[gene[0]]+=1
+            outer.loc[par_gen_fam.pop(0)[0]]+=1
+            print(outer)
+
+            # Compute how many outer genes from this family each chr has...
+            for crm in unique_chr:
+                # suma tots els gens a `crm` menys la columna propia:
+                outsiders = outer.sum()-outer.loc[crm]
+                blocks.loc[crm, 'num_paralogs_outer']+=outsiders
+                # Compute how strong are the links between chr...
+                intchr_links[crm]+=outer.loc[crm]
+                intchr_links.loc[crm, crm]-=1
+
+        # Compute average distances between paralogs of the same chr:
+        blocks['avg_paralogs_dist']=(
+            blocks.loc[blocks['sum_paralogs_dist']!=0, 'sum_paralogs_dist'] /
+            blocks.loc[blocks['sum_paralogs_dist']!=0, 'trials_pargs_dist'])
+
+        return (blocks, intchr_links)
+
+    def gene_distance(self, stored_gene1, stored_gene2):
+        """
+        Compute distance between given pair of genes parsed by the above
+        function
+        """
+        # if they overlap, distance is zero
+        if any([
+        stored_gene1[3] <= stored_gene2[3] <= stored_gene1[4],
+        stored_gene2[3] <= stored_gene1[3] <= stored_gene2[4]
+        ]):
+            distance = 0
+        # otherwise, the difference between max beginning and min end
+        else:
+            distance = int(
+                max(stored_gene1[3], stored_gene2[3]) -
+                min(stored_gene1[4], stored_gene2[4])
+            )
+        return distance
 
     def basic_parfam_properties(self):
         """
@@ -376,16 +514,14 @@ if __name__ == '__main__':
     print("-"*len(t), t, paranome.df_tracks, sep='\n')
     t = "LINK STRENGTH BETWEEN CHR"
     print("-"*len(t), t, paranome.df_links, sep='\n')
-    t = "CIRCOS TRACK SEGMENTS LEN"
-    print("-"*len(t), t, paranome.df_circos_tracks, sep='\n')
 
-    t = "WRITING BOTH DATAFRAMES TO TSV"
-    print("-"*len(t), t, sep='\n')
-    paranome.df_tracks.to_csv('tracks.tsv', sep='\t')
-    paranome.df_links.to_csv('links.tsv', sep='\t')
-    paranome.df_circos_tracks.to_csv('circos_tracks.tsv', sep='\t')
-    # also, heatmap viz
-    paranome.heatmap()
+    if False:
+        t = "WRITING BOTH DATAFRAMES TO TSV"
+        print("-"*len(t), t, sep='\n')
+        paranome.df_tracks.to_csv('tracks.tsv', sep='\t')
+        paranome.df_links.to_csv('links.tsv', sep='\t')
+        # also, heatmap viz
+        paranome.heatmap()
 
     # print table 'pipe' formatted:
 #    paranome.pipe_tbl()
