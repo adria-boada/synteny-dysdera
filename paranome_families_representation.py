@@ -18,18 +18,22 @@ representation efforts.
 
 """
 
-import sys, tabulate, pandas as pd
+import sys, tabulate
+import pandas as pd
 import matplotlib.pyplot as plt, numpy as np
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 class Paranome:
-
     def __init__(self, file1, file2,
                  idx_file: 'Optional index file with chr. lengths'=0):
         """
         Define which two files will create the Paranome class.
-        Assign each file to the pertinent variable by detecting the *.gff3 extension
+        Assign each file to the pertinent variable by detecting the *.gff3
+        extension.
+
+        One file is a GFF3 with a description of all annotated genes.
+        The second, an MCL file which delimits groups of paralogs.
         """
         if ".gff3" in file1:
             self.file_gff = file1
@@ -40,19 +44,30 @@ class Paranome:
         else:
             sys.exit("ERROR: no file with *.gff3 "+
                   "extension has been provided")
-        # verifica que el camí fins als fitxers és vàlid
+        # verify that the provided paths are valid:
         try:
             with open(self.file_gff) as fg, open(self.file_paralogy) as fp:
                 pass
-        # si no és vàlid, exit()
+        # if paths are not valid, exit the script.
         except:
             sys.exit('ERROR: The path to the provided files appears to be '+
+                     'incorrect')
+        if idx_file:
+            try:
+                with open(idx_file) as fx:
+                    pass
+            except:
+                sys.exit('ERROR: The path to the provided IDX file appears to be '+
                      'incorrect')
 
         # finally, parse and withdraw paralogous genes info...
         self.parsed_genes = self.parsing()
-        self.pipe_tbl()
-        self.df_tracks, self.df_links = self.linkage_v2(idx_file)
+        self.df_parsed_genes = pd.DataFrame(self.parsed_genes,
+                                  columns=['sequid', 'geneID',
+                                         'arbitrary_fam_number',
+                                         'start', 'end', 'strand',
+                                         'gene_length'])
+        #self.df_tracks, self.df_links = self.linkage_v2(idx_file)
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
