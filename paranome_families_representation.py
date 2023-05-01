@@ -6,8 +6,9 @@
 # 24 de març 2023  <adria@molevol-OptiPlex-9020>
 
 """
-Converts a couple of `file.gff3.gene_filtered` and `file.mcl` into a more
-adequate file for representation with CIRCOS.
+Converts a couple of `file_gene_filtered.gff3` and `file.mcl` into a more
+adequate file for representation with CIRCOS. Leaving only geneIDs should
+improve performance.
 
 The newly created file is a TSV with 5 columns: gene ID, beginning and ending
 coordinates, in which chromosome is it located, and of which paralogous family
@@ -16,15 +17,19 @@ is it (numbered arbitrarilly from 1 to N).
 This format allows sorting the file by paralogous family, facilitating the
 representation efforts.
 
+Es podria filtrar els sequids amb menys de N paralegs i evitar renombrar.
 """
 
 import sys, tabulate
 import pandas as pd
 import matplotlib.pyplot as plt, numpy as np
+import math
+import natsort
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 class Paranome:
+
     def __init__(self, file1, file2,
                  idx_file: 'Optional index file with chr. lengths'=0):
         """
@@ -60,14 +65,26 @@ class Paranome:
                 sys.exit('ERROR: The path to the provided IDX file appears to be '+
                      'incorrect')
 
-        # finally, parse and withdraw paralogous genes info...
-        self.parsed_genes = self.parsing()
-        self.df_parsed_genes = pd.DataFrame(self.parsed_genes,
+        # parse and withdraw paralogous genes info...
+        self.df_parsed_genes = pd.DataFrame(self.parsing(),
                                   columns=['sequid', 'geneID',
                                          'arbitrary_fam_number',
                                          'start', 'end', 'strand',
                                          'gene_length'])
-        #self.df_tracks, self.df_links = self.linkage_v2(idx_file)
+        # afterwards, find presence of families in sequids...
+        self.df_family_presence = self.fam_presence()
+        # compute matrix of linkage strengths between sequids
+        # (keep in mind that there are multiple func. with diff. weighs)
+        self.df_linkage = self.linkage_v3()
+        # remove rows and cols with only zeroes from the linkage dataframe
+        self.df_clean_linkage =(
+            self.df_linkage.loc[self.df_linkage.any(axis=1),
+                                self.df_linkage.any(axis=0)])
+        # reorder index and colnames with `humansorted` from `natsort`:
+        # Scaffold_2 should be placed between Scaffold_1 and Scaffold_11
+        self.df_clean_linkage =(
+            self.df_clean_linkage.reindex(columns=natsort.humansorted(self.df_clean_linkage.columns)
+                                ).reindex(index=natsort.humansorted(self.df_clean_linkage.index)))
 
     # define all fields of a given GFF3 line thanks to a nested class
     # (requires to be called as 'self.Classname' inside the class)
@@ -106,8 +123,10 @@ class Paranome:
         with open(self.file_paralogy) as fp:
             for line_par in fp:
                 family += 1
-                print(f"Status: Withdrawing gene information from the GFF3 "+
-                      f"for family {family}/{tot_fam}")
+                # print status every so often (remainder of division by 25 == 1)
+                if int(family) % 25 == 1:
+                    print(f"Status: Withdrawing gene information from the GFF3 "+
+                          f"for family {family}/{tot_fam}")
                 for gene_par in line_par.split():
                     with open(self.file_gff) as fg:
                         for line_gff in fg:
@@ -132,10 +151,96 @@ class Paranome:
                             print(f"WARNING: the paralogous gene {gene_par} "+
                                   "has not found its coordinates in the GFF3 "+
                                   "file")
-
         # return the list of fields of interest for each gene
         # once the whole file with paralogous families has been parsed.
         return stored_genes
+
+    def fam_presence(self):
+        """
+        Parse the families of paralogs. Store the presence of particular
+        families in each sequid.
+
+        Example pandas df output:
+                chrA    chrB
+        fam_1   4       0
+        fam_2   2       1
+        """
+        # Define intrachromosomal ranges to detect tandem paralogs
+        # It'd be interesting to report at multiple levels (compare with
+        # i-adhore tandem gene tags)
+        #
+        # The paralogs df is stored in the var 'self.df_parsed_genes'
+        # Shorten the calls to this specific df:
+        df = self.df_parsed_genes
+        # Init. a matrix of zeroes. Each row, a family of paralogy. Each column,
+        # the amount of paralogs from the index family present in column
+        # chromosome.
+        return_families_presence = pd.DataFrame(0,
+                                            columns=df['sequid'].unique(),
+                                            index=df['arbitrary_fam_number'].unique())
+        counter_end = self.df_parsed_genes['arbitrary_fam_number'].max()
+        # Compute the amount of paralogs for given families in every sequid.
+        # For all families of paralogy in the dataframe:
+        for family in df['arbitrary_fam_number'].unique():
+            if int(family) % 25 == 1:
+                print('Status: searching for presence of family '+
+                     f'{family}/{counter_end}')
+            # For all sequids containing members of the selected family:
+            for crm in df[df['arbitrary_fam_number']==family]['sequid'].unique():
+                subset = df.query(f'arbitrary_fam_number == {family} & '+
+                                  f'sequid == "{crm}"')
+                return_families_presence.loc[family, crm] = len(subset)
+        # maybe it would be better to return a dataframe with the amount of
+        # paralog genes present in each sequid for each family
+        return return_families_presence
+
+    def linkage_v3(self,
+                   mode:"Which function to use when computing sequids relatedness"=1):
+        """
+        Given a dataframe of families presence across sequids, calculate
+        relatedness/linkage in and between sequids
+        """
+        if mode == 1:
+            funct = self.analytical_sharedness_pairwise
+        elif mode == 2:
+            pass
+        # The paralogs df is stored in the var 'self.df_parsed_genes'
+        # Shorten the calls to this specific df:
+        df = self.df_parsed_genes
+        # Init. a square matrix of zeroes. Each colname and rowname are unique
+        # chromosome names, representing strength of connections between
+        # every pair of chromosomes (even with themselves; diagonal)
+        return_paralogy_sharedness = pd.DataFrame(0,
+                                         index=df['sequid'].unique(),
+                                         columns=df['sequid'].unique())
+        for row in self.df_family_presence.iterrows():
+            r = row[1][row[1] >0]
+            # iterate until all the values from the series have been popped()
+            while len(r) >0:
+                # pop the first value of family presence in `r` series
+                # at the same time, store its index in another var (crm.)
+                curr_crm, curr_val = (r.index[0], r.pop(r.index[0]))
+                # compare popped() value to itself
+                return_paralogy_sharedness.loc[curr_crm, curr_crm] +=(
+                    funct(curr_val) )
+                # compare popped() value to the remaining values in `r` series
+                # both `curr_crm` and `i` are sequids
+                for i in r.index:
+                    return_paralogy_sharedness.loc[curr_crm, i] +=(
+                        funct(curr_val, r[i]) )
+        return return_paralogy_sharedness
+
+    def analytical_sharedness_pairwise(self, val1, val2=0):
+        """
+        Compute sharedness of chromosome by calculating the number of all possible
+        pairwise connections between paralogs of this family.
+        """
+        if val1==1 and not val2:
+            return 0
+        elif val1>1 and not val2:
+            return (val1*(val1-1))/2
+        else: # val1 and val2
+            return math.ceil( (val1*val2)/2 )
 
     def families_dict(self):
         """
@@ -446,7 +551,6 @@ class Paranome:
                 genes_in_families += [len(line.split())]
                 # recupera el nombre de línies al fitxer (núm. famílies + orfes)
                 families += 1
-
         # recompta famílies amb "membres >= 2" (sols famílies de paralogia)
         paralogous_families = 0
         with open(self.file_paralogy) as fp:
@@ -455,34 +559,44 @@ class Paranome:
                     break
                 else:
                     paralogous_families += 1
-
-        # recompta el nombre total de gens paràlegs
-        # (suma els membres de cada família)
+        # count the total number of paralog genes
+        # (sum the paralogs across all families)
         paralogous_genes = 0
         for i in range(2, max(genes_in_families)+1):
             paralogous_genes += i*genes_in_families.count(i)
 
-        return {
+        # create the dictionary which will be printed and returned by the funct.
+        return_measures = {
             "Màxim de membres en una sola família":
             max(genes_in_families),
             "Núm. de gens paràlegs":
             paralogous_genes,
-            "Núm. de gens paràlegs + no paràlegs (orfes, família d'un)":
+            # orphan genes are defined by not having identifiable paralogs
+            "Núm. de gens 'orfes'":
+            genes_in_families.count(1),
+            "Núm. de gens paràlegs + 'orfes'":
             paralogous_genes + genes_in_families.count(1),
-            "Núm. de famílies paralogues + 'famílies' orfes":
-            families,
             "Núm. de famílies paralogues":
             paralogous_families,
-        }
+            "Núm. de 'famílies orfes'":
+            families-paralogous_families,
+            "Núm. de famílies paralogues + 'orfes'":
+            families,}
+        # when the funct. is called, print the values to screen:
+        for key, val in return_measures.items():
+            print(key, ': ', val, sep='')
+        return return_measures
 
     def heatmap(self, filename: "Output filename of the heatmap" ='linkage_heatmap.png'):
         """
         Create a heatmap from the pairwise connections between chr
         """
-        df = self.df_links
+        df = self.df_clean_linkage
         plt.pcolormesh(df)
         plt.yticks(np.arange(0.5, len(df.index), 1), df.index)
-        plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns)
+        plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns,
+                   # rotate 45 degrees xticks
+                   rotation=45)
         plt.savefig(filename)
 
     def tsv_tbl(self):
@@ -524,27 +638,21 @@ if __name__ == '__main__':
 
     # parse both the GFF3 and TSV.MCL thanks to the "Paranome" class
     # file1 and file2 have to be GFF3 and MCL (vars can go in any order):
-    paranome = Paranome(args.file1, args.file2, args.idx)
+    paranome = Paranome(args.file1, args.file2)
 
     # print retrieved pandas Dataframes
-    t = "GENERAL TABLE"
-    print("-"*len(t), t, paranome.df_tracks, sep='\n')
-    t = "LINK STRENGTH BETWEEN CHR"
-    print("-"*len(t), t, paranome.df_links, sep='\n')
-
-    if False:
-        t = "WRITING BOTH DATAFRAMES TO TSV"
-        print("-"*len(t), t, sep='\n')
-        paranome.df_tracks.to_csv('tracks.tsv', sep='\t')
-        paranome.df_links.to_csv('links.tsv', sep='\t')
-        # also, heatmap viz
-        paranome.heatmap()
+    t = "WRITING BOTH DATAFRAMES TO TSV"
+    print("-"*len(t), t, sep='\n')
+    paranome.df_linkage.to_csv('tmp_raw_linkage.tsv', sep='\t')
+    paranome.df_clean_linkage.to_csv('tmp_clean_linkage.tsv', sep='\t')
+    # also add a heatmap
+    paranome.heatmap()
+    # and return paranome stats
+    x=paranome.basic_parfam_properties()
 
     # print table 'pipe' formatted:
 #    paranome.pipe_tbl()
     # print table 'tsv' formatted:
 #    paranome.tsv_tbl()
     # print basic stats from the MCL file:
-    for key, val in paranome.basic_parfam_properties().items():
-        print(key, ':', val)
 
