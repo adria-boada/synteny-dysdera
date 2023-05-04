@@ -228,6 +228,11 @@ class Paranome:
                 for i in r.index:
                     return_paralogy_sharedness.loc[curr_crm, i] +=(
                         funct(curr_val, r[i]) )
+                    # in order to avoid triangular dataframes (dataframe with
+                    # zeroes) add the computed value above and below the
+                    # diagonal:
+                    return_paralogy_sharedness.loc[i, curr_crm] +=(
+                        funct(curr_val, r[i]) )
         return return_paralogy_sharedness
 
     def analytical_sharedness_pairwise(self, val1, val2=0):
