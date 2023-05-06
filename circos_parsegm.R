@@ -3,26 +3,37 @@ library(circlize)
 library(reshape2)
 library(colourvalues)
 
-### OPTIONS ###
+### MANUAL OPTIONS ###
 
 # select a misc. var to represent between...
 # gene number col. -> 7
 # gene length col. -> 8
 # gene distance col. -> 9
-misc_var = 9
+# intra / extra chromosomal -> 10
+misc_var = 10
 
 ### READ DATAFRAME ###
 
 df = read.table("segments_linked_pairs.tsv",
   sep='\t', header=TRUE, row.names=1)
 # create a separate column with selected misc var...
-df$var = df[, misc_var]
-if (misc_var==7) {misc_var_title=paste('Ratio of gene number',
-                                       '\n(source vs. destiny segments)')}
-if (misc_var==8) {misc_var_title=paste('Ratio of mean gene lengths',
-                                       '\n(source vs. destiny segments)')}
-if (misc_var==9) {misc_var_title=paste('Ratio of mean gene distances',
-                                       '\n(source vs. destiny segments)')}
+if (misc_var==7) {
+  misc_var_title=paste('Ratio of gene number',
+  '\n(source vs. destiny segments)')
+  df$var = df[, misc_var]}
+if (misc_var==8) {
+  misc_var_title=paste('Ratio of mean gene lengths',
+  '\n(source vs. destiny segments)')
+  df$var = df[, misc_var]}
+if (misc_var==9) {
+  misc_var_title=paste('Ratio of mean gene distances',
+  '\n(source vs. destiny segments)')
+  df$var = df[, misc_var]}
+if (misc_var==10) {
+  misc_var_title='Whether links are intrachromosomal'
+  # add a bool column which tracks whether links are intra or extra chromosomal
+  df$var = df$sequid_from==df$sequid_to
+}
 
 ### CREATE COLOUR COLUMN CORRELATED TO MISC RATIOS ###
 
@@ -70,9 +81,18 @@ circos.genomicLink(df[, c(1:3)], df[, c(4:6)],
 )
 # add a legend with the min and max of misc value,
 # and the colours used to represent these.
-legend('bottomleft', title=misc_var_title, bty='n',
-  legend = c(1, df$var[df$var==max(df$var)]),
-  fill = c(col_ramp[1], df$col[df$var==max(df$var)]))
+if (misc_var==10) {
+  # TRUE/FALSE intrachr links
+  col_ramp = colour_values(c(0, 1))
+  legend('bottomleft', title=misc_var_title, bty='n',
+    legend = c(FALSE, TRUE),
+    fill = c(col_ramp[1], col_ramp[2]))
+} else {
+  # legend for other misc variables
+  legend('bottomleft', title=misc_var_title, bty='n',
+    legend = c(1, df$var[df$var==max(df$var)]),
+    fill = c(col_ramp[1], df$col[df$var==max(df$var)]))
+}
 
 # # # # # #
 # shut down plotting device
