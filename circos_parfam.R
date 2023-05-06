@@ -101,7 +101,7 @@ for (i in c(1:length(links[,1]))) {
 ### PLOTTING CIRCOS ###
 
 # guarda 'Rplot.pdf'
-pdf()
+pdf(width=9)
 
 # gràfica
 circos.clear()
