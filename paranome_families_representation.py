@@ -630,7 +630,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description="Provide two files: (a) GFF3 annotations with *.gff3 "+
-        "extension and (b) paranome file (in any order)")
+        "extension and (b) paranome file as in MCL's output (files can be in any order)")
     # file-name: positional arg.
     parser.add_argument('file1', type=str,)
     parser.add_argument('file2', type=str,)
