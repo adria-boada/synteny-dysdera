@@ -195,8 +195,9 @@ if __name__ == '__main__':
     ### PARSE ARGUMENTS ###
     import argparse
 
-    parser = argparse.ArgumentParser(description='Add information from GFF3 to'+
-                    'segments.txt. Stipulate these files in any order.')
+    parser = argparse.ArgumentParser(description='Add gene information from '+
+                    "a GFF3 file to i-adhore's segments.txt file. "+
+                    "Supply both of these required files in any order."
     # file-name: positional arg.
     parser.add_argument('file1', type=str, help='Path to required file-name')
     parser.add_argument('file2', type=str, help='Path to required file-name')
