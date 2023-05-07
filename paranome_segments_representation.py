@@ -140,6 +140,10 @@ class Segments:
             df_return.loc[row.name, 'mean_gene_len'] = mean_lens
             df_return.loc[row.name, 'mean_gene_dist'] = mean_dist
             df_return.loc[row.name, 'n_genes'] = i+2
+            # If you are in need of debugging the script, print the retrieved
+            # genes for each segment in every multiplicon
+            #print('Multiplicon:', row['multiplicon']) # DEBUGGING
+            #print(df_contains) # DEBUGGING
 # are you interested in storing the IDs/coords from the genes in this specific segment?
 #            for rowi in df_contains.iterrows():
 #                rowi=rowi[1]
