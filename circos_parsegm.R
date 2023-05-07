@@ -21,8 +21,16 @@ crm_idx = data.frame(
 
 ### READ DATAFRAME ###
 
+# pairs of segments to link
 df = read.table(segments_file,
   sep='\t', header=TRUE, row.names=1)
+# index of sequids in the previous file, length-sorted
+if (!is.na(args[2])) { # if args[2] is not NA...
+  crm_idx = read.table(args[2],
+    sep='\t', header=FALSE, col.names=c('crm', 'end'))
+  crm_idx$start=0
+  crm_idx = crm_idx[, c('crm', 'start', 'end')]
+}
 # specify the four legend titles
 leg_titles = c(
   paste('Ratio of gene number',
@@ -67,6 +75,9 @@ pdf(width=9)
 # Repeat for each column of colours
 for (i in c(1:4)) {
 circos.clear() # good habit to clear previous options
+# circos.par(): parameters to solve the overabundance of
+# minor scaffold representation in *Dcat*
+circos.par(cell.padding = c(0.02, 0,0.02, 0))
 circos.initialize(sectors=crm_idx$crm,
                   xlim=crm_idx[, c(2,3)])
 circos.track(crm_idx$crm, ylim=c(0,.25),
