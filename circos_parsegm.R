@@ -1,23 +1,23 @@
 #! /usr/bin/env Rscript
 
-library(circlize)      # circular plots
-library(colourvalues)  # colouring links depending on variable
-
 ### MANUAL OPTIONS ###
 
 # Read supplied arguments
 args = commandArgs(trailingOnly=TRUE)
-# Path to segments dataframe file (should be first and only argument)
+# It is necessary to supply 2 arguments:
+if (length(args) != 2) {
+  stop(paste("Supply exactly 2 argument files:",
+             "circos_parsegm.R `segments.txt` `chr_index.idx`",
+             sep='\n'),
+       call.=FALSE)
+}
+# Path to segments dataframe file
 segments_file = args[1]
-# manually add chromosome length
-# (would be good to add fasta.idx reading capabilities)
-crm_idx = data.frame(
-  crm=c('Scaffold_1', 'Scaffold_2', 'Scaffold_3', 'Scaffold_4',
-        'Scaffold_5_Vmt', 'Scaffold_6', 'Scaffold_7'),
-  start=0,
-  end=c(434793700, 210901293, 210826211, 205634564,
-        158554970, 152324531, 96325250)
-)
+# Path to a tabulated index file (2 cols; chr and its length)
+index_file = args[2]
+
+library(circlize)      # circular plots
+library(colourvalues)  # colouring links depending on variable
 
 ### READ DATAFRAME ###
 
@@ -25,12 +25,13 @@ crm_idx = data.frame(
 df = read.table(segments_file,
   sep='\t', header=TRUE, row.names=1)
 # index of sequids in the previous file, length-sorted
-if (!is.na(args[2])) { # if args[2] is not NA...
-  crm_idx = read.table(args[2],
-    sep='\t', header=FALSE, col.names=c('crm', 'end'))
-  crm_idx$start=0
-  crm_idx = crm_idx[, c('crm', 'start', 'end')]
-}
+crm_idx = read.table(index_file,
+  sep='\t', header=FALSE, col.names=c('crm', 'end'))
+# add a "starting" position for chr
+crm_idx$start=0
+# and reorder the columns
+crm_idx = crm_idx[, c('crm', 'start', 'end')]
+
 # specify the four legend titles
 leg_titles = c(
   paste('Ratio of gene number',
@@ -41,6 +42,14 @@ leg_titles = c(
   '\n(source vs. destiny segments)'),
   'Intrachromosomal'
 )
+
+### SUBSETTING CIRCOS LINKS ###
+#
+# Make sure that the given links start or end in chromosomes which
+# are found in the index file. If a segment is found in a chromosome/
+# scaffold which is not found in the index file, remove it from the
+# dataframe.
+
 
 ### COLOUR OF CIRCOS LINKS ###
 
