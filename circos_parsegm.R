@@ -46,10 +46,13 @@ leg_titles = c(
 ### SUBSETTING CIRCOS LINKS ###
 #
 # Make sure that the given links start or end in chromosomes which
-# are found in the index file. If a segment is found in a chromosome/
-# scaffold which is not found in the index file, remove it from the
+# are found in the index file. If a segment is located in a chromosome/
+# scaffold which is not present in the index file, remove it from the
 # dataframe.
 
+# Make sure that the column 'sequid_to' and 'sequid_from'
+# are in the column 'crm' for the 'crm_idx' data.frame
+df = df[df$sequid_to %in% crm_idx$crm & df$sequid_from %in% crm_idx$crm,]
 
 ### COLOUR OF CIRCOS LINKS ###
 
