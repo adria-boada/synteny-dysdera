@@ -1,13 +1,14 @@
 #! /usr/bin/env Rscript
 
-### MANUAL OPTIONS ###
+### MANUAL OPTIONS and READING DATAFRAMES ###
 
 # Read supplied arguments
 args = commandArgs(trailingOnly=TRUE)
 # It is necessary to supply 2 arguments:
-if (length(args) != 2) {
+if (length(args) < 2) {
   stop(paste("Supply exactly 2 argument files:",
-             "circos_parsegm.R `segments.txt` `chr_index.idx`",
+             "circos_parsegm.R `segments.tsv` `chr_index.idx`",
+             "Optionally, supply `single_segments_file.tsv` to plot families with many families",
              sep='\n'),
        call.=FALSE)
 }
@@ -19,8 +20,6 @@ index_file = args[2]
 library(circlize)      # circular plots
 library(colourvalues)  # colouring links depending on variable
 
-### READ DATAFRAME ###
-
 # pairs of segments to link
 df = read.table(segments_file,
   sep='\t', header=TRUE, row.names=1)
@@ -31,6 +30,20 @@ crm_idx = read.table(index_file,
 crm_idx$start=0
 # and reorder the columns
 crm_idx = crm_idx[, c('crm', 'start', 'end')]
+
+if (length(args)==3) {
+# Path to file with all the segments and their coordinates
+# It is used to plot families of >2 segments
+single_segments_file = args[3]
+# complete dataset of multiplicated segments
+df_many_members = read.table(single_segments_file,
+  sep='\t', header=TRUE, row.names=1)
+# Select multiplicons with >2 members
+tab = table(df_many_members$multiplicon)
+df_many_members=df_many_members[df_many_members$multiplicon %in% names(tab[tab>2]),]
+# create a palette: one colour per family (all members the same)
+df_many_members$col = colour_values(as.character(df_many_members$multiplicon))
+}
 
 # specify the four legend titles
 leg_titles = c(
@@ -87,20 +100,31 @@ pdf(width=9)
 # Repeat for each column of colours
 for (i in c(1:4)) {
 circos.clear() # good habit to clear previous options
-# circos.par(): parameters to solve the overabundance of
+# parameters to solve the overabundance of
 # minor scaffold representation in *Dcat*
-circos.par(cell.padding = c(0.02, 0,0.02, 0))
+circos.par(cell.padding = c(0.02, 0,0.02, 0)) # parameters
 circos.initialize(sectors=crm_idx$crm,
                   xlim=crm_idx[, c(2,3)])
 circos.track(crm_idx$crm, ylim=c(0,.25),
   track.height=.15, #bg.border=NA,
   panel.fun = function(x,y) {
-    crm = CELL_META$sector.index
+    cell_crm = CELL_META$sector.index
     xlim = CELL_META$xlim
     ylim = CELL_META$ylim
-    #circos.rect(xlim[1], 0, xlim[2], 1)
-    circos.text(mean(xlim), mean(ylim), crm,
+    # if the conditions are ripe, add >2 member families:
+    if (i==4 & length(args)==3) {
+    # draw where each member is
+    # (dots of the same colour in the tracks):
+    circos.genomicPoints(df_many_members[df_many_members$sequid==cell_crm,c('start', 'end')],
+      CELL_META$ycenter,
+      col=df_many_members[df_many_members$sequid==cell_crm,'col'],
+      pch=16, cex=2) # make them big and round dots
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chrname above track)
+      cell_crm, cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+    } else {
+    circos.text(mean(xlim), mean(ylim), cell_crm,
       cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+    }
   }
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
@@ -120,5 +144,4 @@ circos.genomicLink(df[, c(1:3)], df[, c(4:6)],
 # shut down plotting device
 dev.off()
 # # # # # #
-
 
