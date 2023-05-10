@@ -215,6 +215,8 @@ if __name__ == '__main__':
     seg = Segments(args.file1, args.file2)
     pd.set_option('display.min_rows', 30)
     print(seg.df_segments)
+    seg.df_segments.to_csv('single_segments_all.tsv',
+                           sep='\t')
     print(seg.df_links)
     print(seg.df_links_ratio)
     seg.df_links_ratio.to_csv('segments_linked_pairs.tsv',
