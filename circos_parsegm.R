@@ -53,7 +53,10 @@ leg_titles = c(
   '\n(source vs. destiny segments)'),
   paste('Ratio of mean gene distances',
   '\n(source vs. destiny segments)'),
-  'Intrachromosomal'
+  'Intrachromosomal',
+  'log10 of gene number',
+  'log10 of gene length',
+  'log10 of gene distances'
 )
 
 ### SUBSETTING CIRCOS LINKS ###
@@ -75,18 +78,26 @@ df_cols = data.frame(
   gl=colour_values(c(1, df[, 8])),
   gd=colour_values(c(1, df[, 9])),
   # add a bool column which tracks whether links are intra or extra chromosomal
-  intra=colour_values(c(FALSE, df$sequid_from==df$sequid_to))
+  intra=colour_values(c(FALSE, df$sequid_from==df$sequid_to)),
+  # Some outliers difficult the visualization of the plot
+  # Compute the square root of these vars. and repeat the CIRCOS plot.
+  gnsq=colour_values(c(0, log10(abs(df[, 7])))),
+  glsq=colour_values(c(0, log10(abs(df[, 8])))),
+  gdsq=colour_values(c(0, log10(abs(df[, 9]))))
 )
 # specify min and max colour values
 col_range = colour_values(c(0,1))
 # specify min and max legend values
 val_range = data.frame(
-      min=c(1, 1, 1, FALSE),
+      min=c(1, 1, 1, FALSE, 1, 1, 1),
       max=c(
         df$gn[df$gn==max(df$gn)],
         df$gL[df$gL==max(df$gL)],
         df$gD[df$gD==max(df$gD)],
-        TRUE)
+        TRUE,
+        df$gn[df$gn==max(df$gn)],
+        df$gL[df$gL==max(df$gL)],
+        df$gD[df$gD==max(df$gD)])
       )
 
 ### PLOTTING CIRCOS FIGURE ###
@@ -98,7 +109,7 @@ pdf(width=9)
 # # # # # #
 
 # Repeat for each column of colours
-for (i in c(1:4)) {
+for (i in c(1:7)) {
 circos.clear() # good habit to clear previous options
 # parameters to solve the overabundance of
 # minor scaffold representation in *Dcat*
