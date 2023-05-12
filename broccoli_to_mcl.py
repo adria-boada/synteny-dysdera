@@ -34,21 +34,33 @@ class Broccoli:
 
         # read and prepare dataframe from tabulated file
         df = pd.read_table(file)
+        """
+        If you desire to filter the dataframe by types of orthogroups ("broccoli
+        buenos", filtering by quality, filtering by RNAseq status...) it can be
+        done with:
+        ` df.query(f'Column == "value" | Column == "{variable}"') `
+
+        f'': formatted-string, can introduce variables to strings within
+        braces '{}'
+        To combine logical expressions, use '|' (OR) and '&' (AND).
+        """
         families_out = {}
         for sp in species:
-            print(f'Status: Families for species {sp}')
-            for og in df['OGid'].unique():
+            print(f'Status: Computing OGs for species {sp}')
+            # collect unique OGids present in 'sp' species:
+            for og in df.query(f'Species == "{sp}"')['OGid'].unique():
                 df_subsetted = df.query(f'Species == "{sp}" & OGid == "{og}"')
+                # create a list in which all genes from og orthogroup
+                # will be stored
                 families_out[og] = []
-                # print the genes belonging to the subsetted
-                # family (sp, og) in a tabulated format
                 for gene in df_subsetted['GeneID']:
                     families_out[og] += [gene]
-            # create a list of sublists
+            # create a list of sublists with the previous dict
             # each sublist is a family (group of geneIDs)
             l = list(families_out.values())
             # sort by length of family (amount of geneIDs)
             l.sort(key=lambda x: len(x), reverse=True)
+            # print in a tabulated format
             for fam in l:
                 for gene in fam[:-1]:
                     print(gene, end='\t')
@@ -75,6 +87,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
-    Broccoli(args.file, species=['Dtil'])
+    Broccoli(args.file, species=['Dtil', 'Dcat'])
 
 
