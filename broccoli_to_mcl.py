@@ -41,6 +41,9 @@ class Broccoli:
         f'': formatted-string, can introduce variables to strings within
         braces '{}'
         To combine logical expressions, use '|' (OR) and '&' (AND).
+
+        To subset all OGids within a list...
+        df[df['OGid'].isin(list_OGids)]
         """
 
         # try to open the file (make sure provided path is correct)
@@ -51,9 +54,9 @@ class Broccoli:
             sys.exit('ERROR: The inputted file-path does not exist?')
         # read and prepare dataframe from tabulated file
         self.df_input_table = pd.read_table(file)
-        # init df_dups; if it is later needed, it will be computed
+        # init df_amounts; if it is later needed, it will be computed
         # and stored in this variable (overwritting the now empty DataFrame)
-        self.df_dups = pd.DataFrame()
+        self.df_amounts = pd.DataFrame()
 
 
     def paranome_OG_dict(self, species,
@@ -119,10 +122,7 @@ class Broccoli:
                 sys.exit("ERROR: A species given to the function "+
                          "`write_orthonome_ovo_mcl` "+
                          "has been mispelled (not found in dataframe)")
-        # do we need to compute `tmp_df_amounts()` (yes if it is empty)?
-        if self.df_dups.empty:
-            self.df_dups = self.tmp_df_amounts()
-        df_one_to_one = self.df_dups.query(f'{sp_pair[0]} == 1 & '+
+        df_one_to_one = self.df_dups().query(f'{sp_pair[0]} == 1 & '+
                                            f'{sp_pair[1]} == 1')
         # store genes in dict. before writing to file:
         families_out = {}
@@ -162,7 +162,7 @@ class Broccoli:
 
         return None
 
-    def tmp_df_amounts(self,
+    def df_dups(self,
                        OGtype_species_order: "Order of species in OGtype col"=(
                            'Dcat', 'Dtil', 'Dsil', 'Dver', 'Dban', 'Dgom')):
         """
@@ -174,6 +174,9 @@ class Broccoli:
         It is a very slow function (queries a massive dataframe, many times)
         """
 
+        # do we need to compute `df_dups()` (yes if self.df_dups is empty)
+        if not self.df_amounts.empty:
+            return self.df_amounts
         # shorten var calls
         df = self.df_input_table
         # initialise output dataframe
@@ -182,12 +185,10 @@ class Broccoli:
                                columns=OGtype_species_order,
                                # one row per OG
                                index=df['OGid'].unique())
-        print(df_dups) #DEBUG
-        print(df_dups.columns) #DEBUG
         for i in df_dups.index:
            for sp in df_dups.columns:
                 df_dups.loc[i, sp] = len(df.query(f'OGid == "{i}" & Species == "{sp}"'))
-        print(df_dups) #DEBUG
+        self.df_amounts = df_dups
 
         return df_dups
 
@@ -217,5 +218,12 @@ if __name__ == '__main__':
     broc.one_v_one_orthologs_dict(['Dcat', 'Dtil'])
     broc.paranome_OG_dict('Dcat')
     broc.paranome_OG_dict('Dtil')
-
+    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
+    # (remove present only in one of these two species)
+    OGid_interested_list = broc.df_dups().query(
+        'Dcat > 0 & Dtil > 0').index.to_list()
+    df_dcat_dtil = broc.df_input_table.query(f'OGid in {OGid_interested_list}')
+    # remove other species, which we are not interested in...
+    df_dcat_dtil = df_dcat_dtil.query('Species in ["Dcat", "Dtil"]')
+    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
 
