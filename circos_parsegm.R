@@ -2,9 +2,8 @@
 
 ### MANUAL OPTIONS and READING DATAFRAMES ###
 
-# Read supplied arguments
+# Read/parse supplied arguments
 args = commandArgs(trailingOnly=TRUE)
-# It is necessary to supply 2 arguments:
 if (length(args) < 2) {
   stop(paste("Supply exactly 2 argument files:",
              "circos_parsegm.R `segments.tsv` `chr_index.idx`",
