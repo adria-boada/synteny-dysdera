@@ -89,7 +89,7 @@ og.removed = 0 ; og.included = 0
 for (og in unique(df$OGid)) {
   # select all members of orthogroup
   members = df[df$OGid==og,]
-  print(members[,c('OGtype', 'Scaffold', 'GeneStart', 'GeneEnd', 'Species', 'OGid')])#DEBUG
+  ##print(members[,c('OGtype', 'Scaffold', 'GeneStart', 'GeneEnd', 'Species', 'OGid')])#DEBUG
   members_col = members[members$Species==sp_names[3],]
   members_lss = members[members$Species==sp_names[4],]
 
@@ -124,8 +124,8 @@ for (og in unique(df$OGid)) {
         sequid = members$Scaffold,
         start = members$GeneStart,
         end = members$GeneEnd,
-        col = 'yellow'
-        #sp = members$Species #DEBUG
+        col = 'yellow',
+        ogid = members$OGid
       )
       #print(new_rows)#DEBUG
       df_points = rbind(df_points, new_rows)
@@ -136,8 +136,8 @@ for (og in unique(df$OGid)) {
         sequid = c(members_col$Scaffold, members_lss$Scaffold),
         start = c(members_col$GeneStart, members_lss$GeneStart),
         end = c(members_col$GeneEnd, members_lss$GeneEnd),
-        col = c(rep('red', nrow(members_col)), rep('green', nrow(members_lss)))
-        #sp = c(members_col$Species, members_lss$Species) #DEBUG
+        col = c(rep('red', nrow(members_col)), rep('green', nrow(members_lss))),
+        ogid = c(members_col$OGid, members_lss$OGid) #DEBUG
       )
       #print(new_rows)#DEBUG
       df_points = rbind(df_points, new_rows)
@@ -148,8 +148,8 @@ for (og in unique(df$OGid)) {
         sequid = c(members_col$Scaffold, members_lss$Scaffold),
         start = c(members_col$GeneStart, members_lss$GeneStart),
         end = c(members_col$GeneEnd, members_lss$GeneEnd),
-        col = c(rep('green', nrow(members_col)), rep('red', nrow(members_lss)))
-        #sp = c(members_col$Species, members_lss$Species) #DEBUG
+        col = c(rep('green', nrow(members_col)), rep('red', nrow(members_lss))),
+        ogid = c(members_col$OGid, members_lss$OGid) #DEBUG
       )
       #print(new_rows)#DEBUG
       df_points = rbind(df_points, new_rows)
@@ -163,6 +163,42 @@ df_links$col = 0
 for (i in c(1:nrow(highlighting_crm))) {
   df_links$col[df_links$sequid_col==highlighting_crm[i, 2]]=highlighting_crm[i, 1]
 }
+# create lines instead of genomicPoints()
+# the df_points will have to be formatted differently (create df_lines)
+df_lines=data.frame()
+for (c in idx$crm) {
+  e = idx$end[idx$crm == c]
+  s = seq(0, e, 1e6)
+  s = s[-length(s)]
+  for (i in s) {
+    # select rows with start between `i` and `i+1e6` and in scaffold `c`
+    df_sel = df_points[df_points$start >= i & df_points$start < i+1e6 & df_points$sequid == c,]
+    new_rows = data.frame(
+      sequid = c,
+      start = i,
+      end = i+1e6,
+      amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
+      amount_r = nrow(df_sel[df_sel$col=='red', ]),
+      amount_g = nrow(df_sel[df_sel$col=='green', ]))
+    df_lines = rbind(df_lines, new_rows)
+  }
+  df_sel = df_points[i+1e6 <= df_points$start & df_points$start < e & df_points$sequid == c,]
+    new_rows = data.frame(
+    sequid = c,
+    start = i+1e6,
+    end = as.numeric(e),
+    amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
+    amount_r = nrow(df_sel[df_sel$col=='red', ]),
+    amount_g = nrow(df_sel[df_sel$col=='green', ]))
+df_lines = rbind(df_lines, new_rows)
+}
+track_ylim = max(c(df_lines$amount_y,
+                   df_lines$amount_r,
+                   df_lines$amount_g))
+print(paste('Most genes in `df_lines.green`:', max(df_lines$amount_g)))
+print(paste('Most genes in `df_lines.red`:', max(df_lines$amount_r)))
+print(paste('Most genes in `df_lines.yellow`:', max(df_lines$amount_y)))
+print(head(n=20, df_lines)) #DEBUG
 
 
 ### PLOTTING CIRCOS FIGURE ###
@@ -176,7 +212,6 @@ pdf(width=9)
 # good habit to clear previous options
 circos.clear()
 # separate all crms by 1 and species by 5
-circos.par()
 circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
   rep(1, nrow(idx_lss)-1), 5))
 # ERROR: summation of xdirection is larger than the width
@@ -185,7 +220,7 @@ circos.par(cell.padding = c(0.02, 0, 0.02, 0))
 # initialize with sectors <- chromosome names
 circos.initialize(sectors=idx$crm,
   xlim=idx[, c(2,3)])
-circos.track(idx$crm, ylim=c(0,1),
+circos.track(idx$crm, ylim=c(0, track_ylim),
   track.height=.15, #bg.border=NA,
   panel.fun  = function(x,y) {
     # shorthands for a few sector properties
@@ -194,10 +229,19 @@ circos.track(idx$crm, ylim=c(0,1),
     ylim   = CELL_META$ylim
     # draw points where members of multigenic orthogroups are at
     # colour points by more/less/equal members in orthogroup for both species
-    circos.genomicPoints(df_points[df_points$sequid==cllcrm, c('start', 'end')],
-      CELL_META$ycenter,  # place points in the Y-center of the cell
-      col=df_points[df_points$sequid==cllcrm, 'col'],
-      pch=16, cex=2) # make them big and round dots
+    ##circos.genomicPoints(df_points[df_points$sequid==cllcrm, c('start', 'end')],
+    ##  CELL_META$ycenter,  # place points in the Y-center of the cell
+    ##  col=df_points[df_points$sequid==cllcrm, 'col'],
+    ##  pch=16, cex=2) # make them big and round dots
+    # instead of points, draw multigenic orthogroups as
+    # repetitive elements would be drawn
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_r'], type='segment', col='red')
     circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
       gsub(".*d_", "", cllcrm),  # crm name that will be displayed
       # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
