@@ -90,6 +90,11 @@ for (og in unique(df$OGid)) {
   print(members[,c('OGtype', 'Scaffold', 'GeneStart', 'GeneEnd', 'Species', 'OGid')])#DEBUG
   members_col = members[members$Species==sp_names[3],]
   members_lss = members[members$Species==sp_names[4],]
+  if (nrow(members_lss==0 | members_col==0) {
+    # it is possible to remove all genes from a family while
+    # deleting rows located at minor scaffolds
+    # just skip these cases...
+  }
   if (nrow(members)==2) {
     # two members: we can create a link between coordinates
     # maybe even 3...
