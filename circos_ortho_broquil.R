@@ -83,6 +83,8 @@ df = df[df$Scaffold %in% idx$crm,]
 df_links = data.frame()
 # resulting df with genomic points
 df_points = data.frame()
+# keep track of removed and included OGs in analyses:
+og.removed = 0 ; og.included = 0
 # fill previous df with input df:
 for (og in unique(df$OGid)) {
   # select all members of orthogroup
@@ -90,12 +92,16 @@ for (og in unique(df$OGid)) {
   print(members[,c('OGtype', 'Scaffold', 'GeneStart', 'GeneEnd', 'Species', 'OGid')])#DEBUG
   members_col = members[members$Species==sp_names[3],]
   members_lss = members[members$Species==sp_names[4],]
-  if (nrow(members_lss==0 | members_col==0) {
+
+  if (nrow(members_lss)==0 | nrow(members_col)==0) {
     # it is possible to remove all genes from a family while
     # deleting rows located at minor scaffolds
     # just skip these cases...
-  }
-  if (nrow(members)==2) {
+    og.removed = og.removed+1
+    print(paste0('WARNING: ', og, ' has been removed because',
+    ' at least one species has all of their orthologs outside provided index sequids.'))
+  } else if (nrow(members)==2) {
+    og.included = og.included+1
     # two members: we can create a link between coordinates
     # maybe even 3...
     new_row = data.frame(
@@ -109,6 +115,7 @@ for (og in unique(df$OGid)) {
     # append new row to links df:
     df_links = rbind(df_links, new_row)
   } else if (nrow(members_lss)==nrow(members_col)) {
+    og.included = og.included+1
     # if they are a many-members orthogroup, plot as genomic points:
     # try to colour each point depending on which species
     # has more genes in the selected orthogroup
@@ -123,6 +130,7 @@ for (og in unique(df$OGid)) {
       #print(new_rows)#DEBUG
       df_points = rbind(df_points, new_rows)
   } else if (nrow(members_lss) >nrow(members_col)) {
+    og.included = og.included+1
     # more genes in species colourless (dcat)
       new_rows = data.frame(
         sequid = c(members_col$Scaffold, members_lss$Scaffold),
@@ -134,6 +142,7 @@ for (og in unique(df$OGid)) {
       #print(new_rows)#DEBUG
       df_points = rbind(df_points, new_rows)
   } else if (nrow(members_lss)< nrow(members_col)) {
+    og.included = og.included+1
     # more genes in species colourful (dtil)
       new_rows = data.frame(
         sequid = c(members_col$Scaffold, members_lss$Scaffold),
@@ -146,6 +155,9 @@ for (og in unique(df$OGid)) {
       df_points = rbind(df_points, new_rows)
   }
 }
+print(paste('OGs included:', og.included))
+print(paste('OGs removed:', og.removed))
+print(paste('Overall OGs:', length(unique(df$OGid))))
 # add colours to df_links depending on idx_col of 'origin'
 df_links$col = 0
 for (i in c(1:nrow(highlighting_crm))) {
@@ -164,8 +176,12 @@ pdf(width=9)
 # good habit to clear previous options
 circos.clear()
 # separate all crms by 1 and species by 5
-circos.par("gap.degree" = c(rep(1, nrow(idx_col)-1), 5,
+circos.par()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
   rep(1, nrow(idx_lss)-1), 5))
+# ERROR: summation of xdirection is larger than the width
+# of some sectors. Remove tiny sectors or reset cell.padding as follows...
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
 # initialize with sectors <- chromosome names
 circos.initialize(sectors=idx$crm,
   xlim=idx[, c(2,3)])
@@ -182,7 +198,7 @@ circos.track(idx$crm, ylim=c(0,1),
       CELL_META$ycenter,  # place points in the Y-center of the cell
       col=df_points[df_points$sequid==cllcrm, 'col'],
       pch=16, cex=2) # make them big and round dots
-    circos.text(mean(xlim), mean(ylim)+mm_y(14), # add Y space (chr.name above track)
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
       gsub(".*d_", "", cllcrm),  # crm name that will be displayed
       # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
       cex=1.2, col='black', facing='inside', niceFacing=TRUE)
