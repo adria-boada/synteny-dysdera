@@ -87,7 +87,7 @@ df_points = data.frame()
 for (og in unique(df$OGid)) {
   # select all members of orthogroup
   members = df[df$OGid==og,]
-  #print(members[,c(1:4)])#DEBUG
+  print(members[,c('OGtype', 'Scaffold', 'GeneStart', 'GeneEnd', 'Species', 'OGid')])#DEBUG
   members_col = members[members$Species==sp_names[3],]
   members_lss = members[members$Species==sp_names[4],]
   if (nrow(members)==2) {
