@@ -160,6 +160,7 @@ print(paste('OGs removed:', og.removed))
 print(paste('Overall OGs:', length(unique(df$OGid))))
 # add colours to df_links depending on idx_col of 'origin'
 df_links$col = 0
+window_size = 1e7
 for (i in c(1:nrow(highlighting_crm))) {
   df_links$col[df_links$sequid_col==highlighting_crm[i, 2]]=highlighting_crm[i, 1]
 }
@@ -168,24 +169,24 @@ for (i in c(1:nrow(highlighting_crm))) {
 df_lines=data.frame()
 for (c in idx$crm) {
   e = idx$end[idx$crm == c]
-  s = seq(0, e, 1e6)
+  s = seq(0, e, window_size)
   s = s[-length(s)]
   for (i in s) {
-    # select rows with start between `i` and `i+1e6` and in scaffold `c`
-    df_sel = df_points[df_points$start >= i & df_points$start < i+1e6 & df_points$sequid == c,]
+    # select rows with start between `i` and `i+window_size` and in scaffold `c`
+    df_sel = df_points[df_points$start >= i & df_points$start < i+window_size & df_points$sequid == c,]
     new_rows = data.frame(
       sequid = c,
       start = i,
-      end = i+1e6,
+      end = i+window_size,
       amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
       amount_r = nrow(df_sel[df_sel$col=='red', ]),
       amount_g = nrow(df_sel[df_sel$col=='green', ]))
     df_lines = rbind(df_lines, new_rows)
   }
-  df_sel = df_points[i+1e6 <= df_points$start & df_points$start < e & df_points$sequid == c,]
+  df_sel = df_points[i+window_size <= df_points$start & df_points$start < e & df_points$sequid == c,]
     new_rows = data.frame(
     sequid = c,
-    start = i+1e6,
+    start = i+window_size,
     end = as.numeric(e),
     amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
     amount_r = nrow(df_sel[df_sel$col=='red', ]),
@@ -259,9 +260,106 @@ circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
 #    fill = c(col_range[1], col_range[2]),
 #    )
 
+
+### PLOTTING LINKS FROM A SINGLE CHROMOSOME AT A TIME ###
+
+# for each sequid
+for (sequid in idx_col$crm) {
+# filter out all links that are not in `sequid`
+# each iteration will create a plot with links from a single sequid
+links = df_links[df_links$sequid_col == sequid, ]
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+circos.genomicLink(links[, c(1:3)], links[, c(4:6)],
+  col = links[, 'col'], #h.ratio = .4
+)
+# add a legend with the min and max of misc value,
+# and the colours used to represent these.
+#  legend('bottomleft', title=leg_titles[i], bty='n',
+#    legend = c(val_range$min[i], val_range$max[i]),
+#    fill = c(col_range[1], col_range[2]),
+#    )
+}  # acaba les iteracions de subseccionar les unions cromosomals
+
+
+### REMOVING *OUTLIER* MULTIGENIC FAMILIES FROM THE PLOT ###
+#
+# Some outliers make it more difficult to understand the presented plot.
+# Let's try to remove them for visualization purposes.
+# Remove all rows where amount_g equals its maximum, three times
+# (it could remove much more than 3 rows)
+for (i in c(1:3)) {
+  df_lines_n_out = df_lines[! df_lines$amount_g == max(df_lines$amount_g), ]
+}
+# recompute the new track ylim (bounded by max values of amount of genes)
+track_ylim = max(c(df_lines_n_out$amount_y,
+                   df_lines_n_out$amount_r,
+                   df_lines_n_out$amount_g))
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines_n_out[df_lines_n_out$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
+  col = df_links[, 'col'], #h.ratio = .4
+)
+# add a legend with the min and max of misc value,
+# and the colours used to represent these.
+#  legend('bottomleft', title=leg_titles[i], bty='n',
+#    legend = c(val_range$min[i], val_range$max[i]),
+#    fill = c(col_range[1], col_range[2]),
+#    )
+
+
 # # # # # #
 # shut down plotting device
 dev.off()
 # # # # # #
-
 
