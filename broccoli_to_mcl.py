@@ -53,7 +53,18 @@ class Broccoli:
         except:
             sys.exit('ERROR: The inputted file-path does not exist?')
         # read and prepare dataframe from tabulated file
-        self.df_input_table = pd.read_table(file)
+        self.df_input_table = pd.read_table(file, dtype={
+            # specify dtypes of a few columns (faster file reading)
+            'OGid': str,
+            'Method': str,
+            'Species': str,
+            'BRAKER_status':str,
+            'ChimericGeneStatus': bool,
+            'RNAseq_status': str, 'RNAseq_OGstatus': str,
+            'GO_OGstatus': str, 'GO_status':int,
+            'GeneStart': int,
+            'GeneEnd': int,
+            })
         # init df_amounts; if it is later needed, it will be computed
         # and stored in this variable (overwritting the now empty DataFrame)
         self.df_amounts = pd.DataFrame()
@@ -215,9 +226,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
     broc = Broccoli(args.file)
-    broc.one_v_one_orthologs_dict(['Dcat', 'Dtil'])
-    broc.paranome_OG_dict('Dcat')
-    broc.paranome_OG_dict('Dtil')
+    # Create MCL-like files
+    ##broc.one_v_one_orthologs_dict(['Dcat', 'Dtil'])
+    ##broc.paranome_OG_dict('Dcat')
+    ##broc.paranome_OG_dict('Dtil')
     # let us filter the input dataframe by OGs present in both Dcat and Dtil:
     # (remove present only in one of these two species)
     OGid_interested_list = broc.df_dups().query(
