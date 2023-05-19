@@ -61,7 +61,7 @@ class Broccoli:
             'BRAKER_status':str,
             'ChimericGeneStatus': bool,
             'RNAseq_status': str, 'RNAseq_OGstatus': str,
-            'GO_OGstatus': str, 'GO_status':int,
+            'GO_OGstatus': str, 'GO_status': str,
             'GeneStart': int,
             'GeneEnd': int,
             })
