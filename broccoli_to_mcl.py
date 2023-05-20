@@ -247,10 +247,11 @@ if __name__ == '__main__':
         for species in row.index:
             df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
                              (df_dcat_dtil['OGid'] == og),
-                             'OGtype_perspecies'] = row[species].iloc[0]
-    pd.set_option('display.min_rows', 30)
+                             'OGtype_perspecies'] = row[species]
+    pd.set_option('display.min_rows', 10)
     pd.set_option('display.max_columns', 100)
-    print(df_dcat_dtil)#DEBUG
+    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
+                               'OGtype_perspecies']].drop_duplicates())#DEBUG
     # write df to tsv
     #df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
 
