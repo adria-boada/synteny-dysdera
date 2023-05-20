@@ -26,6 +26,8 @@ index_file_color = args[2]
 index_file_cless = args[3]
 # adjust window size for counting multigenic families per window
 window_size = 4e6 # base-pairs
+# remove the outliers values for amount_g so it is easier to see differences
+remove_top=1
 
 library(circlize)      # circular plots
 library(colourvalues)  # colouring links depending on variable
@@ -92,15 +94,30 @@ highlighting_crm$sequid = idx_col$crm
 
 # function to add members of OG to `df_links` or `df_points`
 linking <- function() {
+  # track two to one orthologs, so they can be added and
+  # removed from CIRCOS plots easily.
   if (nrow(members) == 2) {
-    # two members: we can create a single link between
-    # the pair of coordinates
-    o = TRUE
+    o = TRUE # two members (1:1)
   } else {
-    # (three) members: add them to both dataframes (`df_points` and `df_links`)
-    # they can be included in either data.frame, depending on the
-    # desired plot.
-    o = FALSE
+    o = FALSE # three members (2:1)
+  }
+  # check the quality of annotation for this orthogroup
+  if ('BROC' %in% members$Method) {
+    if ('Support' %in% members$BRAKER_status &
+        'Good' %in% members$RNAseq_OGstatus) {
+      # best quality, BROC with both BRAKER and RNA support
+      q = 1
+    } else if ('Support' %in% members$BRAKER_status |
+        'Good' %in% members$RNAseq_OGstatus) {
+      # good quality, one of BRAKER or RNA remains but not both
+      q = 2
+    } else {q=3}  # BROC without neither BRAKER nor RNA support
+  } else {
+    if ('Support' %in% members$BRAKER_status |
+        'Good' %in% members$RNAseq_OGstatus) {
+      # Orthofinder with at least RNA or BRAKER support
+      q = 4
+    } else {q=5} # worst quality, OF without any support!
   }
     new_row = data.frame(
       sequid_col = members_col$Scaffold,
@@ -109,11 +126,9 @@ linking <- function() {
       sequid_lss = members_lss$Scaffold,
       start_lss = members_lss$GeneStart,
       end_lss = members_lss$GeneEnd,
-      one_to_one = o
+      one_to_one = o,
+      quality = q
     )
-  # evaluate OG quality and assign it an arbitrary number
-  # from 1 (best) to 5 (worst)
-  ##if () {}
   # append new row to links df:
   return(rbind(df_links, new_row))}
 
@@ -126,9 +141,27 @@ pointing <- function() {
   # track two to one orthologs, so they can be added and
   # removed from CIRCOS plots easily.
   if (nrow(members)==3) {
-    to = TRUE
+    to = TRUE # 2:1
   } else {
-    to = FALSE
+    to = FALSE # all other cases
+  }
+  # check the quality of annotation for this orthogroup
+  if ('BROC' %in% members$Method) {
+    if ('Support' %in% members$BRAKER_status &
+        'Good' %in% members$RNAseq_OGstatus) {
+      # best quality, BROC with both BRAKER and RNA support
+      q = 1
+    } else if ('Support' %in% members$BRAKER_status |
+        'Good' %in% members$RNAseq_OGstatus) {
+      # good quality, one of BRAKER or RNA remains but not both
+      q = 2
+    } else {q=3}  # BROC without neither BRAKER nor RNA support
+  } else {
+    if ('Support' %in% members$BRAKER_status |
+        'Good' %in% members$RNAseq_OGstatus) {
+      # Orthofinder with at least RNA or BRAKER support
+      q = 4
+    } else {q=5} # worst quality, OF without any support!
   }
   if (nrow(members_lss)==nrow(members_col)) {
     # the same amount of OG members (genes) in both species.
@@ -146,7 +179,8 @@ pointing <- function() {
     end = c(members_col$GeneEnd, members_lss$GeneEnd),
     col = col,
     ogid = c(members_col$OGid, members_lss$OGid), #DEBUG
-    two_to_one = to
+    two_to_one = to,
+    quality = q
   )
   return(rbind(df_points, new_rows))}
 
@@ -194,12 +228,18 @@ for (og in unique(df_input_table$OGid)) {
   }
 }
 
+# create a column with 'quality colour' depending on 'quality' column value
+df_links$qualcol = colour_values(df_links$quality)
+df_points$qualcol = colour_values(df_points$quality)
+
 print(paste('OGs included:', og.included))
 print(paste('OGs removed (minor scaffolds?):', og.removed))
 print(paste('Overall OGs:', length(unique(df_input_table$OGid))))
-##print('--> DEBUG: `df_links` and `df_points` head')
-##print(head(df_points))
-##print(head(df_links))
+
+print('--> DEBUG: `df_links` and `df_points` head')
+print(head(df_points, n=30))
+print(head(df_links, n=30))
+print('------------------------------------------')
 
 # add colours to df_links depending on idx_col of 'origin'
 # there is no need to manually create a palette, colour_values will take care of it
@@ -213,6 +253,7 @@ for (i in c(1:nrow(highlighting_crm))) {
 }
 print("--> DEBUG: `highlighting_crm` head()")
 print(head(highlighting_crm))
+print('------------------------------------')
 
 # reformat `df_points` into `df_lines`
 # create genomicLines() instead of genomicPoints()
@@ -230,7 +271,13 @@ for (c in idx$crm) {
       end = i+window_size,
       amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
       amount_r = nrow(df_sel[df_sel$col=='red', ]),
-      amount_g = nrow(df_sel[df_sel$col=='green', ]))
+      amount_g = nrow(df_sel[df_sel$col=='green', ]),
+      # remove 2:1
+      toless_amount_y = nrow(df_sel[df_sel$col=='yellow' & df_sel$two_to_one==FALSE, ]),
+      toless_amount_r = nrow(df_sel[df_sel$col=='red' & df_sel$two_to_one==FALSE, ]),
+      toless_amount_g = nrow(df_sel[df_sel$col=='green' & df_sel$two_to_one==FALSE, ]),
+      amount_broc = nrow(df_sel[df_sel$quality %in% c(1,2,3), ]),
+      amount_no_broc = nrow(df_sel[df_sel$quality %in% c(4,5), ]) )
     df_lines = rbind(df_lines, new_rows)
   }
   df_sel = df_points[i+window_size <= df_points$start & df_points$start < e & df_points$sequid == c,]
@@ -240,7 +287,13 @@ for (c in idx$crm) {
     end = as.numeric(e),
     amount_y = nrow(df_sel[df_sel$col=='yellow', ]),
     amount_r = nrow(df_sel[df_sel$col=='red', ]),
-    amount_g = nrow(df_sel[df_sel$col=='green', ]))
+    amount_g = nrow(df_sel[df_sel$col=='green', ]),
+    # remove 2:1
+    toless_amount_y = nrow(df_sel[df_sel$col=='yellow' & df_sel$two_to_one==FALSE, ]),
+    toless_amount_r = nrow(df_sel[df_sel$col=='red' & df_sel$two_to_one==FALSE, ]),
+    toless_amount_g = nrow(df_sel[df_sel$col=='green' & df_sel$two_to_one==FALSE, ]),
+    amount_broc = nrow(df_sel[df_sel$quality %in% c(1,2,3), ]),
+    amount_no_broc = nrow(df_sel[df_sel$quality %in% c(4,5), ]) )
 df_lines = rbind(df_lines, new_rows)
 }
 # compute the range of data (from 0 to max(df))
@@ -250,7 +303,9 @@ track_ylim = max(c(df_lines$amount_y,
 print(paste('Most genes in `df_lines.green`:', max(df_lines$amount_g)))
 print(paste('Most genes in `df_lines.red`:', max(df_lines$amount_r)))
 print(paste('Most genes in `df_lines.yellow`:', max(df_lines$amount_y)))
-print(head(n=20, df_lines)) #DEBUG
+print("--> DEBUG: `df_lines` head")
+print(head(n=30, df_lines)) #DEBUG
+print('--------------------------') #DEBUG
 
 
 ### PLOTTING 'STANDARD' CIRCOS FIGURE ###
@@ -282,13 +337,13 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
     # instead of points, draw multigenic orthogroups as
     # repetitive elements would be drawn
     # this paragraph incorporates 2:1 OGs as links (remove from points)...
-    d = df_lines[df_lines$sequid==cllcrm & df_lines$two_to_one==FALSE, ]
+    d = df_lines[df_lines$sequid==cllcrm, ]
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_g'], type='segment', col='green')
+    d[, 'toless_amount_g'], type='segment', col='green')
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_y'], type='segment', col='yellow')
+    d[, 'toless_amount_y'], type='segment', col='yellow')
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_r'], type='segment', col='red')
+    d[, 'toless_amount_r'], type='segment', col='red')
     circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
       gsub(".*d_", "", cllcrm),  # crm name that will be displayed
       # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
@@ -299,12 +354,6 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
   col = df_links[, 'col'], #h.ratio = .4
 )
-# add a legend with the min and max of misc value,
-# and the colours used to represent these.
-#  legend('bottomleft', title=leg_titles[i], bty='n',
-#    legend = c(val_range$min[i], val_range$max[i]),
-#    fill = c(col_range[1], col_range[2]),
-#    )
 title('Includes 2:1 orthologs (darker links)')
 
 
@@ -328,13 +377,13 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
     cllcrm = CELL_META$sector.index
     xlim   = CELL_META$xlim
     ylim   = CELL_META$ylim
-    d = df_lines[df_lines$sequid==cllcrm & df_lines$two_to_one==FALSE, ]
+    d = df_lines[df_lines$sequid==cllcrm, ]
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_g'], type='segment', col='green')
+    d[, 'toless_amount_g'], type='segment', col='green')
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_y'], type='segment', col='yellow')
+    d[, 'toless_amount_y'], type='segment', col='yellow')
     circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_r'], type='segment', col='red')
+    d[, 'toless_amount_r'], type='segment', col='red')
     circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
       gsub(".*d_", "", cllcrm),  # crm name that will be displayed
       # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
@@ -345,12 +394,6 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 circos.genomicLink(links[, c(1:3)], links[, c(4:6)],
   col = links[, 'col'], #h.ratio = .4
 )
-# add a legend with the min and max of misc value,
-# and the colours used to represent these.
-#  legend('bottomleft', title=leg_titles[i], bty='n',
-#    legend = c(val_range$min[i], val_range$max[i]),
-#    fill = c(col_range[1], col_range[2]),
-#    )
 title('Includes 2:1 orthologs (darker links)')
 }  # acaba les iteracions de subseccionar les unions cromosomals
 
@@ -385,17 +428,11 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
 # remove 2:1 links from plot (they are already incorporated in outside ring lines)
-d = df_links[df_links$one_to_one==TRUE]
+d = df_links[df_links$one_to_one==TRUE, ]
 circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
   col = d[, 'col'], #h.ratio = .4
 )
-# add a legend with the min and max of misc value,
-# and the colours used to represent these.
-#  legend('bottomleft', title=leg_titles[i], bty='n',
-#    legend = c(val_range$min[i], val_range$max[i]),
-#    fill = c(col_range[1], col_range[2]),
-#    )
-title('Removing 2:1 links and incorporating them "inside" scaffolds')
+title('Excluding 2:1 links; incorporating them in "inner-scaffold-multigenic-count"')
 
 
 ### REMOVING *OUTLIER* MULTIGENIC FAMILIES FROM THE PLOT ###
@@ -404,7 +441,8 @@ title('Removing 2:1 links and incorporating them "inside" scaffolds')
 # Let's try to remove them for visualization purposes.
 # Remove all rows where amount_g equals its maximum, three times
 # (it could remove much more than 3 rows)
-for (i in c(1:3)) {
+removed_max_multigenic_values = df_lines$amount_g[order(df_lines$amount_g, decreasing=TRUE)][c(1:(remove_top+1))]
+for (i in c(1:remove_top)) {
   df_lines_n_out = df_lines[! df_lines$amount_g == max(df_lines$amount_g), ]
 }
 # recompute the new track ylim (bounded by max values of amount of genes)
@@ -439,17 +477,170 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
 # remove 2:1 links from plot (they are already incorporated in outside ring lines)
-d = df_links[df_links$one_to_one==TRUE]
+d = df_links[df_links$one_to_one==TRUE, ]
 circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
   col = d[, 'col'], #h.ratio = .4
 )
 # add a legend with the min and max of misc value,
 # and the colours used to represent these.
-#  legend('bottomleft', title=leg_titles[i], bty='n',
-#    legend = c(val_range$min[i], val_range$max[i]),
-#    fill = c(col_range[1], col_range[2]),
-#    )
+  legend('bottomleft', title='Gene count of\nremoved outlier windows', bty='n',
+    legend = removed_max_multigenic_values,
+    cex=.8
+    )
 title('Removing 2:1 links and the top 3 densest multigenic regions from inner-scaffolds plot')
+
+
+### COLOUR LINKS AND MULTIGENIC OGs BY QUALITY ###
+
+track_ylim = max(c(df_lines$amount_no_broc,
+                   df_lines_n_out$amount_broc))
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_no_broc'], type='segment', col='red')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_broc'], type='segment', col='green')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+# remove 2:1 links from plot (they are already incorporated in outside ring lines)
+circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
+  col = df_links[, 'qualcol'], #h.ratio = .4
+)
+# add a legend with the min and max of misc value,
+# and the colours used to represent these.
+legend('bottomleft', title='Links quality', bty='n',
+  legend = c(paste0("(", nrow(df_links[df_links$quality==1, ]),")", ' BROC & RNA & BRAKER'),
+             paste0("(", nrow(df_links[df_links$quality==2, ]),")", ' BROC & (RNA|BRAKER)'),
+             paste0("(", nrow(df_links[df_links$quality==3, ]),")", ' only BROC'),
+             paste0("(", nrow(df_links[df_links$quality==4, ]),")", ' OF & (RNA|BRAKER)'),
+             paste0("(", nrow(df_links[df_links$quality==5, ]),")", ' only OF'),
+             'Outer multigenic BROC',
+             'Outer multigenic OF'),
+  fill = c(colour_values(c(1,2,3,4)), 'white', 'green', 'red'),
+  cex=.7
+  )
+title('OG Quality (2:1 represented twice; as links and as outter multigenic windows)')
+
+
+### INTERCHROMOSOMAL QUALITY ###
+
+track_ylim = max(c(df_lines$amount_no_broc,
+                   df_lines_n_out$amount_broc))
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_no_broc'], type='segment', col='red')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_broc'], type='segment', col='green')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# long list to select interchromosomal links...
+# remove all links between homologous chromosomes
+d = subset(df_links, !(sequid_col == 'Dtil@Scaffold_1' & sequid_lss == 'Dcat@Scaffold_5') &
+  !(sequid_col == 'Dtil@Scaffold_2' & sequid_lss == 'Dcat@Scaffold_4') &
+  !(sequid_col == 'Dtil@Scaffold_3' & sequid_lss == 'Dcat@Scaffold_2') &
+  !(sequid_col == 'Dtil@Scaffold_4' & sequid_lss == 'Dcat@Scaffold_3') &
+  !(sequid_col == 'Dtil@Scaffold_5_Vmt' & sequid_lss == 'Dcat@Scaffold_2') &
+  !(sequid_col == 'Dtil@Scaffold_6' & sequid_lss == 'Dcat@Scaffold_1_Vmt') &
+  !(sequid_col == 'Dtil@Scaffold_7' & sequid_lss == 'Dcat@Scaffold_1_Vmt'))
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+# remove 2:1 links from plot (they are already incorporated in outside ring lines)
+circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
+  col = d[, 'qualcol'], #h.ratio = .4
+)
+# add a legend with the min and max of misc value,
+# and the colours used to represent these.
+legend('bottomleft', title='Links quality', bty='n',
+  legend = c(paste0("(", nrow(d[d$quality==1, ]),")", ' BROC & RNA & BRAKER'),
+             paste0("(", nrow(d[d$quality==2, ]),")", ' BROC & (RNA|BRAKER)'),
+             paste0("(", nrow(d[d$quality==3, ]),")", ' only BROC'),
+             paste0("(", nrow(d[d$quality==4, ]),")", ' OF & (RNA|BRAKER)'),
+             paste0("(", nrow(d[d$quality==5, ]),")", ' only OF'),
+             'Outer multigenic BROC',
+             'Outer multigenic OF'),
+  fill = c(colour_values(c(1,2,3,4)), 'white', 'green', 'red'),
+  cex=.7
+  )
+rm(d) # elimina el data.frame temporal
+title('OG Quality (removing links between homologous chromosomes)')
+
+### ONE PLOT PER QUALITY LEVEL (1:5) ###
+
+# prepare titles for each quality value
+titles_per_quality = c('BROC & RNA & BRAKER',
+  'BROC & (RNA | BRAKER)',
+  'only BROC',
+  'OF & (RNA | BRAKER)')
+# for each quality value
+for (q in unique(df_links$quality)) {
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# filter out all links that are not of `q` quality
+# each iteration will create a plot with links of a single quality
+d = df_links[df_links$quality == q, ]
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
+  col = d[, 'col'], #h.ratio = .4
+)
+title(titles_per_quality[q])
+}  # acaba les iteracions de subseccionar les unions cromosomals
 
 
 # # # # # #
