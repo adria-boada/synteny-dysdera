@@ -26,7 +26,8 @@ index_file_color = args[2]
 index_file_cless = args[3]
 # adjust window size for counting multigenic families per window
 window_size = 4e6 # base-pairs
-# remove the outliers values for amount_g so it is easier to see differences
+# remove as many as `remove_top` outliers values
+# for amount_g so it is easier to see differences
 remove_top=1
 
 library(circlize)      # circular plots
@@ -126,6 +127,9 @@ linking <- function() {
       sequid_lss = members_lss$Scaffold,
       start_lss = members_lss$GeneStart,
       end_lss = members_lss$GeneEnd,
+      n_ogs_col = members_col$OGtype_perspecies,
+      n_ogs_lss = members_lss$OGtype_perspecies,
+      ogid = og, #DEBUG (og defined in for-loop)
       one_to_one = o,
       quality = q
     )
@@ -180,6 +184,7 @@ pointing <- function() {
     col = col,
     ogid = c(members_col$OGid, members_lss$OGid), #DEBUG
     two_to_one = to,
+    n_ogs = c(members_col$OGtype_perspecies, members_lss$OGtype_perspecies),
     quality = q
   )
   return(rbind(df_points, new_rows))}
@@ -233,7 +238,7 @@ df_links$qualcol = colour_values(df_links$quality)
 df_points$qualcol = colour_values(df_points$quality)
 
 print(paste('OGs included:', og.included))
-print(paste('OGs removed (minor scaffolds?):', og.removed))
+print(paste('OGs removed (minor scaffolds):', og.removed))
 print(paste('Overall OGs:', length(unique(df_input_table$OGid))))
 
 print('--> DEBUG: `df_links` and `df_points` head')
@@ -308,20 +313,41 @@ print(head(n=30, df_lines)) #DEBUG
 print('--------------------------') #DEBUG
 
 
-### PLOTTING 'STANDARD' CIRCOS FIGURE ###
-
 # # # # # #
 # export plot to 'Rplot.pdf'
 # increase default width to correctly display legend
 pdf(width=9)
 # # # # # #
 
-# abans de plotejar CIRCOS, text informatiu:
-##plot.new()
-##legend('center', legend=c(
-##  paste(''),
-##  paste())
-##)
+### SUMMARY INFORMATION ###
+
+og.total = og.removed+og.included #== length(unique(df_input_table$OGid))
+og.removed.perc = round((og.removed/og.total)*100, digits=1)
+og.outer = length(unique(df_points[df_points$two_to_one==FALSE, 'ogid']))
+og.outer.perc = round((og.outer/og.total)*100, digits=1)
+og.links = length(unique(df_links[df_links$one_to_one=='1:1', 'ogid']))
+og.links.perc = round((og.links/og.total)*100, digits=1)
+og.either = length(unique(df_links[df_links$one_to_one=='2:1' | df_links$one_to_one=='1:2', 'ogid']))
+og.either.perc = round((og.either/og.total)*100, digits=1)
+plot.new()
+legend('center', title='Amount of orthologs included and excluded', bty='n',
+  legend = c(
+    paste0('OGs removed because all members were in minor scaffolds: ', og.removed, ', ', og.removed.perc, '%'),
+    paste0('OGs only as inner links: ', og.links, ', ', og.links.perc, '%'),
+    paste0('OGs either as links or in outer windows (2:1): ', og.either, ', ', og.either.perc, '%'),
+    paste0('OGs in outer windows (multigenic OGs): ', og.outer, ', ', og.outer.perc, '%'),
+    paste0('Total amount of inner links (not OGs but gene pairs): ', nrow(df_links)),
+    paste('Most genes in a green window:', max(df_lines$amount_g)),
+    paste('Most genes in a red window:', max(df_lines$amount_r)),
+    paste('Most genes in a yellow window:', max(df_lines$amount_y)),
+    '----------------------',
+    paste('Amount of 1:1 OGs as links:', length(unique(df_links[df_links$n_ogs_lss==1 & df_links$n_ogs_col==1, 'ogid']))),
+    paste('Amount of 2:1 OGs as links (more Dcat):', length(unique(df_links[df_links$n_ogs_lss==2 & df_links$n_ogs_col==1, 'ogid']))),
+    paste('Amount of 1:2 OGs as links (more Dtil):', length(unique(df_links[df_links$n_ogs_lss==1 & df_links$n_ogs_col==2, 'ogid'])))
+))
+
+
+### PLOTTING 'STANDARD' CIRCOS FIGURE ###
 
 # good habit to clear previous options
 circos.clear()
@@ -361,7 +387,111 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
   col = df_links[, 'col'], #h.ratio = .4
 )
-title('Includes 2:1 orthologs (darker links)')
+title('Every possible link included (2 to 1 shaded darker)')
+
+
+### REMOVING *OUTLIER* MULTIGENIC FAMILIES FROM THE PLOT ###
+#
+# Some outliers make it more difficult to understand the presented plot.
+# Let's try to remove them for visualization purposes.
+# Remove all rows where amount_g equals its maximum, three times
+# (it could remove much more than 3 rows)
+removed_max_multigenic_values = df_lines$amount_g[order(df_lines$amount_g, decreasing=TRUE)][c(1:(remove_top+1))]
+for (i in c(1:remove_top)) {
+  df_lines_n_out = df_lines[! df_lines$amount_g == max(df_lines$amount_g), ]
+}
+# recompute the new track ylim (bounded by max values of amount of genes)
+track_ylim = max(c(df_lines_n_out$amount_y,
+                   df_lines_n_out$amount_r,
+                   df_lines_n_out$amount_g))
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines_n_out[df_lines_n_out$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+# remove 2:1 links from plot (they are already incorporated in outside ring lines)
+circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
+  col = df_links[, 'col'], #h.ratio = .4
+)
+# add a legend with the min and max of misc value,
+# and the colours used to represent these.
+  legend('bottomleft', title='Gene count of\nremoved outlier windows', bty='n',
+    legend = c(paste0('Removed window value: ', removed_max_multigenic_values[-length(removed_max_multigenic_values)]),
+    paste0('Next top value which was included: ', removed_max_multigenic_values[length(removed_max_multigenic_values)])
+    ),
+    cex=.8
+    )
+title(paste('Removing the top', remove_top,
+            'densest multigenic regions (outliers) from outer windows'),
+      cex.main=.9)
+
+
+### REMOVING MULTIGENIC OG THAT DROP TO LINKS ###
+# A few OGs have many orthologs (3, 4, etc.) in minor scaffolds
+# This script removes these orthologs from the data.frame
+# Then, the data.frame might 'become' 1:1 or 2:1 and
+# they would be displayed as links, even though the OG is initially 4:2...
+# Let's try to remove these cases
+circos.clear()
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c(2,3)])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    d = df_lines_n_out[df_lines_n_out$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# remove links that are not 1:1, 2:1, 1:2
+d = df_links[
+  (df_links$n_ogs_lss == 2 & df_links$n_ogs_col == 1) |
+  (df_links$n_ogs_lss == 1 & df_links$n_ogs_col == 2) |
+  (df_links$n_ogs_lss == 1 & df_links$n_ogs_col == 1), ]
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
+  col = d[, 'col'], #h.ratio = .4
+)
+title(paste('Removing minor scaffold links'),
+      cex.main=.9)
+
 
 
 ### REMOVE 1:1 TO BETTER VIEW 2:1 ###
@@ -400,7 +530,9 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
   }
 )
 # select rows not '1:1'
-d = df_links[df_links$one_to_one %in% c('2:1', '1:2'), ]
+d = df_links[
+  (df_links$n_ogs_col==1 & df_links$n_ogs_lss==2) |
+  (df_links$n_ogs_col==2 & df_links$n_ogs_lss==1), ]
 # colour more in species `col` as bright, more in `lss` as dark
 for (i in c(1:nrow(highlighting_crm))) {
   # add bright colours to 1:2 (more in sp_names[1])
@@ -414,8 +546,8 @@ circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
 )
 title('Removes 1:1; only shows 2:1')
 legend('bottomleft', title='Colour for links', bty='n',
-  legend = c(paste0('(', nrow(d[d$one_to_one=='2:1', ]), ')', ' Dark links: more in ', sp_names[2]),
-    paste0('(', nrow(d[d$one_to_one=='1:2', ]), ')', ' Bright links: more in ', sp_names[1])),
+  legend = c(paste0('(', nrow(d[d$n_ogs_lss==2, ]), ')', ' Dark links: more in ', sp_names[2]),
+    paste0('(', nrow(d[d$n_ogs_col==2, ]), ')', ' Bright links: more in ', sp_names[1])),
   cex=.8
 )
 rm(d)
@@ -497,65 +629,6 @@ circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
   col = d[, 'col'], #h.ratio = .4
 )
 title('Excluding 2:1 links; incorporating them in "inner-scaffold multigenic windows"')
-
-
-### REMOVING *OUTLIER* MULTIGENIC FAMILIES FROM THE PLOT ###
-#
-# Some outliers make it more difficult to understand the presented plot.
-# Let's try to remove them for visualization purposes.
-# Remove all rows where amount_g equals its maximum, three times
-# (it could remove much more than 3 rows)
-removed_max_multigenic_values = df_lines$amount_g[order(df_lines$amount_g, decreasing=TRUE)][c(1:(remove_top+1))]
-for (i in c(1:remove_top)) {
-  df_lines_n_out = df_lines[! df_lines$amount_g == max(df_lines$amount_g), ]
-}
-# recompute the new track ylim (bounded by max values of amount of genes)
-track_ylim = max(c(df_lines_n_out$amount_y,
-                   df_lines_n_out$amount_r,
-                   df_lines_n_out$amount_g))
-circos.clear()
-circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
-  rep(1, nrow(idx_lss)-1), 5))
-circos.par(cell.padding = c(0.02, 0, 0.02, 0))
-circos.initialize(sectors=idx$crm,
-  xlim=idx[, c(2,3)])
-circos.track(idx$crm, ylim=c(0, track_ylim),
-  track.height=.15, #bg.border=NA,
-  panel.fun  = function(x,y) {
-    # shorthands for a few sector properties
-    cllcrm = CELL_META$sector.index
-    xlim   = CELL_META$xlim
-    ylim   = CELL_META$ylim
-    d = df_lines_n_out[df_lines_n_out$sequid==cllcrm, ]
-    circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_g'], type='segment', col='green')
-    circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_y'], type='segment', col='yellow')
-    circos.genomicLines(d[, c('start', 'end')],
-    d[, 'amount_r'], type='segment', col='red')
-    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
-      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
-      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
-      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
-  }
-)
-# connect 1:3 (origin segment) to 4:6 (recipient segment)
-# remove 2:1 links from plot (they are already incorporated in outside ring lines)
-d = df_links[df_links$one_to_one=='1:1', ]
-circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
-  col = d[, 'col'], #h.ratio = .4
-)
-# add a legend with the min and max of misc value,
-# and the colours used to represent these.
-  legend('bottomleft', title='Gene count of\nremoved outlier windows', bty='n',
-    legend = c(removed_max_multigenic_values[-length(removed_max_multigenic_values)],
-    paste0('Next top value which was included: ', removed_max_multigenic_values[length(removed_max_multigenic_values)])
-    ),
-    cex=.8
-    )
-title(paste('Removing 2:1 links and the top', remove_top,
-            'densest multigenic regions from "inner-scaffolds multigenic windows"'),
-      cex.main=.5)
 
 
 ### COLOUR LINKS AND MULTIGENIC OGs BY QUALITY ###
