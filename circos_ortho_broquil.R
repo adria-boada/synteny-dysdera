@@ -97,10 +97,10 @@ linking <- function() {
   # track two to one orthologs, so they can be added and
   # removed from CIRCOS plots easily.
   if (nrow(members) == 2) {
-    o = TRUE # two members (1:1)
-  } else {
-    o = FALSE # three members (2:1)
-  }
+    o = '1:1' # two members (1:1)
+  } else if (nrow(members_col)==2) {
+    o = '1:2' # three members (2 in col, 1 in lss)
+  } else { o = '2:1' } # 3 memb. (1 in col, 2 in lss)
   # check the quality of annotation for this orthogroup
   if ('BROC' %in% members$Method) {
     if ('Support' %in% members$BRAKER_status &
@@ -247,9 +247,9 @@ df_links$col = 0
 df_links$col_qual = 0
 for (i in c(1:nrow(highlighting_crm))) {
   # add primary colours column
-  df_links$col[df_links$sequid_col==highlighting_crm[i, 1] & df_links$one_to_one==TRUE] = highlighting_crm[i, 2]
+  df_links$col[df_links$sequid_col==highlighting_crm[i, 1] & df_links$one_to_one=='1:1'] = highlighting_crm[i, 2]
   # add secondary colour column
-  df_links$col[df_links$sequid_col==highlighting_crm[i, 1] & df_links$one_to_one==FALSE] = highlighting_crm[i, 3]
+  df_links$col[df_links$sequid_col==highlighting_crm[i, 1] & df_links$one_to_one %in% c('2:1', '1:2')] = highlighting_crm[i, 3]
 }
 print("--> DEBUG: `highlighting_crm` head()")
 print(head(highlighting_crm))
@@ -316,6 +316,13 @@ print('--------------------------') #DEBUG
 pdf(width=9)
 # # # # # #
 
+# abans de plotejar CIRCOS, text informatiu:
+##plot.new()
+##legend('center', legend=c(
+##  paste(''),
+##  paste())
+##)
+
 # good habit to clear previous options
 circos.clear()
 # separate all crms by 1 and species by 5
@@ -355,6 +362,63 @@ circos.genomicLink(df_links[, c(1:3)], df_links[, c(4:6)],
   col = df_links[, 'col'], #h.ratio = .4
 )
 title('Includes 2:1 orthologs (darker links)')
+
+
+### REMOVE 1:1 TO BETTER VIEW 2:1 ###
+
+circos.clear()
+# separate all crms by 1 and species by 5
+circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
+  rep(1, nrow(idx_lss)-1), 5))
+# ERROR: summation of xdirection is larger than the width
+# of some sectors. Remove tiny sectors or reset cell.padding as follows...
+circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+# initialize with sectors <- chromosome names
+circos.initialize(sectors=idx$crm,
+  xlim=idx[, c('start', 'end')])
+circos.track(idx$crm, ylim=c(0, track_ylim),
+  track.height=.15, #bg.border=NA,
+  panel.fun  = function(x,y) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    # instead of points, draw multigenic orthogroups as
+    # repetitive elements would be drawn
+    # this paragraph incorporates 2:1 OGs as links (remove from points)...
+    d = df_lines[df_lines$sequid==cllcrm, ]
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_g'], type='segment', col='green')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_y'], type='segment', col='yellow')
+    circos.genomicLines(d[, c('start', 'end')],
+    d[, 'toless_amount_r'], type='segment', col='red')
+    circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
+      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
+      cex=1.2, col='black', facing='inside', niceFacing=TRUE)
+  }
+)
+# select rows not '1:1'
+d = df_links[df_links$one_to_one %in% c('2:1', '1:2'), ]
+# colour more in species `col` as bright, more in `lss` as dark
+for (i in c(1:nrow(highlighting_crm))) {
+  # add bright colours to 1:2 (more in sp_names[1])
+  d$col[d$sequid_col==highlighting_crm[i, 1] & d$one_to_one=='1:2'] = highlighting_crm[i, 2]
+  # add dark colours to 2:1 (more in sp_names[2])
+  d$col[d$sequid_col==highlighting_crm[i, 1] & d$one_to_one=='2:1'] = highlighting_crm[i, 3]
+}
+# connect 1:3 (origin segment) to 4:6 (recipient segment)
+circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
+  col = d[, 'col'], #h.ratio = .4
+)
+title('Removes 1:1; only shows 2:1')
+legend('bottomleft', title='Colour for links', bty='n',
+  legend = c(paste0('(', nrow(d[d$one_to_one=='2:1', ]), ')', ' Dark links: more in ', sp_names[2]),
+    paste0('(', nrow(d[d$one_to_one=='1:2', ]), ')', ' Bright links: more in ', sp_names[1])),
+  cex=.8
+)
+rm(d)
 
 
 ### PLOTTING LINKS FROM A SINGLE CHROMOSOME AT A TIME ###
@@ -428,11 +492,11 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
 # remove 2:1 links from plot (they are already incorporated in outside ring lines)
-d = df_links[df_links$one_to_one==TRUE, ]
+d = df_links[df_links$one_to_one=='1:1', ]
 circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
   col = d[, 'col'], #h.ratio = .4
 )
-title('Excluding 2:1 links; incorporating them in "inner-scaffold-multigenic-count"')
+title('Excluding 2:1 links; incorporating them in "inner-scaffold multigenic windows"')
 
 
 ### REMOVING *OUTLIER* MULTIGENIC FAMILIES FROM THE PLOT ###
@@ -477,17 +541,21 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
 # remove 2:1 links from plot (they are already incorporated in outside ring lines)
-d = df_links[df_links$one_to_one==TRUE, ]
+d = df_links[df_links$one_to_one=='1:1', ]
 circos.genomicLink(d[, c(1:3)], d[, c(4:6)],
   col = d[, 'col'], #h.ratio = .4
 )
 # add a legend with the min and max of misc value,
 # and the colours used to represent these.
   legend('bottomleft', title='Gene count of\nremoved outlier windows', bty='n',
-    legend = removed_max_multigenic_values,
+    legend = c(removed_max_multigenic_values[-length(removed_max_multigenic_values)],
+    paste0('Next top value which was included: ', removed_max_multigenic_values[length(removed_max_multigenic_values)])
+    ),
     cex=.8
     )
-title('Removing 2:1 links and the top 3 densest multigenic regions from inner-scaffolds plot')
+title(paste('Removing 2:1 links and the top', remove_top,
+            'densest multigenic regions from "inner-scaffolds multigenic windows"'),
+      cex.main=.5)
 
 
 ### COLOUR LINKS AND MULTIGENIC OGs BY QUALITY ###
@@ -536,7 +604,7 @@ legend('bottomleft', title='Links quality', bty='n',
   fill = c(colour_values(c(1,2,3,4)), 'white', 'green', 'red'),
   cex=.7
   )
-title('OG Quality (2:1 represented twice; as links and as outter multigenic windows)')
+title('OG Quality')
 
 
 ### INTERCHROMOSOMAL QUALITY ###
