@@ -252,6 +252,7 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', 100)
     print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
                                'OGtype_perspecies']].drop_duplicates())#DEBUG
+    print(df_dcat_dtil)
     # write df to tsv
-    #df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
+    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
 
