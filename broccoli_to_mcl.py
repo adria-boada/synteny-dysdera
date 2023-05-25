@@ -88,7 +88,7 @@ class Broccoli:
         try:
             with open(out) as o:
                 sys.exit(f'ERROR: The given outfile path {out} '+
-                     'already exists and would be overriden!')
+                     'already exists and would be overwritten!')
         except:
             pass
         # shorten var calls
@@ -228,31 +228,32 @@ if __name__ == '__main__':
     broc = Broccoli(args.file)
     # Create MCL-like files
     ##broc.one_v_one_orthologs_dict(['Dcat', 'Dtil'])
-    ##broc.paranome_OG_dict('Dcat')
+    broc.paranome_OG_dict('Dcat')
     ##broc.paranome_OG_dict('Dtil')
-    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
-    # (remove present only in one of these two species)
-    OGid_interested_list = broc.df_dups().query(
-        'Dcat > 0 & Dtil > 0').index.to_list()
-    df_dcat_dtil = broc.df_input_table.query(f'OGid in {OGid_interested_list}')
-    # remove other species, which we are not interested in...
-    df_dcat_dtil = df_dcat_dtil.query('Species in ["Dcat", "Dtil"]')
-    # create a new column, OGtype per species
-    # instead of 1.2.3.4.5.6 etc. Dcat
-    # only '1'
-    df_dcat_dtil['OGtype_perspecies']=0
-    for row in broc.df_dups().loc[:, ['Dcat', 'Dtil']].iterrows():
-        og = row[0]
-        row = row[1]
-        for species in row.index:
-            df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
-                             (df_dcat_dtil['OGid'] == og),
-                             'OGtype_perspecies'] = row[species]
-    pd.set_option('display.min_rows', 10)
-    pd.set_option('display.max_columns', 100)
-    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
-                               'OGtype_perspecies']].drop_duplicates())#DEBUG
-    print(df_dcat_dtil)
-    # write df to tsv
-    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
+
+###    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
+###    # (remove present only in one of these two species)
+###    OGid_interested_list = broc.df_dups().query(
+###        'Dcat > 0 & Dtil > 0').index.to_list()
+###    df_dcat_dtil = broc.df_input_table.query(f'OGid in {OGid_interested_list}')
+###    # remove other species, which we are not interested in...
+###    df_dcat_dtil = df_dcat_dtil.query('Species in ["Dcat", "Dtil"]')
+###    # create a new column, OGtype per species
+###    # instead of 1.2.3.4.5.6 etc. Dcat
+###    # only '1'
+###    df_dcat_dtil['OGtype_perspecies']=0
+###    for row in broc.df_dups().loc[:, ['Dcat', 'Dtil']].iterrows():
+###        og = row[0]
+###        row = row[1]
+###        for species in row.index:
+###            df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
+###                             (df_dcat_dtil['OGid'] == og),
+###                             'OGtype_perspecies'] = row[species]
+###    pd.set_option('display.min_rows', 10)
+###    pd.set_option('display.max_columns', 100)
+###    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
+###                               'OGtype_perspecies']].drop_duplicates())#DEBUG
+###    print(df_dcat_dtil)
+###    # write df to tsv
+###    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
 
