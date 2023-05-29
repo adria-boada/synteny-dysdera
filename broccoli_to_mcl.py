@@ -21,6 +21,7 @@ Genes should be separated by \t.
 
 import sys
 import pandas as pd
+import matplotlib.pyplot as plt, numpy as np
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -203,6 +204,75 @@ class Broccoli:
 
         return df_dups
 
+    def count_minor_major_scaffold_occupancy(self, species,
+            df: "It is possible to supply a filtered dataframe"= pd.DataFrame(),
+            up_to: "Up to how many OGtypes included?"= 4):
+        """
+        Count the orthogroups present in only minor, only major, and mix of
+        major-minor scaffolds. Group minor-OGs, major-OGs, and their
+        intersection.
+        """
+        if len(df)==0:
+            df = self.df_input_table
+        if len(species)!=2:
+            sys.exit('ERROR: supplied a list of species longer than 2')
+        # df storing the recounting of OGs per OGtype...
+        df_count_ogtypes = pd.DataFrame(
+            columns=[species[0]+str(i) for i in range(1, up_to)]+[species[0]+f'>={up_to}'],
+            index=[species[1]+str(i) for i in range(1, up_to)]+[species[1]+f'>={up_to}']
+        )
+        # compute the inner 1 to up_to-1 matrix
+        for i in range(0, up_to):
+            for j in range(0, up_to):
+                OGid_interested_list = self.df_dups().query(
+                    f'{species[0]} == {i} & {species[1]} == {j}'
+                ).index.to_list()
+                # subset DF for OGids with i and j amount of orthologs (OGtypes)
+                d = df.query(f'OGid in {OGid_interested_list}')
+                ##print(d[['OGid', 'Species', 'ScaffoldCategory', 'OGtype']])##DEBUG
+                df_count_ogtypes.loc[species[1]+str(j), species[0]+str(i)] = (
+                len(d['OGid'].unique()))
+
+        # compute both i=(1,3) and j>=up_to for both species
+        for i in range(0, up_to):
+            OGid_interested_list = self.df_dups().query(
+                f'{species[0]} == {i} & {species[1]} >= {up_to}'
+            ).index.to_list()
+            d = df.query(f'OGid in {OGid_interested_list}')
+            ##print(d[['OGid', 'Species', 'ScaffoldCategory', 'OGtype']])##DEBUG
+            df_count_ogtypes.loc[species[1]+'>='+str(up_to), species[0]+str(i)] = (
+            len(d['OGid'].unique()))
+            OGid_interested_list = self.df_dups().query(
+                f'{species[1]} == {i} & {species[0]} >= {up_to}'
+            ).index.to_list()
+            d = df.query(f'OGid in {OGid_interested_list}')
+            ##print(d[['OGid', 'Species', 'ScaffoldCategory', 'OGtype']])##DEBUG
+            df_count_ogtypes.loc[species[1]+str(i), species[0]+'>='+str(up_to)] = (
+            len(d['OGid'].unique()))
+
+        # compute both species >=up_to
+        OGid_interested_list = self.df_dups().query(
+            f'{species[1]} >= {up_to} & {species[0]} >= {up_to}'
+        ).index.to_list()
+        d = df.query(f'OGid in {OGid_interested_list}')
+        ##print(d[['OGid', 'Species', 'ScaffoldCategory', 'OGtype']])##DEBUG
+        df_count_ogtypes.loc[species[1]+'>='+str(up_to), species[0]+'>='+str(up_to)] = (
+        len(d['OGid'].unique()))
+
+        return df_count_ogtypes
+
+    def heatmap(self, df,
+                filename = 'heatmap_brocc_py.png'):
+        """
+        Create a heatmap from the pairwise connections between chr
+        """
+        plt.pcolormesh(df)
+        plt.yticks(np.arange(0.5, len(df.index), 1), df.index)
+        plt.xticks(np.arange(0.5, len(df.columns), 1), df.columns,
+                   # rotate 45 degrees xticks
+                   rotation=45)
+        plt.savefig(filename)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -228,8 +298,48 @@ if __name__ == '__main__':
     broc = Broccoli(args.file)
     # Create MCL-like files
     ##broc.one_v_one_orthologs_dict(['Dcat', 'Dtil'])
-    broc.paranome_OG_dict('Dcat')
+    ##broc.paranome_OG_dict('Dcat')
     ##broc.paranome_OG_dict('Dtil')
+
+    # filter df by OGids with all chr
+    minor_dfs = []
+    major_dfs = []
+    mix_dfs = []
+    unique_OGids = broc.df_input_table['OGid'].unique()
+    for og in unique_OGids:
+        filtered_df = broc.df_input_table.query(f'OGid == "{og}" &'+
+                                    'Species in ["Dtil", "Dcat"]')
+        if all(filtered_df['ScaffoldCategory']=='Chr'):
+            major_dfs.append(filtered_df)
+        elif all(filtered_df['ScaffoldCategory']=='Scaffold'):
+            minor_dfs.append(filtered_df)
+        else:
+            mix_dfs.append(filtered_df)
+    df_mix = pd.concat(mix_dfs)
+    df_major = pd.concat(major_dfs)
+    df_minor = pd.concat(minor_dfs)
+    print("Counts for the complete dataframe")
+    df_count_total = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
+                                                    up_to=6)
+    print(df_count_total)
+    print("Counts for major scaffolds only")
+    df_count_major = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
+                                            up_to=6, df=df_major)
+    print(df_count_major)
+    print("Counts for minor scaffolds only")
+    df_count_minor = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
+                                            up_to=6, df=df_minor)
+    print(df_count_minor)
+    print("Counts for OGs mixed between minor/major scaffolds")
+    df_count_mix = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
+                                            up_to=6, df=df_mix)
+    print(df_count_mix)
+    # s'haurien de passar el dtype de cada cel·la a integer pq numpy pugui
+    # interpretar-ho i fer-ne els heatmaps... df = df.astype(int)
+    broc.heatmap(df_count_mix.astype(int), 'heatmap_brocc_mix.png')
+    broc.heatmap(df_count_major.astype(int), 'heatmap_brocc_major.png')
+    broc.heatmap(df_count_minor.astype(int), 'heatmap_brocc_minor.png')
+    broc.heatmap(df_count_total.astype(int), 'heatmap_brocc_total.png')
 
 ###    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
 ###    # (remove present only in one of these two species)
