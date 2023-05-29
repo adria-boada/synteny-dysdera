@@ -53,8 +53,8 @@ class Broccoli:
         except:
             sys.exit('ERROR: The inputted file-path does not exist?')
         # read and prepare dataframe from tabulated file
-        self.df_input_table = pd.read_table(file, dtype={
-            # specify dtypes of a few columns (faster file reading)
+        self.df_input_table = pd.read_table(file,
+            dtype={ # specify dtypes of a few columns (faster file reading)
             'OGid': str,
             'Method': str,
             'Species': str,
