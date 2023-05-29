@@ -218,8 +218,8 @@ class Broccoli:
             sys.exit('ERROR: supplied a list of species longer than 2')
         # df storing the recounting of OGs per OGtype...
         df_count_ogtypes = pd.DataFrame(
-            columns=[species[0]+str(i) for i in range(1, up_to)]+[species[0]+f'>={up_to}'],
-            index=[species[1]+str(i) for i in range(1, up_to)]+[species[1]+f'>={up_to}']
+            columns=[species[0]+str(i) for i in range(0, up_to)]+[species[0]+f'>={up_to}'],
+            index=[species[1]+str(i) for i in range(0, up_to)]+[species[1]+f'>={up_to}']
         )
         # compute the inner 1 to up_to-1 matrix
         for i in range(0, up_to):
@@ -301,32 +301,6 @@ if __name__ == '__main__':
     ##broc.paranome_OG_dict('Dcat')
     ##broc.paranome_OG_dict('Dtil')
 
-    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
-    # (remove present only in one of these two species)
-    OGid_interested_list = broc.df_dups().query(
-        'Dcat > 0 & Dtil > 0').index.to_list()
-    df_dcat_dtil = broc.df_input_table.query(f'OGid in {OGid_interested_list}')
-    # remove other species, which we are not interested in...
-    df_dcat_dtil = df_dcat_dtil.query('Species in ["Dcat", "Dtil"]')
-    # create a new column, OGtype per species
-    # instead of 1.2.3.4.5.6 etc. Dcat
-    # only '1'
-    df_dcat_dtil['OGtype_perspecies']=0
-    for row in broc.df_dups().loc[:, ['Dcat', 'Dtil']].iterrows():
-        og = row[0]
-        row = row[1]
-        for species in row.index:
-            df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
-                             (df_dcat_dtil['OGid'] == og),
-                             'OGtype_perspecies'] = row[species]
-    pd.set_option('display.min_rows', 10)
-    pd.set_option('display.max_columns', 100)
-    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
-                               'OGtype_perspecies']].drop_duplicates())#DEBUG
-    # write df to tsv
-    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t',
-        na_rep='NA') # don't remove missing values (GO_OGstatus)
-
     # filter df by OGids with all chr
     minor_dfs = []
     major_dfs = []
@@ -390,7 +364,8 @@ if __name__ == '__main__':
 ###    pd.set_option('display.max_columns', 100)
 ###    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
 ###                               'OGtype_perspecies']].drop_duplicates())#DEBUG
-###    print(df_dcat_dtil)
 ###    # write df to tsv
-###    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t')
+###    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t',
+###        na_rep='NA') # don't remove missing values (GO_OGstatus)
+
 
