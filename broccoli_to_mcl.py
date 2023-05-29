@@ -315,12 +315,13 @@ if __name__ == '__main__':
             minor_dfs.append(filtered_df)
         else:
             mix_dfs.append(filtered_df)
-    df_mix = pd.concat(mix_dfs)
-    df_major = pd.concat(major_dfs)
-    df_minor = pd.concat(minor_dfs)
+    df_mix = pd.concat(mix_dfs).query('Method == "BROC"')
+    df_major = pd.concat(major_dfs).query('Method == "BROC"')
+    df_minor = pd.concat(minor_dfs).query('Method == "BROC"')
+    df_total = broc.df_input_table.query('Method == "BROC"')
     print("Counts for the complete dataframe")
     df_count_total = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
-                                                    up_to=6)
+                                            up_to=6, df=df_total)
     print(df_count_total)
     print("Counts for major scaffolds only")
     df_count_major = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
