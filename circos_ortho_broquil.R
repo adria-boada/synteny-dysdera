@@ -89,6 +89,13 @@ idx = rbind(idx_col, idx_lss)
 df_input_table = df_input_table[df_input_table$Scaffold %in% idx$crm,]
 # pair colours from `highlighting_crm` with sequids
 highlighting_crm$sequid = idx_col$crm
+# recupera els totals i compara'ls amb els obtinguts pel Vadim i la Marta...
+cat(paste0(
+  'Number of OGids in the original dataframe.tsv: 19 480\n',
+  'Of these OGids, 18 617 are partially found in major scaffolds\n',
+  'R data.frame has ', length(unique(df_input_table$OGid)), ' unique OGids\n',
+  'R data.frame has ', nrow(df_input_table), ' number of rows\n'
+  ))
 
 
 ### CREATE GENOMIC LINKS and POINTS DATAFRAMES ###
