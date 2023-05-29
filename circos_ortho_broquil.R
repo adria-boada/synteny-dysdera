@@ -1,6 +1,5 @@
 #! /usr/bin/env Rscript
 
-
 ### MANUAL OPTIONS and READING DATAFRAMES ###
 
 # Read supplied files in argument line
