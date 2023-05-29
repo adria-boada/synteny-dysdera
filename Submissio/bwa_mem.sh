@@ -23,7 +23,10 @@ echo "  PATH: $(which samtools)"
 echo "  ver.: $(samtools --version|head -n2)"
 echo "Burrows-Wheeler Aligner (bwa)"
 echo "  PATH: $(which bwa)"
-echo
+echo "  SOFT: $(/soft/bwa/bwa)"
+echo "Tenim problemes per a trobar el camí fins a bwa..."
+echo "Usaré un camí absolut: '/soft/bwa/bwa'"
+BWA="/soft/bwa/bwa"
 
 # INPUT PARSING
 while [ "$1" != "" ]; do
@@ -79,7 +82,7 @@ while [ "$1" != "" ]; do
 		echo "Output name: $output"
 		echo
 
-	bwa mem -a -t $threads $ref_asm $reads $mates |
+	$BWA mem -a -t $threads $ref_asm $reads $mates |
 		# Possibilitat d'evaluar la canonada de bwa gracies a tee:
 		# canalitza i al mateix temps escriu una còpia del que surt de bwa mem
 		# al fitxer tmp.sam.
