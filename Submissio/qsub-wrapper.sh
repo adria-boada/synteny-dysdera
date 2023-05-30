@@ -3,19 +3,19 @@
 # Parse arguments and options.
 while [ "$1" != "" ]; do
 	case $1 in
-		-t )		shift
-				ncpu="$1"
-				;;
-		-N )		shift
-				NAME="$1"
-				;;
-		-n )		shift
-				NODE="$1"
-				;;
-		* )		ARGS+=" $1"
+		# Number of threads requested.
+		-t ) shift; ncpu="$1" ;;
+		# Name given to the job submitted.
+		-N ) shift; NAME="$1" ;;
+		# Node {1, 8..13} where the job is sent.
+		-n ) shift; NODE="$1" ;;
+		# The rest of the args (script, program, options for them...)
+		* )		ARGS+="$1 "
 	esac
 	shift
 done
+# Remove the ending whitespace "$1 "...
+ARGS=${ARGS:0: -1}
 
 # Quit and echo instructions if a missing arg. is found.
 	# la variable `${0##*/}` crida el nom de l'script ($0=qsub_wrapper.sh)
@@ -26,8 +26,10 @@ for i in "$ncpu" "$NAME" "$NODE" ; do
 		echo 'Call the script as follows:'
 		echo "${0##*/} -N 'job-name' -n 'node[1; 8..13]' -t 'threads' 'SCRIPT-and-ARGS'"
 		echo # move to a new line
-		echo "Example:" 
+		echo "Example with shellscript (keep in mind chmod u+x and shebang):"
 		echo "${0##*/} -N prova -n 8 -t 2 script.sh all the other script args"
+		echo "Example with binary (only to -n[ode] 1):"
+		echo "${0##*/} -N find -n 1 -t 1 find . -size +1G -print"
 		exit 1
 	fi 
 done
