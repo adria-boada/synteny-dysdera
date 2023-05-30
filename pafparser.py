@@ -190,10 +190,10 @@ class Mapping(object):
             elif 'tp:A:' in i:
                 # tipus d'alineament; 1ari o 2ari.
                 self.typeA = i
-            elif 'nn:' in i:
+            elif 'nn:i:' in i:
                 # Bases ambigues (NNN)
                 self.ambiguous = int(i[5:])
-            elif 'cg:' in i:
+            elif 'cg:Z:' in i:
                 # CIGAR-string.
                 # the [5:] slicing strips beggining 'cg:Z:'
                 # the strip() method removes ending '\n'.
