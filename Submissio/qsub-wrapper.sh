@@ -17,7 +17,7 @@ done
 # Remove the ending whitespace "$1 "...
 ARGS=${ARGS:0: -1}
 
-# if there is a missing arg., exit the script and echo instructions:
+# Quit and echo instructions if a missing arg. is found.
 	# la variable `${0##*/}` crida el nom de l'script ($0=qsub_wrapper.sh)
 	# sense afegir les barres i els directoris ('home\qsub_wrapper.sh').
 for i in "$ncpu" "$NAME" "$NODE" ; do
@@ -34,7 +34,7 @@ for i in "$ncpu" "$NAME" "$NODE" ; do
 	fi 
 done
 
-# detect to which hostname was the query submitted to:
+# Detect to which hostname was the query submitted to:
 # Read single digits and translate to cluster addresses.
 if [[ $NODE -eq 8 ]]; then
 	Q_NODO="h0809.q"
@@ -85,7 +85,7 @@ STDOUT="$(date +%y%m%d-%H%M)-${NAME}.log"
 
 # Demana si la ordre és correcta:
 echo "La ordre que es llançarà és la següent (s'han eludit algunes opcions 'bàsiques' dins els punts suspensius):"
-echo "qsub (...) -N $NAME -q $Q_NODO -l $L_NODO -pe $THREADS $ncpu -o $STDOUT bash $ARGS"
+echo "qsub (...) -N $NAME -q $Q_NODO -l $L_NODO -pe $THREADS $ncpu -o $STDOUT $ARGS"
 echo # move to a new line
 read -p "Desitja continuar? [S/n]" -n 1 -r # La opció -n 1 deixa entrar tan sols un caràcter.
 echo # move to a new line
@@ -97,16 +97,16 @@ if [[ $REPLY =~ ^[YS]$ ]]; then
 	echo $(date) >> $STDOUT  # data completa amb `date`
 	# Retalla 'hostname' de la variable $L_NODO; separa pel caràcter '=' en dues parts.
 	echo "$INFO_NODE" >> $STDOUT  # Quin node, quantes cpus...
-	echo >> $STDOUT  # Espai estètic 
+	echo >> $STDOUT  # Espai estètic
 	echo "Ordre enviada:" >> $STDOUT
-	echo "qsub -cwd -V -N $NAME -q $Q_NODO -l $L_NODO -pe $THREADS $ncpu -o $STDOUT -j yes -b yes bash $ARGS" >> $STDOUT
+	echo "qsub -cwd -V -N $NAME -q $Q_NODO -l $L_NODO -pe $THREADS $ncpu -o $STDOUT -j yes $ARGS" >> $STDOUT
 	echo "-- -- -- -- -- -- -- -- -- --" >> $STDOUT
 	echo >> $STDOUT  # Espai estètic
 
 	if [[ $NODE != 1 ]]; then  # Si NO envies a la cua h0107.q ...
-		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -l "$L_NODO" -pe "$THREADS" "$ncpu" -o "$STDOUT" -j yes -b yes bash "$ARGS"
+		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -l "$L_NODO" -pe "$THREADS" "$ncpu" -o "$STDOUT" -j yes $ARGS
 	else  # Si envies a la cua h0107.q, comanda qsub diferent...
-		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -o "$STDOUT" -j yes -b yes bash "$ARGS"
+		qsub -cwd -V -N "$NAME" -q "$Q_NODO" -o "$STDOUT" -j yes $ARGS
 	fi
 
 	# La opció '-h' llança la ordre en espera... no comença fins a sotmetre `qalter -h U "$j_id" `.
@@ -115,6 +115,7 @@ if [[ $REPLY =~ ^[YS]$ ]]; then
 
 	# Ara, comença el treball
 	#~qalter -h U "$JOB_ID"
+
 # Si no esta satisfet amb la ordre i no prem 'S', no fa res.
 else
 	echo "S'ha anul·lat el llançament de qsub"
