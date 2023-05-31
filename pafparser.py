@@ -39,6 +39,7 @@ import sys
 # Dataframes manipulation, akin to the R project
 import pandas as pd
 import numpy as np
+import natsort
 
 # Plotting data into barplots, histograms, etc.
 import matplotlib.pyplot as plt
@@ -169,9 +170,9 @@ class Mapping(object):
         # Detect whether the given scaffold is a chromosome or a minor
         # unassembled contig. If it is the later, change its name to a generic
         # tag (`Scaff`) which groups all of them under a single name: 
-        if 'scaffold' in self.qname.lower():
+        if 'scaffold' in self.qname.lower() or 'ctg' in self.qname.lower():
             self.qname = 'Scf'
-        if 'scaffold' in self.tname.lower():
+        if 'scaffold' in self.tname.lower() or 'ctg' in self.qname.lower():
             self.tname = 'Scf'
         # `Scaff` results will be a mean/sum of all minor contigs. The lower
         # function makes the string lowercase (case-insensitive matching).
@@ -323,6 +324,9 @@ if __name__ == "__main__":
             df_crm_mapq = df_crm_mapq.rename(crm)
             df_mapq = pd.concat([df_mapq, df_crm_mapq], axis=1)
 
+    # natsort the df_mapq
+    df_mapq = df_mapq.reindex(columns=natsort.humansorted(df_mapq.columns))
+
     print("# List of map-qualities with which creating a boxplot...")
     print("----------")
 #    df_mapq = pd.concat([df[['Tname', 'MapQ.']].rename(columns={'Tname': 'crm'}),
@@ -330,7 +334,7 @@ if __name__ == "__main__":
 #                         ])
     print(df_mapq, end='\n\n')  ###DEBUG
     # Plot `df_mapq` with matplotlib.
-    df_mapq.plot.box(
+    df_mapq.plot.box(showmeans=True,
                      #figsize=(20,10),
         )
     plt.xticks(rotation = 30) # Rotates X-Axis Ticks by 30-degrees
