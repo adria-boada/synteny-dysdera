@@ -14,13 +14,13 @@ title2="qDcat_tDtil"
 
 # asm20
 echo "Computing $fasta1 vs $fasta2 with settings asm20"
-minimap2 -t $threads -cx asm20 --cs $fasta1 $fasta2 > ${title1}_asm20.paf
+minimap2 -t $threads -cx asm20 --cs $fasta1 $fasta2 > ${title2}_asm20.paf
 echo "Computing $fasta2 vs $fasta1 with settings asm20"
-minimap2 -t $threads -cx asm20 --cs $fasta2 $fasta1 > ${title2}_asm20.paf
+minimap2 -t $threads -cx asm20 --cs $fasta2 $fasta1 > ${title1}_asm20.paf
 
 # asm10
 echo "Computing $fasta1 vs $fasta2 with settings asm10"
-minimap2 -t $threads -cx asm10 --cs $fasta1 $fasta2 > ${title1}_asm10.paf
+minimap2 -t $threads -cx asm10 --cs $fasta1 $fasta2 > ${title2}_asm10.paf
 echo "Computing $fasta2 vs $fasta1 with settings asm10"
-minimap2 -t $threads -cx asm10 --cs $fasta2 $fasta1 > ${title2}_asm10.paf
+minimap2 -t $threads -cx asm10 --cs $fasta2 $fasta1 > ${title1}_asm10.paf
 
