@@ -236,18 +236,18 @@ legend('center', title='General summary information', bty='n',
 # el seu homòleg al final del cromosoma d'una altra espècie. D'aquesta manera,
 # s'han de capgirar manualment si es disposa de grans blocs colinears que
 # ho indiquin...
-inverted_crms = c('Dtil@Scaffold_1_X')
+inverted_crms = c('Dtil@Scaffold_1_X',
+              'Dtil@Scaffold_3',
+              'Dcat@Scaffold_1_Vmt')
 reverse_coord = function(x, xrange) {
   # xrange: starting and end for crm
   # x: coordinate which will be reversed
   return(xrange[2] - x + xrange[1])
 }
-# invert all relations and windows for crms specified in `inverted_crms`
+# invert all relations for crms specified in `inverted_crms`
 df_links_12.rev = df_links_12
 for (s in inverted_crms) {
   xrange = c(as.numeric(idx[idx$crm == s, 'start']), as.numeric(idx[idx$crm == s, 'end']))
-  print(xrange)#DEBUG
-  print(s)#DEBUG
   # emmascara el df segons fileres `sequid_doub` que haurien d'invertir-se
   mbool_doub = df_links_12$sequid_doub == s
   df_links_12.rev$end_doub[mbool_doub] = reverse_coord(df_links_12$start_doub[mbool_doub], xrange)
@@ -257,6 +257,16 @@ for (s in inverted_crms) {
   df_links_12.rev$end_sing[mbool_sing] = reverse_coord(df_links_12$start_sing[mbool_sing], xrange)
   df_links_12.rev$start_sing[mbool_sing] = reverse_coord(df_links_12$end_sing[mbool_sing], xrange)
 }
+# invert all windows for crms specified in `inverted_crms`
+df_windows_n0.rev = df_windows_n0
+for (s in inverted_crms) {
+  xrange = c(as.numeric(idx[idx$crm == s, 'start']), as.numeric(idx[idx$crm == s, 'end']))
+  # emmascara el df segons fileres `sequid_doub` que haurien d'invertir-se
+  mbool = df_windows_n0$sequid == s
+  df_windows_n0.rev$start[mbool] = reverse_coord(df_windows_n0$end[mbool], xrange)
+  df_windows_n0.rev$end[mbool] = reverse_coord(df_windows_n0$start[mbool], xrange)
+}
+
 
 
 ### CREATE CIRCOS ###
@@ -287,7 +297,7 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
     # instead of points, draw multigenic orthogroups as
     # repetitive elements would be drawn
     # this paragraph incorporates 2:1 OGs as links (remove from points)...
-    d = df_windows_n0[df_windows_n0$sequid==cllcrm, ]
+    d = df_windows_n0.rev[df_windows_n0.rev$sequid==cllcrm, ]
     circos.genomicLines(d[, c('start', 'end')],
       d[, 'amount_n0'],
       col=window_colours[window_colours$var=='amount_n0', 'col'])
