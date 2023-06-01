@@ -122,29 +122,30 @@ for (og in unique(df_paranomelike_12$OGid)) {
   members = df_paranomelike_12[df_paranomelike_12$OGid==og, ]
   # if one paralog from the pair has been removed from the
   # data.frame due to being in a minor scaffold... next for-loop
-  if (nrow(members[members$OGtype_perspecies==2, ]) != 2) {
+  if (nrow(members) != 3) {
     cat(paste('WARNING:', og, 'removed from analyses\n'))
     og.removed.links12 = og.removed.links12 + 1
     next
   }
   new_rows = data.frame(
-    sequid_from = members[members$OGtype_perspecies==2, 'Scaffold'][1],
-    start_from = members[members$OGtype_perspecies==2, 'GeneStart'][1],
-    end_from = members[members$OGtype_perspecies==2, 'GeneEnd'][1],
-    sequid_to = members[members$OGtype_perspecies==2, 'Scaffold'][2],
-    start_to = members[members$OGtype_perspecies==2, 'GeneStart'][2],
-    end_to = members[members$OGtype_perspecies==2, 'GeneEnd'][2],
+    sequid_doub = members[members$OGtype_perspecies==2, 'Scaffold'],
+    start_doub = members[members$OGtype_perspecies==2, 'GeneStart'],
+    end_doub = members[members$OGtype_perspecies==2, 'GeneEnd'],
+    sequid_sing = members[members$OGtype_perspecies==1, 'Scaffold'][1],
+    start_sing = members[members$OGtype_perspecies==1, 'GeneStart'][1],
+    end_sing = members[members$OGtype_perspecies==1, 'GeneEnd'][1],
     ogid = og
   )
-  if (new_rows$sequid_from != new_rows$sequid_to) {
-    # els paràlegs es troben al mateix cromosoma
-    PGtype = 'interchr'
-  } else if (abs(new_rows$start_from - new_rows$start_to) < distancia_12) {
+  # emplena la columna PGtype, que marca la distància entre paràlegs
+  if (new_rows$sequid_doub[1] != new_rows$sequid_doub[2]) {
+    # la parella de paràlegs no es troba al mateix chr
+    PGtype = 4 #='interchromosomal'
+  } else if (abs(new_rows$start_doub[1] - new_rows$start_doub[2]) < distancia_12) {
     # els paràlegs es troben propers
-    PGtype = 'propers'
+    PGtype = 1 #='propers'
   } else {
     # es troben distants però mateix cromosoma
-    PGtype = 'distants'
+    PGtype = 2 #='distants'
   }
   new_rows$PGtype = PGtype
   df_links_12 = rbind(df_links_12, new_rows)
@@ -220,10 +221,10 @@ og.included.windowsn0.perc = round((og.included.windowsn0/og.total)*100, digits=
 plot.new()
 legend('center', title='General summary information', bty='n',
   legend = c(
-    paste0('Every single unique OG for species in CIRCOS: ', og.total, ', 100%'),
-    paste0('1:2 OGs removed because one member of the pair was in minor scaffolds: ', og.removed.links12, ', ', og.removed.links12.perc, '%'),
-    paste0('OGs as inner links: ', og.included.links12, ', ', og.included.links12.perc, '%'),
-    paste0('OGs in outer windows (n:0): ', og.included.windowsn0, ', ', og.included.windowsn0.perc, '%'),
+    paste0('Total amount of unique OGs for both species: ', og.total, ', 100%'),
+    paste0('1:2 OGs removed because one of its members was in minor scaffolds: ', og.removed.links12, ', ', og.removed.links12.perc, '%'),
+    paste0('1:2 OGs as inner links: ', og.included.links12, ', ', og.included.links12.perc, '%'),
+    paste0('n:0 OGs in outer windows: ', og.included.windowsn0, ', ', og.included.windowsn0.perc, '%'),
     paste0('Total amount of inner links (not OGs but gene pairs): ', nrow(df_links_12)),
     paste('Most genes in a 1:0 window:', max(df_windows_n0$amount_10)),
     paste('Most genes in a >1:0 window:', max(df_windows_n0$amount_n0))
@@ -232,6 +233,8 @@ legend('center', title='General summary information', bty='n',
 
 ### CREATE CIRCOS ###
 
+# create 2 plots, one for Dtil doubles and another for Dcat doubles...
+for (pattern in c("^Dtil@", "^Dcat@")) {
 # compute the range of data for outer windows (from 0 to max(df))
 track_ylim = max(c(df_windows_n0$amount_n0,
                    df_windows_n0$amount_10))
@@ -270,25 +273,47 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
   }
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
-circos.genomicLink(df_links_12[, c(1:3)], df_links_12[, c(4:6)],
-  col = df_links_12[, 'PGtype_col'], #h.ratio = .4
+x = df_links_12[grepl(pattern, df_links_12$sequid_doub), ]
+circos.genomicLink(x[, c(1:3)], x[, c(4:6)],
+  col = x[, 'PGtype_col'], #h.ratio = .4
 )
+# texte recompte esdeveniments:
+t = paste0('\n',
+  'Genes 1:0 for Dtil: ', sum(df_windows_n0[grepl("^Dtil@", df_windows_n0$sequid), 'amount_10']), '\n',
+  'Genes 1:0 for Dcat: ', sum(df_windows_n0[grepl("^Dcat@", df_windows_n0$sequid), 'amount_10']), '\n',
+  'Genes n:0 for Dtil: ', sum(df_windows_n0[grepl("^Dtil@", df_windows_n0$sequid), 'amount_n0']), '\n',
+  'Genes n:0 for Dcat: ', sum(df_windows_n0[grepl("^Dcat@", df_windows_n0$sequid), 'amount_n0']), '\n')
+plot_dim = par('usr')
+# Coordenades x i y del punt superior a la dreta...
+x_topright <- plot_dim[2]
+y_topright <- plot_dim[4]
+# Espai vertical necessari per al text
+text_height <- strheight(t, cex=0.7)
+# Coordenades ajustades per col·locar el text a top right
+x_text <- x_topright - text_height
+y_text <- y_topright - text_height
+# afegir el text
+text(x_text, y_text, t, cex=0.7, pos=3)
+
 legend('bottomleft', bty='n', cex=.7,
        legend = c(
-          paste0('Outer windows of 1:0'),
-          paste0('Outer windows of >1:0'),
-          paste0('Closeby 2:1 paralogs (dist<', distancia_12,')' ),
-          paste0('Distant 2:1 paralogs (dist>=', distancia_12,')' ),
-          paste0('Interchromosomal 2:1 paralogs')
+          paste0('Outer windows of 1:0 (', sum(df_windows_n0$amount_10),' genes)'),
+          paste0('Outer windows of >1:0 (', sum(df_windows_n0$amount_n0),' genes)'),
+          paste0('Closeby 2:1 paralogs (dist<', distancia_12,') (amount=', nrow(x[x$PGtype==1,]),')' ),
+          paste0('Distant 2:1 paralogs (dist>=', distancia_12,') (amount=', nrow(x[x$PGtype==2,]), ')' ),
+          paste0('Interchromosomal 2:1 paralogs (amount=', nrow(x[x$PGtype==4,]), ')')
         ),
        fill = c(
           window_colours[window_colours$var=='amount_10', 'col'],
           window_colours[window_colours$var=='amount_n0', 'col'],
-          legend_pgtype_colours[legend_pgtype_colours$PGtype=='propers', 'PGtype_col'],
-          legend_pgtype_colours[legend_pgtype_colours$PGtype=='distants', 'PGtype_col'],
-          legend_pgtype_colours[legend_pgtype_colours$PGtype=='interchr', 'PGtype_col']
+          legend_pgtype_colours[legend_pgtype_colours$PGtype==1, 'PGtype_col'], #propers
+          legend_pgtype_colours[legend_pgtype_colours$PGtype==2, 'PGtype_col'], #distants
+          legend_pgtype_colours[legend_pgtype_colours$PGtype==4, 'PGtype_col']  #interchromosomal
         )
 )
-title('1:2 paralog links and n:0 outer gene-count windows')
+species_loop = paste0(strsplit(pattern, '')[[1]][2:5], collapse='')
+title(paste0('Links: Pairs of ', species_loop,
+             "'s paralogs -- Outer windows: n:0 gene-count"))
+}
 
 
