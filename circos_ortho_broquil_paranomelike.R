@@ -231,6 +231,34 @@ legend('center', title='General summary information', bty='n',
 ))
 
 
+### INTENT INVERTIR CROMOSOMES ###
+# Els cromosomes no es troben en l'ordre correcte. Hi ha inicis que troben
+# el seu homòleg al final del cromosoma d'una altra espècie. D'aquesta manera,
+# s'han de capgirar manualment si es disposa de grans blocs colinears que
+# ho indiquin...
+inverted_crms = c('Dtil@Scaffold_1_X')
+reverse_coord = function(x, xrange) {
+  # xrange: starting and end for crm
+  # x: coordinate which will be reversed
+  return(xrange[2] - x + xrange[1])
+}
+# invert all relations and windows for crms specified in `inverted_crms`
+df_links_12.rev = df_links_12
+for (s in inverted_crms) {
+  xrange = c(as.numeric(idx[idx$crm == s, 'start']), as.numeric(idx[idx$crm == s, 'end']))
+  print(xrange)#DEBUG
+  print(s)#DEBUG
+  # emmascara el df segons fileres `sequid_doub` que haurien d'invertir-se
+  mbool_doub = df_links_12$sequid_doub == s
+  df_links_12.rev$end_doub[mbool_doub] = reverse_coord(df_links_12$start_doub[mbool_doub], xrange)
+  df_links_12.rev$start_doub[mbool_doub] = reverse_coord(df_links_12$end_doub[mbool_doub], xrange)
+  # emmascara el df segons fileres `sequid_sing` que haurien d'invertir-se
+  mbool_sing = df_links_12$sequid_sing == s
+  df_links_12.rev$end_sing[mbool_sing] = reverse_coord(df_links_12$start_sing[mbool_sing], xrange)
+  df_links_12.rev$start_sing[mbool_sing] = reverse_coord(df_links_12$end_sing[mbool_sing], xrange)
+}
+
+
 ### CREATE CIRCOS ###
 
 # create 2 plots, one for Dtil doubles and another for Dcat doubles...
@@ -273,7 +301,7 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
   }
 )
 # connect 1:3 (origin segment) to 4:6 (recipient segment)
-x = df_links_12[grepl(pattern, df_links_12$sequid_doub), ]
+x = df_links_12.rev[grepl(pattern, df_links_12$sequid_doub), ]
 circos.genomicLink(x[, c(1:3)], x[, c(4:6)],
   col = x[, 'PGtype_col'], #h.ratio = .4
 )
