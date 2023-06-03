@@ -223,9 +223,9 @@ legend('center', title='General summary information', bty='n',
   legend = c(
     paste0('Total amount of unique OGs for both species: ', og.total, ', 100%'),
     paste0('1:2 OGs removed because one of its members was in minor scaffolds: ', og.removed.links12, ', ', og.removed.links12.perc, '%'),
-    paste0('1:2 OGs as inner links: ', og.included.links12, ', ', og.included.links12.perc, '%'),
-    paste0('n:0 OGs in outer windows: ', og.included.windowsn0, ', ', og.included.windowsn0.perc, '%'),
-    paste0('Total amount of inner links (not OGs but gene pairs): ', nrow(df_links_12)),
+    paste0('1:2 OGs represented as inner links: ', og.included.links12, ', ', og.included.links12.perc, '%'),
+    paste0('n:0 OGs represented in outer windows: ', og.included.windowsn0, ', ', og.included.windowsn0.perc, '%'),
+    paste0('Total amount of inner links (not OGs but linked pairs of genes): ', nrow(df_links_12)),
     paste('Most genes in a 1:0 window:', max(df_windows_n0$amount_10)),
     paste('Most genes in a >1:0 window:', max(df_windows_n0$amount_n0))
 ))
@@ -236,6 +236,16 @@ legend('center', title='General summary information', bty='n',
 # el seu homòleg al final del cromosoma d'una altra espècie. D'aquesta manera,
 # s'han de capgirar manualment si es disposa de grans blocs colinears que
 # ho indiquin...
+reverse_coord_windows <- function(dfw, inverted_sequids) {
+  # reverse start and end columns of dfw only for selected inverted_sequids
+  for (s in inverted_sequids) {
+    xrange = as.double(idx[idx$sequid == s, c('start', 'end')])
+    # emmascara el df segons fileres `sequid_doub` que haurien d'invertir-se
+    mbool = df_windows_n0$sequid == s
+    dfw[mbool, 'start'] = xrange[2] - dfw[mbool, 'end'] + xrange[1]
+    dfw[mbool, 'end'] = xrange[2] - dfw[mbool, 'start'] + xrange[1]
+}}
+
 inverted_crms = c('Dtil@Scaffold_1_X',
               'Dtil@Scaffold_3',
               'Dcat@Scaffold_1_Vmt')
@@ -283,7 +293,7 @@ circos.par(gap.degree = c(rep(1, nrow(idx_col)-1), 5,
   rep(1, nrow(idx_lss)-1), 5))
 # ERROR: summation of xdirection is larger than the width
 # of some sectors. Remove tiny sectors or reset cell.padding as follows...
-circos.par(cell.padding = c(0.02, 0, 0.02, 0))
+circos.par(cell.padding = c(0, 0, 0, 0))
 # initialize with sectors <- chromosome names
 circos.initialize(sectors=idx$crm,
   xlim=idx[, c('start', 'end')])
