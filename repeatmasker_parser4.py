@@ -146,14 +146,15 @@ class Repeat:
                 df['replen'] = abs(df['end'] - df['begin']) +1
                 dfs.append(df)
 
+            # once read, remove all tmp files
+            if any(".tmp" in s for s in tmp_file_list):
+                print_green('STATUS: Removing temp. files from tmp_file_list')
+                print(tmp_file_list)
+                [os.remove(tfl) for tfl in tmp_file_list]
+
         # print('DEBUG: Preconcat')
         self.df_input_table = pd.concat(dfs)
         # print('DEBUG: Postconcat')
-        # once read, remove all tmp files
-        if any(".tmp" in s for s in tmp_file_list):
-            print_green('STATUS: Removing temp. files from tmp_file_list')
-            print(tmp_file_list)
-            [os.remove(tfl) for tfl in tmp_file_list]
 
         # shorten calls to dataframe
         df = self.df_input_table
