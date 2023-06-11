@@ -674,6 +674,18 @@ class Repeat:
             + Z hue (e.g. species)
         """
         df = self.df_input_table
+        fig_titles = {
+            'score_SW': 'Smith-Waterman score',
+            'perc_divg': 'Divergence from consensus sequence',
+            'perc_indel': 'Indels from consensus sequence',
+            'replen': 'Repetitive element lengths',
+        }
+        fig_xlabel = {
+            'score_SW': 'score',
+            'perc_divg': '% divergence',
+            'perc_indel': '% indels (?)',
+            'replen': 'basepairs',
+        }
         for xvar in ['score_SW', 'perc_divg', 'perc_indel',
                      'replen']:
             sns.boxplot(data=df, x=xvar, y='class',
@@ -682,8 +694,10 @@ class Repeat:
                                        marker='*',
                                        markeredgecolor='black',
                                        markersize='15'))
-            plt.title(xvar)
-            plt.savefig(str(xvar)+'_matplotlib.png')
+            plt.title(fig_titles[xvar])
+            plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
+            plt.xlabel(fig_xlabel[xvar])
+            plt.savefig(str(xvar)+'_matplotlib.png', dpi=300)
             plt.close('all')
 
         return None
@@ -693,9 +707,17 @@ class Repeat:
         Draw boxplots of genome content occupied
         by each class in each species.
         """
-        df = self.df_input_table
         g  = self.df_groupby_summary
-
+        fig_titles = {
+            'avg_repclass_len': 'Average repeat class length',
+            'num_elements': 'Number of elements of repeat class',
+            'genom_occup': 'Genome occupancy for repeat class'
+        }
+        fig_xlabel = {
+            'avg_repclass_len': 'basepairs',
+            'num_elements': '#amount eles',
+            'genom_occup': '% occupancy'
+        }
         for xvar in ['avg_repclass_len', 'num_elements', 'genom_occup']:
             sns.boxplot(data=g, x=xvar, y='class',
                         hue='Species', showmeans='True',
@@ -703,8 +725,10 @@ class Repeat:
                                        marker='*',
                                        markeredgecolor='black',
                                        markersize='15'))
-            plt.title(xvar)
-            plt.savefig(str(xvar)+'_matplotlib.png')
+            plt.title(fig_titles[xvar])
+            plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
+            plt.xlabel(fig_xlabel[xvar])
+            plt.savefig(str(xvar)+'_matplotlib.png', dpi=300)
             plt.close('all')
 
         return None
