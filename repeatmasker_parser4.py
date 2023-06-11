@@ -20,9 +20,13 @@ Make sure all rows are of the same length (16 fields for all)
 
 import sys
 import pandas as pd
+
 # some csv are too big to read; they must be split beforehand
-import os # reading
-import csv # splitting
+# (failed attempt)
+import os, csv # reading and splitting csv files
+
+# plotting
+import seaborn as sns, matplotlib.pyplot as plt
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -70,89 +74,90 @@ def split_csv_file(input_file, output_prefix, lines_per_file):
 
 class Repeat:
 
-    def __init__(self, file:"File-path to a table.out given by RepeatMasker"):
+    def __init__(self,
+        file_list: "List of file-paths to a table.out given by RepeatMasker",
+        species_names: "List of species names of each file-path, "+
+            "in the same order (in order to pair file and sp.name)",
+        gensizes_dict: "Dict with gensize value for species in species_names"):
         """
         """
         # try to open the file (make sure provided path is correct)
-        try:
-            with open(file) as ft:
-                pass
-        except:
-            sys.exit('ERROR: The inputted file-path does not exist?')
-
-        # check filesize and split if it were too big
-        file_size = os.path.getsize(file)
-        print_green("STATUS: CSV file-size of " + str(file_size) + " (bytes?)")
-        if file_size > 500000000: # file-size bigger than 500 Mb?
-            # split before loading
-            print_green(f'STATUS: File-size exceeding 5 Mb, memory compromised. '+
-                        'File will be split in tmp files and read '+
-                        'individually.')
-
-            tmp_file_list = split_csv_file(file, 'fragment_rmparser', 1000000)
-
-        else:
-            tmp_file_list = [file]
-
-        print('DEBUG: split file')
+        for file in file_list:
+            try:
+                with open(file) as ft:
+                    pass
+            except:
+                sys.exit('ERROR: The inputted file-path does not exist?')
 
         dfs = []
-        for tfl in tmp_file_list:
-            # read and prepare dataframe from tabulated file
-            df = pd.read_table(tfl,
-            header=None,
-            sep='\s+',
-            names=[
-            'score_SW',
-            'perc_divg',
-            'perc_del',
-            'perc_ins',
-            'sequid',
-            'begin',
-            'end',
-            'left',
-            'orient',
-            'name',
-            'default_repclass',
-            'begin_match',
-            'end_match',
-            'left_match',
-            'ID',
-            'overlapping'],
-            dtype={
-                'score_SW': int,        # Smith-Waterman score
-                'perc_divg': float,     # % of substit. bps in matching region
-                'perc_del': float,      # % of delet. bps in matching region
-                'perc_ins': float,      # % of insert. bps in matching region
-                'sequid': str,          # queried sequid name
-                'begin': int,           # match begin in sequid
-                'end': int,             # match end in sequid
-                'left': str,            # left to end of sequid
-                'orient': str,          # orientation/strand
-                'name': str,            # internal RM repeat name
-                'default_repclass': str,# default repeat class
-                'begin_match': str,     # begin in database match
-                'end_match': str,       # end in database match
-                'left_match': str,      # left to end of database match
-                'ID': int,              # identifier (not always unique)
-                'overlapping': bool},   # overlapping with a higher quality R.E.
-            )
-            dfs.append(df)
+        for i in range(len(file_list)):
+            # check filesize and split if it were too big
+            # (always split to tmp file to shorten coding time)
+            file = file_list[i]
+            species = species_names[i]
+            file_size = os.path.getsize(file)
+            print_green("STATUS: Size of `" + str(file) + "` is " +
+                        str(file_size) + " (bytes?)")
+            tmp_file_list = split_csv_file(file, 'fragment_rmparser', 1000000)
 
-        print('DEBUG: Preconcat')
+            for tfl in tmp_file_list:
+                # read and prepare dataframe from tabulated file
+                df = pd.read_table(tfl,
+                header=None,
+                sep='\s+',
+                names=[
+                'score_SW',
+                'perc_divg',
+                'perc_del',
+                'perc_ins',
+                'sequid',
+                'begin',
+                'end',
+                'left',
+                'orient',
+                'name',
+                'default_repclass',
+                'begin_match',
+                'end_match',
+                'left_match',
+                'ID',
+                'overlapping'],
+                dtype={
+                    'score_SW': int,        # Smith-Waterman score
+                    'perc_divg': float,     # % of substit. bps in matching region
+                    'perc_del': float,      # % of delet. bps in matching region
+                    'perc_ins': float,      # % of insert. bps in matching region
+                    'sequid': str,          # queried sequid name
+                    'begin': int,           # match begin in sequid
+                    'end': int,             # match end in sequid
+                    'left': str,            # left to end of sequid
+                    'orient': str,          # orientation/strand
+                    'name': str,            # internal RM repeat name
+                    'default_repclass': str,# default repeat class
+                    'begin_match': str,     # begin in database match
+                    'end_match': str,       # end in database match
+                    'left_match': str,      # left to end of database match
+                    'ID': int,              # identifier (not always unique)
+                    'overlapping': bool},   # overlapping with a higher quality R.E.
+                )
+                # add more columns
+                df['Species'] = species
+                df['perc_indel'] = df['perc_del'] + df['perc_ins']
+                df['replen'] = abs(df['end'] - df['begin']) +1
+                dfs.append(df)
+
+        # print('DEBUG: Preconcat')
         self.df_input_table = pd.concat(dfs)
-        print('DEBUG: Postconcat')
+        # print('DEBUG: Postconcat')
         # once read, remove all tmp files
-        print_green('STATUS: Removing files from tmp_file_list')
-        print(tmp_file_list)
-        [os.remove(tfl) for tfl in tmp_file_list]
-
-        print_green(f'STATUS: The file {file} '+
-                    'has been read as the following dataframe:')
-        print(self.df_input_table)
+        if any(".tmp" in s for s in tmp_file_list):
+            print_green('STATUS: Removing temp. files from tmp_file_list')
+            print(tmp_file_list)
+            [os.remove(tfl) for tfl in tmp_file_list]
 
         # shorten calls to dataframe
         df = self.df_input_table
+        # print(df) # DEBUG
 
         # Long paragraphs to classify "default_repclass" into
         # four new columns, easier to read and employ
@@ -198,7 +203,7 @@ class Repeat:
         df.loc[
             df["default_repclass"]=='Satellite',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Tandem_repeat', 'Satellite', 'NA', 'NA')
+        ] = ('Tandem_repeat', '*Satellite*', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='Satellite/W-chromosome',
@@ -228,7 +233,7 @@ class Repeat:
         df.loc[
             df["default_repclass"].str.contains('Low_complexity'),
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Low_complexity', 'Low_complexity', 'NA', 'NA')
+        ] = ('*Low_complexity*', 'Low_complexity', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"].str.contains('Other'),
@@ -595,18 +600,114 @@ class Repeat:
         print_green(f'STATUS: Dataframe dtypes:')
         self.df_input_table.info()
 
-        # check transformation
+        # create a complementary dataframe which summarizes `df_input_table`
+        # computes sum of replens (cumulative length of repeat class)
+        # mean of replen (average length of repeat class)
+        # count of replen (number of elements of repeat class)
+        g = df.groupby(['Species', 'class', 'subclass', 'order',
+                        'superfam'])['replen'].agg([
+                        'sum', 'mean', 'count',]).reset_index()
+        g = g.rename(columns={
+            'sum': 'cum_repclass_len',
+            'mean': 'avg_repclass_len',
+            'count': 'num_elements'})
+
+        # compute proportion of genome occupancy for all classes,
+        # for a given species
+        for sp in gensizes_dict.keys():
+            g.loc[g['Species'] == sp, 'genom_occup'] = (
+                g.loc[g['Species'] == sp, 'cum_repclass_len'] /
+                int(gensizes_dict[sp])) * 100 # percent
+
+        # compute proportion of repetitive fraction for all classes,
+        # given a species
+        for sp in g['Species'].unique():
+            g.loc[g['Species'] == sp, 'repeat_frac'] = (
+                g.loc[g['Species'] == sp, 'cum_repclass_len'] /
+                g.loc[g['Species'] == sp, 'cum_repclass_len'].sum()) * 100
+
         pd.set_option('display.max_rows', None)
-        print_green(f'STATUS: New columns added:')
-        print(df.drop_duplicates(subset=['default_repclass',
-                                         'class', 'subclass',
-                                         'order',
-                                         'superfam']).loc[:, [
-                                     'class', 'subclass', 'order',
+        pd.set_option('display.max_colwidth', None)
+        print_green("STATUS: Summary of repeatmasker's dataframe.out:")
+        print(g)
+        self.df_groupby_summary = g
+
+    # this is a long __init__ function...
+
+    def check_classification(self):
+        """
+        Checks how the default classes have been re-classified
+        """
+        df = self.df_input_table # check on created self.dataframe
+
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_colwidth', None)
+        print_green(f'STATUS: Reclassification of dataframe:')
+        # show the new classification
+        # (drop rows sharing the same repeat class)
+        df_new_classes = df.drop_duplicates(
+            subset=['default_repclass', 'class',
+                    'subclass', 'order', 'superfam'])
+        # sort dataframe by classes (then subclass, etc.)
+        df_new_classes = df_new_classes.sort_values(
+            by=['class', 'subclass', 'order', 'superfam'])
+        # reset index
+        df_new_classes = df_new_classes.reset_index()
+        # only print columns with repeat class names
+        df_new_classes = df_new_classes.loc[:, ['class',
+                                     'subclass', 'order',
                                      'superfam', 'mite',
-                                     'default_repclass']].sort_values(
-                                        by=['class', 'subclass', 'order',
-                                            'superfam']))
+                                     'default_repclass']]
+        print(df_new_classes)
+        # return to default pandas options
+        pd.set_option('display.max_rows', 60)
+        pd.set_option('display.max_colwidth', 80)
+
+        return df_new_classes
+
+    def boxplot_entrance(self):
+        """
+        Draw boxplots of dataframe by
+            + X variable (e.g. SW score, genome content)
+            + Y category (e.g. repeat class)
+            + Z hue (e.g. species)
+        """
+        df = self.df_input_table
+        for xvar in ['score_SW', 'perc_divg', 'perc_indel',
+                     'replen']:
+            sns.boxplot(data=df, x=xvar, y='class',
+                        hue='Species', showmeans='True',
+                        meanprops=dict(color='green',
+                                       marker='*',
+                                       markeredgecolor='black',
+                                       markersize='15'))
+            plt.title(xvar)
+            plt.savefig(str(xvar)+'_matplotlib.png')
+            plt.close('all')
+
+        return None
+
+    def boxplot_genome_content(self):
+        """
+        Draw boxplots of genome content occupied
+        by each class in each species.
+        """
+        df = self.df_input_table
+        g  = self.df_groupby_summary
+
+        for xvar in ['avg_repclass_len', 'num_elements', 'genom_occup']:
+            sns.boxplot(data=g, x=xvar, y='class',
+                        hue='Species', showmeans='True',
+                        meanprops=dict(color='green',
+                                       marker='*',
+                                       markeredgecolor='black',
+                                       markersize='15'))
+            plt.title(xvar)
+            plt.savefig(str(xvar)+'_matplotlib.png')
+            plt.close('all')
+
+        return None
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -614,20 +715,30 @@ class Repeat:
 if __name__ == '__main__':
 
     ### PARSE ARGUMENTS ###
-    import argparse
+    if len(sys.argv) < 3:
+        sys.exit(f"Lacking RepeatMasker's output\n{sys.argv[0]} rm_sp1.out "+
+                 "species1_name rm_sp2.out species2_name ...")
 
-    parser = argparse.ArgumentParser(description='')
-    # file-name: positional arg.
-    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
+    species = []
+    files = []
+    for i in range(1, len(sys.argv), 2):
+        files.append(sys.argv[i])
+        species.append(sys.argv[i+1])
 
-    args = parser.parse_args()
-    # call a value: args.operacio or args.filename.
+    # send genome length in bases (compute % genome occupancy)
+    repeats = Repeat(files, species,
+                     gensizes_dict=dict(
+                         Dcat=3279770110,
+                         Dtil=1550000000))
+    # check wheather classification is done correctly
+    # store reclassification in a TSV file
+    repeats.check_classification(
+        ).to_csv('repeat_classes_reclassification.tsv',
+        sep='\t', na_rep='NA',)
+    # moreover, store summary df as TSV
+    repeats.df_groupby_summary.to_csv(
+        'repeat_summary.tsv', sep='\t', na_rep='NA')
+    # create boxplots of whole df and summary df
+    repeats.boxplot_entrance()        # whole
+    repeats.boxplot_genome_content()  # summary
 
-    repeats = Repeat(args.filename)
