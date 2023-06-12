@@ -630,7 +630,8 @@ class Repeat:
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_colwidth', None)
         print_green("STATUS: Summary of repeatmasker's dataframe.out:")
-        print(g)
+        # print df in markdown format (requires tabulate package)
+        print(g.round(decimals=2).to_markdown(None))
         self.df_groupby_summary = g
 
     # this is a long __init__ function...
@@ -659,7 +660,8 @@ class Repeat:
                                      'subclass', 'order',
                                      'superfam', 'mite',
                                      'default_repclass']]
-        print(df_new_classes)
+        # print df in markdown format (requires tabulate package)
+        print(df_new_classes.round(decimals=2).to_markdown(None))
         # return to default pandas options
         pd.set_option('display.max_rows', 60)
         pd.set_option('display.max_colwidth', 80)
@@ -725,6 +727,40 @@ class Repeat:
                                        marker='*',
                                        markeredgecolor='black',
                                        markersize='15'))
+            # lets try to label outlier subclasses in a class
+            xvar_q1 = g.groupby(['class', 'Species']
+                            ).quantile(0.25)[xvar]
+            xvar_q3 = g.groupby(['class', 'Species']
+                            ).quantile(0.75)[xvar]
+            outlier_top_lim = xvar_q3 + 1 * (xvar_q3 - xvar_q1)
+            outlier_bot_lim = xvar_q1 - 1 * (xvar_q3 - xvar_q1)
+
+            categorical_pos = {
+                'Dcat*Low_complexity*': 0,
+                'Dtil*Low_complexity*': 0,
+                'DcatDNA': 1,
+                'DtilDNA': 1,
+                'DcatRetrotransposon': 2,
+                'DtilRetrotransposon': 2,
+                'DcatTandem_repeat': 3,
+                'DtilTandem_repeat': 3,
+                'DcatUnknown': 4,
+                'DtilUnknown': 4,
+                'DcattRNA': 5,
+                'DtiltRNA': 5,
+            }
+            # labeling values not bonded by limits
+            for row in g.to_dict(orient='index').items():
+                index = row[0]
+                rclass = row[1]['class']
+                sp = row[1]['Species']
+                pos = categorical_pos[sp+rclass]
+                val = row[1][xvar]
+                if (val > outlier_top_lim[rclass, sp]) or (
+                    val < outlier_bot_lim[rclass, sp]):
+                    plt.text(val, pos, f' {index}',
+                             ha='left', va='center', fontsize=4)
+
             plt.title(fig_titles[xvar])
             plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
             plt.xlabel(fig_xlabel[xvar])
