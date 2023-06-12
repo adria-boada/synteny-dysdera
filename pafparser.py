@@ -327,12 +327,8 @@ if __name__ == "__main__":
     # natsort the df_mapq
     df_mapq = df_mapq.reindex(columns=natsort.humansorted(df_mapq.columns))
 
-    print("# List of map-qualities with which creating a boxplot...")
+    print("# Writing mapqual-boxplot.jpg...")
     print("----------")
-#    df_mapq = pd.concat([df[['Tname', 'MapQ.']].rename(columns={'Tname': 'crm'}),
-#                         df[['Qname', 'MapQ.']].rename(columns={'Qname': 'crm'})
-#                         ])
-    print(df_mapq, end='\n\n')  ###DEBUG
     # Plot `df_mapq` with matplotlib.
     fig, ax = plt.subplots(figsize=(6.8, 10.5))
     df_mapq.plot.box(showmeans=True, ax=ax)
