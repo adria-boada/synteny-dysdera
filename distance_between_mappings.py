@@ -122,9 +122,9 @@ aforementioned variable.\n")
                    min(lst),
                    max(lst),
                    sms.get_mean(),
-                   str((sms.get_mean()*100)/lengths[crm])+" %",
+                   str(round((sms.get_mean()*100)/lengths[crm], 5))+" %",
                    sms.get_stdeviation(),
-                   str((sms.get_stdeviation()*100)/lengths[crm])+" %",
+                   str(round((sms.get_stdeviation()*100)/lengths[crm], 5))+" %",
                    ]]
         # reinicia les mesures.
         sms.reinitialize()
@@ -137,9 +137,9 @@ aforementioned variable.\n")
                    min(lst),
                    max(lst),
                    sms.get_mean(),
-                   str((sms.get_mean()*100)/lengths[crm])+" %",
+                   str(round((sms.get_mean()*100)/lengths[crm], 5))+" %",
                    sms.get_stdeviation(),
-                   str((sms.get_stdeviation()*100)/lengths[crm])+" %",
+                   str(round((sms.get_stdeviation()*100)/lengths[crm], 5))+" %",
                    ]]
         # reinicia mesures
         sms.reinitialize()
