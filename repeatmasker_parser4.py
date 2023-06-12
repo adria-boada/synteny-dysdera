@@ -746,8 +746,10 @@ class Repeat:
                 'DtilTandem_repeat': 3,
                 'DcatUnknown': 4,
                 'DtilUnknown': 4,
-                'DcattRNA': 5,
-                'DtiltRNA': 5,
+                'DcatrRNA': 5,
+                'DtilrRNA': 5,
+                'DcattRNA': 6,
+                'DtiltRNA': 6,
             }
             # labeling values not bonded by limits
             for row in g.to_dict(orient='index').items():
