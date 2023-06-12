@@ -9,8 +9,8 @@ echo "minimap2 path: $(which minimap2)"
 fasta1=$1      # dtil fasta
 fasta2=$2      # dcat fasta
 threads=$3     # threads
-title1="qDtil_tDcat"
-title2="qDcat_tDtil"
+title1="tDcat_qDtil"
+title2="tDtil_qDcat"
 
 # asm20
 echo "Computing $fasta1 vs $fasta2 with settings asm20"
