@@ -729,9 +729,9 @@ class Repeat:
                                        markersize='15'))
             # lets try to label outlier subclasses in a class
             xvar_q1 = g.groupby(['class', 'Species']
-                            ).quantile(0.25)[xvar]
+                            )[xvar].quantile(0.25)
             xvar_q3 = g.groupby(['class', 'Species']
-                            ).quantile(0.75)[xvar]
+                            )[xvar].quantile(0.75)
             outlier_top_lim = xvar_q3 + 1 * (xvar_q3 - xvar_q1)
             outlier_bot_lim = xvar_q1 - 1 * (xvar_q3 - xvar_q1)
 
