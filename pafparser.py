@@ -334,11 +334,11 @@ if __name__ == "__main__":
 #                         ])
     print(df_mapq, end='\n\n')  ###DEBUG
     # Plot `df_mapq` with matplotlib.
-    df_mapq.plot.box(showmeans=True,
-                     #figsize=(20,10),
-        )
-    plt.xticks(rotation = 30) # Rotates X-Axis Ticks by 30-degrees
-    plt.title('Mapping qualities for individual chromosomes')
+    fig, ax = plt.subplots(figsize=(6.8, 10.5))
+    df_mapq.plot.box(showmeans=True, ax=ax)
+    plt.xticks(rotation = 85) # Rotates X-Axis Ticks by 85-degrees
+    plt.title('Mapping qualities for individual chromosomes'+
+              '\nGreen bar/triangle are median/mean, black circles outliers')
     plt.savefig("mapqual-boxplot.jpg")
 
 
