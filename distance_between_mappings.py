@@ -96,7 +96,7 @@ if __name__ == '__main__':
 
     # header of the table...
     capD = ["Chromosomes", "Min. dist.", "Max. dist.", "Mean dist.",
-              "...by Gsize", "St.dev. dist.", "...by Gsize"]
+              "...by rel. chr size", "St. dev. ali. len.", "...by rel. chr size"]
     tableD = []
 
     capL = ["Chromosomes", "Min. ali. len.", "Max. ali. len.", "Mean ali. len.",
