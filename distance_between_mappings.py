@@ -6,7 +6,7 @@
 # 21 jun 2022  <adria@molevol-OptiPlex-9020>
 
 """Compute the mean distance between .paf mappings.
-A measure of how much interspersed are they. 
+A measure of how much interspersed are they.
 """
 
 import sys, statmaths as sms, pafparser as pf, tabulate
@@ -94,24 +94,13 @@ if __name__ == '__main__':
     differences_list = dict(sorted(differences_list.items()))
     ali_len_list = dict(sorted(ali_len_list.items()))
 
-    # Let us print an informative header.
-    print("# INFO MAPPING INTERDISTANCES\n")
-    print("'Minimum distance' displays the lowest difference between beginning and end \
-of contiguous mappings.")
-    print("'Maximum distance' displays the biggest difference between beginning \
-and end of contiguous mappings.")
-    print("'Mean distance' displays the mean difference between beginning and end \
-of contiguous mappings.")
-    print("'Standard deviation distance' displays the dispersion of the \
-aforementioned variable.\n")
-
     # header of the table...
     capD = ["Chromosomes", "Min. dist.", "Max. dist.", "Mean dist.",
               "...by Gsize", "St.dev. dist.", "...by Gsize"]
     tableD = []
 
-    capL = ["Chromosomes", "Min. ali-len.", "Max. ali-len.", "Mean ali-len.",
-              "...by Gsize", "St.dev. ali-len.", "...by Gsize"]
+    capL = ["Chromosomes", "Min. ali. len.", "Max. ali. len.", "Mean ali. len.",
+              "...by rel. chr size", "St. dev. ali. len.", "...by rel. chr size"]
     tableL = []
 
     for crm, lst in differences_list.items():
@@ -144,26 +133,31 @@ aforementioned variable.\n")
         # reinicia mesures
         sms.reinitialize()
 
-    print("# INTERDISTANCES TABLE\n")
+    print("## Mapping interdistances per chromosome\n")
     print(tabulate.tabulate(tableD, tablefmt='pipe', headers=capD))
+    print( # table footer in markdown format...
+        ": "+  # these footers open with colons as first character
+        "**Min. dist.**: length of the shortest alignment (subsetting by chr). "+
+        "**Max. dist.**: length of the longest alignment (subsetting by "+
+        "chr). "+
+        "**Mean dist.**: mean of alignment lengths (subsetting by chr). "+
+        "**St. dev. dist.**: standard deviation of alignment lengths "+
+        "(subsetting by chr). "+
+        "**By rel. chr size**: variable in previous column (mean or std. dev.) "+
+        "divided by corresponding chr size.")
     print()
-    print("# INFO ALIGNMENT LENGTH\n")
-    print("'Minimum ali-len' displays the lowest length of an alignment.")
-    print("'Maximum ali-len' displays the biggest length of an alignment.")
-    print("'Mean ali-len' displays the mean alignment length.")
-    print("'Standard deviation' displays the dispersion of the \
-aforementioned variable.\n")
-    print("# ALIGNMENT LENGTH TABLE\n")
+    print("## Alignment lengths per chromosome\n")
     print(tabulate.tabulate(tableL, tablefmt='pipe', headers=capL))
-
-
-#        print("Min. dist.:", min(lst))
-#        print("Max. dist.:", max(lst))
-#        for val in lst:
-#            sms.add_measure(val)
-#        print("Mean dist.:", sms.get_mean())
-#        print("...By Gsize:", (sms.get_mean()*100)/lengths[crm],"%")
-#        print("St.dev. dist.:", sms.get_stdeviation())
-#        print("...By Gsize:", (sms.get_stdeviation()*100)/lengths[crm],"%")
+    print( # table footer in markdown format...
+        ": "+  # these footers open with colons as first character
+        "**Min. ali. len.**: length of the shortest alignment (subsetting by chr). "+
+        "**Max. ali. len.**: length of the longest alignment (subsetting by "+
+        "chr). "+
+        "**Mean ali. len.**: mean of alignment lengths (subsetting by chr). "+
+        "**St. dev. ali. len.**: standard deviation of alignment lengths "+
+        "(subsetting by chr). "+
+        "**By rel. chr size**: variable in previous column (mean or std. dev.) "+
+        "divided by corresponding chr size.")
+    print()
 
 
