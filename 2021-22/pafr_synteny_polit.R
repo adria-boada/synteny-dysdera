@@ -2,6 +2,12 @@
 ### PAFR_SYNTENY.R
 ### Creates `circos` and coverage plots from minimap2 data (i.e., alignment.paf).
 
+# Carrega el camí fins als fitxers necessaris i defineix variables:
+# PAF amb alineament:
+args = commandArgs(trailingOnly=TRUE)
+if (length(args) != 1) {
+  stop("Supply a PAF file as the first arg. value")
+}
 
 ## CARREGA DADES, OPCIONS I LLIBRERIES ##
 
@@ -10,9 +16,7 @@
 # crear gràfiques circulars partint de fitxers/data.frames BED-like
   library(circlize)
   
-# Carrega el camí fins als fitxers necessaris i defineix variables:
-# PAF amb alineament:
-  path_to_paf = "Escritorio/Data/Synteny/modified_pafs/filtered_whole_tcat.paf"
+  path_to_paf = args[1]
   
 # Variables per a filtrar el PAF i reduir-ne la mida:
   min_map_qual = 20  # No es mira per sota d'aquesta qualitat de mapatge.
@@ -41,9 +45,63 @@
 
 # Filtrar els aliniaments per adequar el fitxer entrada a les teves necessitats.
 # Excés d'aliniaments petits dificulten la computació i interpretació.
-  aln_circos = subset(raw_aln_circos, mapq >= min_map_qual)  # Elimina poca qualitat de mapeig
+  cat(paste0('Complete/raw amount of rows: ', nrow(raw_aln_circos), '\n'))
+  t = nrow(raw_aln_circos)
+  df_minor_scaffold = raw_aln_circos[
+                                grepl("Scaffold", raw_aln_circos$qname) &
+                                grepl('Scaffold', raw_aln_circos$tname), ]
+  removed.min_scaffold = nrow(df_minor_scaffold)
+  aln_circos = raw_aln_circos[ # sequid names do not (!) contain "Scaffold"
+                              # (at least one of these names is a chromosome)
+                                ! grepl("Scaffold", raw_aln_circos$qname) |
+                                ! grepl('Scaffold', raw_aln_circos$tname), ]
+  cat(paste0('Rows removed because they were in minor scaffolds: ',
+             round((removed.min_scaffold/t)*100, digits=1), ' %\n'))
+  aln_circos = subset(aln_circos, mapq >= min_map_qual)  # Elimina poca qualitat de mapeig
+  removed.mapq = nrow(raw_aln_circos)-nrow(subset(raw_aln_circos, mapq >= min_map_qual))
+  cat(paste0('Rows removed because they were of mapq lower than ',
+             min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %\n'))
   aln_circos = subset(aln_circos, alen > min_align_len)  # Elimina mapatges curts
+  removed.alilen = nrow(raw_aln_circos)-nrow(subset(raw_aln_circos, alen > min_align_len))
+  cat(paste0('Rows removed because their ali. length was lower than ',
+             min_align_len, ': ', round((removed.alilen/t)*100, digits=1), ' %\n'))
   aln_circos = filter_secondary_alignments(aln_circos)   # Elimina mapatges secundaris
+  removed.secali = nrow(raw_aln_circos)-nrow(filter_secondary_alignments(raw_aln_circos))
+  cat(paste0('Rows removed because they were secondary mappings: ',
+             round((removed.secali/t)*100,digits=1), ' %\n'))
+  removed.all = nrow(raw_aln_circos)-nrow(aln_circos)
+  cat(paste0('The combined amount of removed rows is: ',
+             round((removed.all/t)*100,digits=1), ' %\n'))
+
+# Emparella colors i cromosomes al df `aln_circos`
+  colors_correspondencia = data.frame(
+    sequid = c("DtilchrX", "Dtilchr1", "Dtilchr2",
+               "Dtilchr3", "Dtilchr4", "Dtilchr5",
+               "Dtilchr6"),
+    colors = c("#f659a5", "#c5090a", "#ff7f07",
+               "#cabf0a", "#41a62a", "#4fa1ca",
+               "#4f3b97"))
+
+  # DEBUG
+    print(colors_correspondencia)
+  print(aln_circos)
+
+  # inicialitza columna amb colors
+  aln_circos$colors <- NA
+  for (i in 1:nrow(colors_correspondencia)) {
+    color = colors_correspondencia[i, 'colors']
+    sequid = colors_correspondencia[i, 'sequid']
+    # omple la columna de colors
+    aln_circos[aln_circos$qname == sequid, 'colors'] = color
+  }
+
+  #DEBUG
+    print(aln_circos)
+
+# Ordena els aliniaments segons mapq;
+  # d'aquesta manera, els pitjors mapatges quedaràn sotarrats pels millors,
+  # i no al revés.
+  ########
 
 # Crea dos bedlike dataframes amb les columnes dels aliniaments:
 # Es necessita partir el data.frame en dos de nous per fer els links del circos.
