@@ -23,7 +23,7 @@ if (length(args) != 1) {
   # El rang de qualitats de mapatge vira entre zero i seixanta. 
   min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
   
-## PALETA DE COLORS ##
+## PALETA DE COLORS ESCUER--SILVATICA ##
 
   # 8 colors més l'afegit U2. 
   paleta_escuer = c(DsilChrX="#f659a5", DsilChr1="#c5090a", DsilChr2="#ff7f07",
@@ -43,48 +43,96 @@ if (length(args) != 1) {
 # Carrega el mapatge PAF de minimap2:
   raw_aln_circos = read_paf(path_to_paf)
 
+# Etiqueta cromosomes amb 'Q.' i 'T.' al principi
+  raw_aln_circos$tname = paste0('T.', raw_aln_circos$tname)
+  raw_aln_circos$qname = paste0('Q.', raw_aln_circos$qname)
+
 # Filtrar els aliniaments per adequar el fitxer entrada a les teves necessitats.
 # Excés d'aliniaments petits dificulten la computació i interpretació.
+
+  # M'agradaria començar per un filtre un pèl complex;
+  # percentatge de vincles entre cromosomes no homòlegs
+  homologous = nrow(raw_aln_circos[
+      # X versus X
+      (grepl('cat.*X', raw_aln_circos$tname) & grepl('til.*X', raw_aln_circos$qname)) |
+      (grepl('til.*X', raw_aln_circos$tname) & grepl('cat.*X', raw_aln_circos$qname)) |
+      # til7 and til6 vs cat1
+      (grepl('til.*7', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
+      (grepl('til.*6', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
+      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*6', raw_aln_circos$qname)) |
+      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*7', raw_aln_circos$qname)) |
+      # til3 and til5 vs cat2
+      (grepl('til.*3', raw_aln_circos$tname) & grepl('cat.*2', raw_aln_circos$qname)) |
+      (grepl('til.*5', raw_aln_circos$tname) & grepl('cat.*2', raw_aln_circos$qname)) |
+      (grepl('cat.*2', raw_aln_circos$tname) & grepl('til.*5', raw_aln_circos$qname)) |
+      (grepl('cat.*2', raw_aln_circos$tname) & grepl('til.*3', raw_aln_circos$qname)) |
+      # til4 vs cat3
+      (grepl('cat.*3', raw_aln_circos$tname) & grepl('til.*4', raw_aln_circos$qname)) |
+      (grepl('til.*4', raw_aln_circos$tname) & grepl('cat.*3', raw_aln_circos$qname)) |
+      # til 2 vs cat 4
+      (grepl('cat.*4', raw_aln_circos$tname) & grepl('til.*2', raw_aln_circos$qname)) |
+      (grepl('til.*2', raw_aln_circos$tname) & grepl('cat.*4', raw_aln_circos$qname))
+    , ])
+
   cat(paste0('Complete/raw amount of rows: ', nrow(raw_aln_circos), '\n'))
   t = nrow(raw_aln_circos)
+  df_double_minor_scaffold = raw_aln_circos[
+                                grepl("Scaffold|ctg", raw_aln_circos$qname) &
+                                grepl("Scaffold|ctg", raw_aln_circos$tname), ]
+  removed.both_min_scaffold = nrow(df_double_minor_scaffold)
   df_minor_scaffold = raw_aln_circos[
-                                grepl("Scaffold", raw_aln_circos$qname) &
-                                grepl('Scaffold', raw_aln_circos$tname), ]
-  removed.min_scaffold = nrow(df_minor_scaffold)
+                                grepl("Scaffold|ctg", raw_aln_circos$qname) |
+                                grepl("Scaffold|ctg", raw_aln_circos$tname), ]
+  df_single_scaffold = df_minor_scaffold[
+                                grepl('chr', df_minor_scaffold$qname) |
+                                grepl('chr', df_minor_scaffold$tname), ]
+  removed.single_min_scaffold = nrow(df_single_scaffold)
   aln_circos = raw_aln_circos[ # sequid names do not (!) contain "Scaffold"
                               # (at least one of these names is a chromosome)
-                                ! grepl("Scaffold", raw_aln_circos$qname) |
-                                ! grepl('Scaffold', raw_aln_circos$tname), ]
-  cat(paste0('Rows removed because they were in minor scaffolds: ',
-             round((removed.min_scaffold/t)*100, digits=1), ' %\n'))
-  aln_circos = subset(aln_circos, mapq >= min_map_qual)  # Elimina poca qualitat de mapeig
+                                ! grepl("Scaffold|ctg", raw_aln_circos$qname) &
+                                ! grepl("Scaffold|ctg", raw_aln_circos$tname), ]
+  # Elimina poca qualitat de mapeig
+  aln_circos = subset(aln_circos, mapq >= min_map_qual)
+  df_single_scaffold = subset(df_single_scaffold, mapq >= (min_map_qual-5))
   removed.mapq = nrow(raw_aln_circos)-nrow(subset(raw_aln_circos, mapq >= min_map_qual))
-  cat(paste0('Rows removed because they were of mapq lower than ',
-             min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %\n'))
-  aln_circos = subset(aln_circos, alen > min_align_len)  # Elimina mapatges curts
+  # Elimina mapatges curts
+  aln_circos = subset(aln_circos, alen > min_align_len)
+  df_single_scaffold = subset(df_single_scaffold, alen > (min_align_len-3500))
   removed.alilen = nrow(raw_aln_circos)-nrow(subset(raw_aln_circos, alen > min_align_len))
+  # Elimina mapatges secundaris
+  aln_circos = filter_secondary_alignments(aln_circos)
+  removed.secali = nrow(raw_aln_circos)-nrow(filter_secondary_alignments(raw_aln_circos))
+  # Total ajuntant totes les eliminacions... (tenint en compte solapaments)
+  removed.all = nrow(raw_aln_circos)-nrow(aln_circos)
+
+  removed.single_min_scaffold.qualfiltered = nrow(df_single_scaffold)
+
+  # imprimeix valors en pantalla
+  cat(paste0('Rows mapping pairs of homologous/contiguous chromosomes: ',
+             round((homologous/t)*100, digits=1), ' %\n'))
+  cat(paste0('Rows mapping one minor scaffold to another minor scaffold (unused): ',
+             round((removed.both_min_scaffold/t)*100, digits=1), ' %\n'))
+  cat(paste0('Rows mapping one minor scaffold to a main chromosome (unused): ',
+             round((removed.single_min_scaffold/t)*100, digits=1), ' %\n'))
+  cat(paste0('Rows mapping one minor scaffold to a main chromosome WITH HIGH QUAL. (outer track): ',
+             round((removed.single_min_scaffold.qualfiltered/t)*100, digits=1), ' %\n'))
+  cat(paste0('Rows removed because their mapQ. was lower than ',
+             min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %\n'))
   cat(paste0('Rows removed because their ali. length was lower than ',
              min_align_len, ': ', round((removed.alilen/t)*100, digits=1), ' %\n'))
-  aln_circos = filter_secondary_alignments(aln_circos)   # Elimina mapatges secundaris
-  removed.secali = nrow(raw_aln_circos)-nrow(filter_secondary_alignments(raw_aln_circos))
   cat(paste0('Rows removed because they were secondary mappings: ',
              round((removed.secali/t)*100,digits=1), ' %\n'))
-  removed.all = nrow(raw_aln_circos)-nrow(aln_circos)
-  cat(paste0('The combined amount of removed rows is: ',
+  cat(paste0('The combined percentage of original rows that have been removed is: ',
              round((removed.all/t)*100,digits=1), ' %\n'))
 
 # Emparella colors i cromosomes al df `aln_circos`
   colors_correspondencia = data.frame(
     sequid = c("DtilchrX", "Dtilchr1", "Dtilchr2",
                "Dtilchr3", "Dtilchr4", "Dtilchr5",
-               "Dtilchr6"),
+               "Dtilchr6", "Dtilchr7"),
     colors = c("#f659a5", "#c5090a", "#ff7f07",
                "#cabf0a", "#41a62a", "#4fa1ca",
-               "#4f3b97"))
-
-  # DEBUG
-    print(colors_correspondencia)
-  print(aln_circos)
+               "#4f3b97", "#a29a9c"))
 
   # inicialitza columna amb colors
   aln_circos$colors <- NA
@@ -92,118 +140,177 @@ if (length(args) != 1) {
     color = colors_correspondencia[i, 'colors']
     sequid = colors_correspondencia[i, 'sequid']
     # omple la columna de colors
-    aln_circos[aln_circos$qname == sequid, 'colors'] = color
+    aln_circos[
+          grepl(sequid, aln_circos$qname) | # omple fileres on qname == sequid
+          grepl(sequid, aln_circos$tname),  # (or tname)
+      'colors'] = color                     # omple columna 'colors' amb la variable color
   }
-
-  #DEBUG
-    print(aln_circos)
 
 # Ordena els aliniaments segons mapq;
   # d'aquesta manera, els pitjors mapatges quedaràn sotarrats pels millors,
-  # i no al revés.
-  ########
+  # i no al revés. Els millors al final (els últims a ser dibuixats)
+  aln_circos = aln_circos[order(aln_circos$mapq, aln_circos$alen), ]
 
-# Crea dos bedlike dataframes amb les columnes dels aliniaments:
-# Es necessita partir el data.frame en dos de nous per fer els links del circos.
-  query = aln_circos[c("qname", "qstart", "qend", "qlen")]
-  target = aln_circos[c("tname", "tstart", "tend", "tlen")]
+  # snippet of the filtered dataframe # debug
+  cat('\n')
+  #head(as.data.frame(aln_circos[, -24]))
+  cat('\n')
 
-# Crea una llista ordenada de bedlike dataframes; cada objecte de la llista són
-  # els mapatges per un cromosoma de Dsil. D'aquesta manera es podràn pintar
-  # d'un mateix color totes les unions d'un crm. de Dsil. Les línies de les
-  # dues llistes coincideixen (cada una és un mapatge).
-bed_query = c() ; bed_target = c()  # Dos llistes buides
-# Per a cada cromosoma query (qname):
-for (chr in sort(unique(query$qname))) {
-  # Extreu les línies de la query que contenen 'qname==chr'
-  bed_query = c(bed_query, chr = list(query[query$qname == chr,]))
-  # Extreu les línies de la target que contenen 'tname==chr'
-  bed_target = c(bed_target, chr = list(target[query$qname == chr,]))
-}
-# Anomena cada objecte de la llista correctament. 
-names(bed_query) = sort(unique(query$qname))
-names(bed_target) = sort(unique(query$qname))
-# Reordena la llista amb els aliniaments per estètica:
-  # Primer 'X' i després la resta.
-bed_query = c(bed_query[9], bed_query[1:8])
-bed_target = c(bed_target[9], bed_target[1:8])
+# Busca les regions de sequids principals que troben mapatges a scaffolds
+  # minoritaris
+  query_ressaltat = df_single_scaffold[grepl('Scaffold|ctg', df_single_scaffold$tname),
+                      c('qname', 'qstart', 'qend', 'alen', 'mapq')]
+  names(query_ressaltat) = c('sequid', 'start', 'end', 'alen', 'mapq')
+  target_ressaltat = df_single_scaffold[grepl('Scaffold|ctg', df_single_scaffold$qname),
+                      c('tname', 'tstart', 'tend', 'alen', 'mapq')]
+  names(target_ressaltat) = c('sequid', 'start', 'end', 'alen', 'mapq')
+  ressaltat_exterior = rbind(query_ressaltat, target_ressaltat)
+
+  print('## HEAD() DEL DATAFRAME PER A RESSALTAR EXTERIOR ##')
+  head(as.data.frame(ressaltat_exterior))
 
 ## CARREGA ÍNDEX DELS CROMOSOMES ##
 
 # Crea uns indexos que separen el cercle en sectors
 # Cada sector és un cromosoma amb la mida que indica l'index.
 
-# index silvatica dels principals chr
-index_sil_general = data.frame(
-  name = c(unique(query$qname)),
-  start = c(rep(0, length(unique(query$qname)))),
-  end = c(unique(query$qlen))
-)
-# index catalonica dels principals chr
-index_cat_general = data.frame(
-  name = c(unique(target$tname)),
-  start = c(rep(0, length(unique(target$tname)))),
-  end = c(unique(target$tlen))
-)
-# Ordena els cromosomes de l'index numericament per llargada (end). 
-  index_sil_general = index_sil_general[order(-index_sil_general$end), ]
-  index_cat_general = index_cat_general[order(-index_cat_general$end), ]
- 
-# rbind dels dos data.frames:
-dysdera_tracks = rbind(index_cat_general, index_sil_general)
+  # query index (remove qnames labeled as 'Scaffold')
+main_query_chr = aln_circos[! grepl('Scaffold', aln_circos$qname), 'qname']
+main_query_chr = unique(main_query_chr) # unique list of main sequids
+main_target_chr = aln_circos[! grepl('Scaffold', aln_circos$tname), 'tname']
+main_target_chr = unique(main_target_chr) # unique list of main sequids
+
+index_query = data.frame()
+index_target = data.frame()
+
+for (sequid in main_query_chr) {
+  row = data.frame(
+    sequid = sequid,
+    start = 0,
+    end = aln_circos[aln_circos$qname == sequid, 'qlen'][1]
+    )
+  index_query = rbind(index_query, row)
+}
+
+for (sequid in main_target_chr) {
+  row = data.frame(
+    sequid = sequid,
+    start = 0,
+    end = aln_circos[aln_circos$tname == sequid, 'tlen'][1]
+    )
+  index_target = rbind(index_target, row)
+}
+
+index = rbind(index_query, index_target)
+dysdera_tracks = index[order(index$sequid), ]
+# debug
+cat('\n')
+print('## DYSDERA TRACKS ##')
+print(dysdera_tracks)
+cat('\n')
+
+
+### INTENT INVERTIR CROMOSOMES ###
+# Els cromosomes no es troben en l'ordre correcte. Hi ha inicis que troben
+# el seu homòleg al final del cromosoma d'una altra espècie. D'aquesta manera,
+# s'han de capgirar manualment si es disposa de grans blocs colinears que
+# ho indiquin...
+inverted_sequids = c(
+  'DtilchrX',
+  'Dtilchr3',
+  'Dcatchr1')
+
+reverse_coord_windows <- function(dfw, inverted_sequids) {
+  # reverse start and end columns of dfw only for selected inverted_sequids
+  dfw.rev = dfw
+  for (s in inverted_sequids) {
+    # range of the selected (s) chromosome which will be inverted
+    xrange = as.double(dysdera_tracks[
+                       grepl(s, dysdera_tracks$sequid),
+                       c('start', 'end')])
+    # emmascara el df que hauria d'invertir-se
+    Qmbool = grepl(s, dfw$qname)
+    Tmbool = grepl(s, dfw$tname)
+    dfw.rev[Qmbool, 'qstart'] = xrange[2] - dfw[Qmbool, 'qend'] + xrange[1]
+    dfw.rev[Qmbool, 'qend'] = xrange[2] - dfw[Qmbool, 'qstart'] + xrange[1]
+    dfw.rev[Tmbool, 'tstart'] = xrange[2] - dfw[Tmbool, 'tend'] + xrange[1]
+    dfw.rev[Tmbool, 'tend'] = xrange[2] - dfw[Tmbool, 'tstart'] + xrange[1]
+  }
+  return(dfw.rev)}
+
+aln_circos = reverse_coord_windows(aln_circos, inverted_sequids)
+
 
 ## GRAFICAR CIRCOS DEL PAF INPUT ##
 
 circos.clear()  # Per si de cas, s'eliminen les últimes opcions de circos abans de res...
  # (en cas de que es corri l'script interactivament i més d'una vegada)
 
-# Separació dels tracks (gaps entre chr): dos entre cromosomes de la mateixa
-# espècie (repetit 4 i 7 vegades) i 6 entre genomes de diferents espècies.
-circos.par("gap.degree" = c(rep(2, 4), 6, rep(2,7), 4, 6))
+# Separació dels tracks (gaps entre chr): 2 "unitats" entre cromosomes de la
+# mateixa espècie i 6 "unitats" entre genomes de diferents espècies.
+query_sequids = length(grep('Q.', dysdera_tracks$sequid)) -1
+target_sequids = length(grep('T.', dysdera_tracks$sequid)) -1
+circos.par(gap.degree = c(rep(2, query_sequids), 6,
+                            rep(2, target_sequids), 6),
+           # ajunta primera i segona via/tracks
+           track.margin = c(0,0)
+)
 
 # Inicialitza amb les dades de Dysdera.
-circos.genomicInitialize(dysdera_tracks, plotType = NULL)
+circos.genomicInitialize(dysdera_tracks,
+                         plotType = NULL)
 
 # Complexa funció per fer uns tracks generals de chr:
-circos.track(ylim = c(0,1), panel.fun = function(x, y) {
-  circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
-             gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
-  # Afegeix axis genòmics a sobre del track:
-  circos.genomicAxis(h = "top")
-}, 
-track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
-
-# Crea dues cintes, vermella i blava, per a diferenciar les dues espècies:
-highlight.chromosome(unique(query$qname),
-                     col = rgb(1,0,0,.7))
-highlight.chromosome(unique(target$tname),
-                     col = rgb(0,0,1,.7))
+circos.track(dysdera_tracks$sequid,
+  ylim = c(0,1), track.height = mm_h(1),
+  cell.padding = c(0, 0, 0, 0), #bg.border = NA,
+  panel.fun = function(x, y, ...) {
+    # shorthands for a few sector properties
+    cllcrm = CELL_META$sector.index
+    xlim   = CELL_META$xlim
+    ylim   = CELL_META$ylim
+    # text que etiqueta als cromosomes...
+    circos.text(CELL_META$xcenter, CELL_META$ylim[2] + mm_y(5), 
+             gsub(".*chr", "", cllcrm), cex = 1, niceFacing = TRUE)
+    # Afegeix axis genòmics a sobre del track:
+    circos.genomicAxis(h = "top")
+    # rectangles que assenyalen mapatges entre chr-scaff.
+    r = ressaltat_exterior[ressaltat_exterior$sequid == cllcrm, ]
+    circos.genomicPoints(r[, c('start', 'end')], 0.5,
+              col='red', pch=16, cex=0.35, #border = NA
+    )
+})
 
 # Fés els requadres buits de sota els cromosomes.
 circos.track(ylim = c(0, 1), track.height = .1)
 
-# Posa una paleta de colors sobre els cromosomes de silvatica:
-for (fx in names(paleta_escuer)) {
-  highlight.chromosome(fx, col = paleta_escuer[[fx]], track.index = 2)
+# Posa una paleta de colors sobre els cromosomes seleccionats
+# manualment dins el data.frame `colors_correspondencia`...
+for (seq in dysdera_tracks$sequid) {
+  # elimina etiqueta Q o T
+  s = substr(seq, start=3, stop=nchar(seq))
+  color = colors_correspondencia[
+                       grepl(s, colors_correspondencia$sequid),
+                       'colors']
+  highlight.chromosome(seq, col=color, track.index = 2
+  )
 }
 
 # Afegeix transparència a la palette pels links:
 ### [NO FUNCIONA per excés de dades a plotejar.]
 ### Es solapen tants objectes semi-transparents que el color
 ### final acaba sent igualment sòlid.
-paleta_escuer_transp = add_transparency(col = paleta_escuer, transparency = 0.5)
+### paleta_escuer_transp = add_transparency(col = paleta_escuer, transparency = 0.5)
 
-# Links entre les regions aliniades:
-for (n in 1:length(bed_query)) {
-  circos.genomicLink(bed_target[n], bed_query[n],
-                     col = paleta_escuer_transp[n])
-}
+circos.genomicLink(aln_circos[, c('qname', 'qstart', 'qend')],
+                   aln_circos[, c('tname', 'tstart', 'tend')],
+                   col = aln_circos[, 'colors'])
 
 circos.clear()
 
 # Text que marca quina espècie és quina: 
 text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
-text(0.9, 0.9, "D. silvatica\ngenome", col = "red", cex = 1.1)
+text(0.9, 0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
