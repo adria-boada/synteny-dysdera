@@ -19,9 +19,9 @@ if (length(args) != 1) {
   path_to_paf = args[1]
   
 # Variables per a filtrar el PAF i reduir-ne la mida:
-  min_map_qual = 20  # No es mira per sota d'aquesta qualitat de mapatge.
+  min_map_qual = 40  # No es mira per sota d'aquesta qualitat de mapatge.
   # El rang de qualitats de mapatge vira entre zero i seixanta. 
-  min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
+  min_align_len = 3e3  # No es mira alineaments que siguin més petits de 6 kb.
   
 ## PALETA DE COLORS ESCUER--SILVATICA ##
 
@@ -74,7 +74,6 @@ if (length(args) != 1) {
       (grepl('til.*2', raw_aln_circos$tname) & grepl('cat.*4', raw_aln_circos$qname))
     , ])
 
-  cat(paste0('Complete/raw amount of rows: ', nrow(raw_aln_circos), '\n'))
   t = nrow(raw_aln_circos)
   df_double_minor_scaffold = raw_aln_circos[
                                 grepl("Scaffold|ctg", raw_aln_circos$qname) &
@@ -108,6 +107,7 @@ if (length(args) != 1) {
   removed.single_min_scaffold.qualfiltered = nrow(df_single_scaffold)
 
   # imprimeix valors en pantalla
+  cat(paste0('Complete/raw amount of rows: ', nrow(raw_aln_circos), '\n'))
   cat(paste0('Rows mapping pairs of homologous/contiguous chromosomes: ',
              round((homologous/t)*100, digits=1), ' %\n'))
   cat(paste0('Rows mapping one minor scaffold to another minor scaffold (unused): ',
@@ -201,9 +201,10 @@ for (sequid in main_target_chr) {
   index_target = rbind(index_target, row)
 }
 
-index = rbind(index_query, index_target)
-dysdera_tracks = index[order(index$sequid), ]
-# debug
+index_query = index_query[order(index_query$end), ]
+index_target = index_target[order(index_target$end), ]
+dysdera_tracks = rbind(index_query, index_target)
+
 cat('\n')
 print('## DYSDERA TRACKS ##')
 print(dysdera_tracks)
@@ -241,6 +242,42 @@ reverse_coord_windows <- function(dfw, inverted_sequids) {
 aln_circos = reverse_coord_windows(aln_circos, inverted_sequids)
 
 
+## INFORMACIÓ RESUM ##
+
+########################## Obre output pdf
+pdf(paste0('genplot_', args[1], '.pdf'),
+    width=9)
+##########################
+
+species_query = dysdera_tracks[grepl('^Q', dysdera_tracks$sequid), 'sequid'][1]
+species_query = substr(species_query, start=3, stop=6)
+species_target = dysdera_tracks[grepl('^T', dysdera_tracks$sequid), 'sequid'][1]
+species_target = substr(species_target, start=3, stop=6)
+
+plot.new()
+legend('center', title='General summary information', cex=0.9,
+  legend = c(
+  paste0('Query: ', species_query, '; Target: ', species_target, '; Total rows: ', nrow(raw_aln_circos)),
+  paste0('Rows mapping pairs of homologous chromosomes: ',
+             round((homologous/t)*100, digits=1), ' %'),
+  paste0('Rows mapping one minor scaffold to another\nminor scaffold (discarded from plot): ',
+             round((removed.both_min_scaffold/t)*100, digits=1), ' %'),
+  paste0('Rows mapping one minor scaffold to a main\nchromosome (discarded from plot): ',
+             round((removed.single_min_scaffold/t)*100, digits=1), ' %'),
+  paste0('Rows mapping one minor scaffold to a main chromosome\nWITH HIGH QUAL.',
+         ' (outmost red/white track,\nbeside coordinate axis): ',
+             round((removed.single_min_scaffold.qualfiltered/t)*100, digits=1), ' %'),
+  paste0('Rows removed because their mapQ. was lower than ',
+             min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %'),
+  paste0('Rows removed because their ali. length was lower than ',
+             min_align_len, ': ', round((removed.alilen/t)*100, digits=1), ' %'),
+  paste0('Rows removed because they were secondary mappings: ',
+             round((removed.secali/t)*100,digits=1), ' %\n'),
+  paste0('The combined percentage of original rows\nthat have been removed is: ',
+             round((removed.all/t)*100,digits=1), ' %')
+))
+
+
 ## GRAFICAR CIRCOS DEL PAF INPUT ##
 
 circos.clear()  # Per si de cas, s'eliminen les últimes opcions de circos abans de res...
@@ -253,7 +290,7 @@ target_sequids = length(grep('T.', dysdera_tracks$sequid)) -1
 circos.par(gap.degree = c(rep(2, query_sequids), 6,
                             rep(2, target_sequids), 6),
            # ajunta primera i segona via/tracks
-           track.margin = c(0,0)
+           track.margin = c(mm_h(1), mm_h(1))
 )
 
 # Inicialitza amb les dades de Dysdera.
@@ -306,11 +343,18 @@ circos.genomicLink(aln_circos[, c('qname', 'qstart', 'qend')],
                    aln_circos[, c('tname', 'tstart', 'tend')],
                    col = aln_circos[, 'colors'])
 
-circos.clear()
+# Text que marca la posició de les dues espècies: 
+  # Si tilosensis és query, situar el seu nom a la part inferior dreta
+  if (any(grepl('^Q.*til', dysdera_tracks$sequid))) {
+    text(-0.85, 0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
+    text(0.9, -0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
+  # Si tilosensis és target, situar el seu nom a la part superior dreta
+  } else if (any(grepl('^T.*til', dysdera_tracks$sequid))) {
+    text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
+    text(0.9, 0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
+}
 
-# Text que marca quina espècie és quina: 
-text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
-text(0.9, 0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
+circos.clear()
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -348,7 +392,7 @@ for (link in 1:length(bed_query)){
                 gsub(".*Chr", "", CELL_META$sector.index), cex = 1, niceFacing = TRUE)
     # Afageix axis genòmics a sobre del track [INHABILITAT?]:
     circos.genomicAxis(h = "top")
-  }, track.height = mm_h(1), cell.padding = c(0, 0, 0, 0), bg.border = NA)
+  }, track.height = mm_h(1), cell.padding = c(1, 1, 1, 1), bg.border = NA)
   
   # Crea dues cintes, vermella i blava, per a diferenciar les dues espècies:
   highlight.chromosome(unique(query$qname),
