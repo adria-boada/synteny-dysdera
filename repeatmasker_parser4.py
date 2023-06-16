@@ -669,7 +669,7 @@ class Repeat:
         df = self.df_input_table.loc[:]
         # rename all scaffolds, so they share a single name; simply, "Scaffold"
         # (instead of scaffold_1, scaffold_2, etc.)
-        df.loc[df['sequid'].str.contains('Scaffold'), 'sequid'] = "Scaffold"
+        df.loc[df['sequid'].str.contains('Scaffold|ctg'), 'sequid'] = "Scaffold"
         # groupby species, sequid and class...
         df_summ_per_seq = self.df_input_table.groupby(['Species', 'sequid', 'class'])['replen'
                                               ].agg(['sum','mean','count']
