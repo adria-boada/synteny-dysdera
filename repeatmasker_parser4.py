@@ -1,4 +1,4 @@
-##! /usr/bin/env python3
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # repeatmasker_parser4.py
@@ -11,8 +11,8 @@ Let's parse from default output.
 All changes ought to be done by pandas, temporally...
 The input RM.out was modified as little as possible.
 
-However, some changes are inevitable. With `awk`:
-awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
+However, some changes are inevitable. With awk:
+# awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
 There are rows with an asterisk as 16th field, and rows with only 15 fields.
 Make sure all rows are of the same length (16 fields for all)
 
@@ -821,20 +821,16 @@ class Repeat:
             outlier_bot_lim = xvar_q1 - 1 * (xvar_q3 - xvar_q1)
 
             categorical_pos = {
-                'Dcat*Low_complexity*': 0,
-                'Dtil*Low_complexity*': 0,
-                'DcatDNA': 1,
-                'DtilDNA': 1,
+                'DcatDNA': 0,
+                'DtilDNA': 0,
+                'DcatOther': 1,
+                'DtilOther': 1,
                 'DcatRetrotransposon': 2,
                 'DtilRetrotransposon': 2,
                 'DcatTandem_repeat': 3,
                 'DtilTandem_repeat': 3,
                 'DcatUnclassified': 4,
                 'DtilUnclassified': 4,
-                'DcatrRNA': 5,
-                'DtilrRNA': 5,
-                'DcattRNA': 6,
-                'DtiltRNA': 6,
             }
             # labeling values not bonded by limits
             for row in g.to_dict(orient='index').items():
