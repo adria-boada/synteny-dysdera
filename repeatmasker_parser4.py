@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+##! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # repeatmasker_parser4.py
@@ -167,33 +167,33 @@ class Repeat:
         df.loc[
             df["default_repclass"]=='__unknown',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Unknown', 'NA', 'NA', 'NA')
+        ] = ('Unclassified', 'NA', 'NA', 'NA')
 
         # "ENZYMATIC" RNAs
         df.loc[
             df["default_repclass"]=='tRNA',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('tRNA', 'NA', 'NA', 'NA')
+        ] = ('Other', 'tRNA', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='rRNA',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('rRNA', 'NA', 'NA', 'NA')
+        ] = ('Other', 'rRNA', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='srpRNA',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('srpRNA', 'NA', 'NA', 'NA')
+        ] = ('Other', 'srpRNA', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='snRNA',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('snRNA', 'NA', 'NA', 'NA')
+        ] = ('Other', 'snRNA', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='scRNA',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('scRNA', 'NA', 'NA', 'NA')
+        ] = ('Other', 'scRNA', 'NA', 'NA')
 
         # GENERIC REPETITIVE ELEMENTS
         df.loc[
@@ -234,7 +234,7 @@ class Repeat:
         df.loc[
             df["default_repclass"].str.contains('Low_complexity'),
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('*Low_complexity*', 'Low_complexity', 'NA', 'NA')
+        ] = ('Other', 'Low_complexity', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"].str.contains('Other'),
@@ -609,23 +609,106 @@ class Repeat:
                         'superfam'])['replen'].agg([
                         'sum', 'mean', 'count',]).reset_index()
         g = g.rename(columns={
-            'sum': 'cum_repclass_len',
-            'mean': 'avg_repclass_len',
+            'sum': 'cumulative_bp_len',
+            'mean': 'avgele_bp_len',
             'count': 'num_elements'})
 
         # compute proportion of genome occupancy for all classes,
         # for a given species
         for sp in gensizes_dict.keys():
-            g.loc[g['Species'] == sp, 'genom_occup'] = (
-                g.loc[g['Species'] == sp, 'cum_repclass_len'] /
+            g.loc[g['Species'] == sp, 'genome_occupancy'] = (
+                g.loc[g['Species'] == sp, 'cumulative_bp_len'] /
                 int(gensizes_dict[sp])) * 100 # percent
 
         # compute proportion of repetitive fraction for all classes,
         # given a species
         for sp in g['Species'].unique():
-            g.loc[g['Species'] == sp, 'repeat_frac'] = (
-                g.loc[g['Species'] == sp, 'cum_repclass_len'] /
-                g.loc[g['Species'] == sp, 'cum_repclass_len'].sum()) * 100
+            g.loc[g['Species'] == sp, 'relative_repeat_fraction'] = (
+                g.loc[g['Species'] == sp, 'cumulative_bp_len'] /
+                g.loc[g['Species'] == sp, 'cumulative_bp_len'].sum()) * 100
+
+        # summarize `df_groupby_summary` (bin superfamilies into classes)
+        # reduces information even further than `g`/`df_groupby_summary`
+        df_compressed_summary = df.groupby(['Species', 'class'])['replen'
+                                              ].agg(['sum','mean','count']
+                                                  ).reset_index()
+        total = df.groupby(['Species'])['replen'
+                                              ].agg(['sum','mean','count']
+                                                  ).reset_index()
+        total['class'] = 'Total'
+        df_compressed_summary = pd.concat([df_compressed_summary, total])
+        df_compressed_summary = df_compressed_summary.rename(columns={
+            'sum': 'cumulative_bp_len',
+            'mean': 'avgele_bp_len',
+            'count': 'num_elements'})
+
+        # Compute proportions for the last df, too...
+        for sp in gensizes_dict.keys():
+            df_compressed_summary.loc[
+                df_compressed_summary['Species'] == sp, 'genome_occupancy'] = (
+                df_compressed_summary.loc[
+                    df_compressed_summary['Species'] == sp, 'cumulative_bp_len'] /
+                int(gensizes_dict[sp])
+                ) * 100 # percent
+        for sp in df_compressed_summary['Species'].unique():
+            # total value of repeated bps:
+            tot_bp = int(df_compressed_summary.loc[
+                (df_compressed_summary['Species'] == sp) &
+                (df_compressed_summary['class'] == 'Total'),
+                'cumulative_bp_len'])
+            df_compressed_summary.loc[
+                df_compressed_summary['Species'] == sp, 'relative_repeat_fraction'] = (
+                    df_compressed_summary.loc[
+                        df_compressed_summary['Species'] == sp, 'cumulative_bp_len'] /
+                    tot_bp) * 100
+
+        # hauria de fer una funció per agrupar, però qui té temps per funcionar?
+        # Broaden `df_compressed_summary` scope to introduce content per chr.
+
+        # subset all repeats in chrs (and minor sequids)
+        df = self.df_input_table.loc[:]
+        # rename all scaffolds, so they share a single name; simply, "Scaffold"
+        # (instead of scaffold_1, scaffold_2, etc.)
+        df.loc[df['sequid'].str.contains('Scaffold'), 'sequid'] = "Scaffold"
+        # groupby species, sequid and class...
+        df_summ_per_seq = self.df_input_table.groupby(['Species', 'sequid', 'class'])['replen'
+                                              ].agg(['sum','mean','count']
+                                                  ).reset_index()
+        total = df.groupby(['Species', 'sequid'])['replen'
+                                              ].agg(['sum','mean','count']
+                                                  ).reset_index()
+        total['class'] = 'Total'
+        df_summ_per_seq = pd.concat([df_summ_per_seq, total])
+        df_summ_per_seq = df_summ_per_seq.rename(columns={
+            'sum': 'cumulative_bp_len',
+            'mean': 'avgele_bp_len',
+            'count': 'num_elements'})
+
+        # Compute proportions for the last df, too...
+        for sp in gensizes_dict.keys():
+            msp = df_summ_per_seq['Species']==sp
+            for sequid in df_summ_per_seq.loc[msp,
+                                              'sequid'].unique():
+                msq = df_summ_per_seq['sequid']==sequid
+                df_summ_per_seq.loc[(msp) & (msq), 'genome_occupancy'] = (
+                    df_summ_per_seq.loc[(msp) & (msq), 'cumulative_bp_len'] /
+                int(gensizes_dict[sp])
+                ) * 100 # percent
+        for sp in gensizes_dict.keys():
+            msp = df_summ_per_seq['Species']==sp
+            for sequid in df_summ_per_seq.loc[msp,
+                                              'sequid'].unique():
+                msq = df_summ_per_seq['sequid']==sequid
+                tot_bp = int(df_summ_per_seq.loc[
+                    (msq) & (msp) &
+                    (df_summ_per_seq['class'] == 'Total'),
+                    'cumulative_bp_len'])
+                df_summ_per_seq.loc[
+                    (msq) & (msp),
+                    'relative_repeat_fraction'] = (
+                df_summ_per_seq.loc[
+                    (msq) & (msp),
+                    'cumulative_bp_len'] / tot_bp) * 100
 
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_colwidth', None)
@@ -633,6 +716,8 @@ class Repeat:
         # print df in markdown format (requires tabulate package)
         print(g.round(decimals=2).to_markdown(None))
         self.df_groupby_summary = g
+        self.df_compressed_summary = df_compressed_summary.reset_index(drop=True)
+        self.df_summ_per_seq = df_summ_per_seq.reset_index(drop=True)
 
     # this is a long __init__ function...
 
@@ -711,16 +796,16 @@ class Repeat:
         """
         g  = self.df_groupby_summary
         fig_titles = {
-            'avg_repclass_len': 'Average repeat class length',
+            'avgele_bp_len': 'Average repeat class length',
             'num_elements': 'Number of elements of repeat class',
-            'genom_occup': 'Genome occupancy for repeat class'
+            'genome_occupancy': 'Genome occupancy for repeat class'
         }
         fig_xlabel = {
-            'avg_repclass_len': 'basepairs',
+            'avgele_bp_len': 'basepairs',
             'num_elements': '#amount eles',
-            'genom_occup': '% occupancy'
+            'genome_occupancy': '% occupancy'
         }
-        for xvar in ['avg_repclass_len', 'num_elements', 'genom_occup']:
+        for xvar in ['avgele_bp_len', 'num_elements', 'genome_occupancy']:
             sns.boxplot(data=g, x=xvar, y='class',
                         hue='Species', showmeans='True',
                         meanprops=dict(color='green',
@@ -744,8 +829,8 @@ class Repeat:
                 'DtilRetrotransposon': 2,
                 'DcatTandem_repeat': 3,
                 'DtilTandem_repeat': 3,
-                'DcatUnknown': 4,
-                'DtilUnknown': 4,
+                'DcatUnclassified': 4,
+                'DtilUnclassified': 4,
                 'DcatrRNA': 5,
                 'DtilrRNA': 5,
                 'DcattRNA': 6,
@@ -796,11 +881,18 @@ if __name__ == '__main__':
     # check wheather classification is done correctly
     # store reclassification in a TSV file
     repeats.check_classification(
-        ).to_csv('repeat_classes_reclassification.tsv',
+        ).round(decimals=2).to_csv('repeat_reclassification.tsv',
         sep='\t', na_rep='NA',)
     # moreover, store summary df as TSV
-    repeats.df_groupby_summary.to_csv(
-        'repeat_summary.tsv', sep='\t', na_rep='NA')
+    repeats.df_groupby_summary.round(decimals=2).to_csv(
+        'repeat_table_superfamilies.tsv', sep='\t', na_rep='NA')
+    # store dfs that further summarize information;
+    # more concisely:
+    repeats.df_compressed_summary.round(decimals=2).to_csv(
+        'repeat_table_classes.tsv', sep='\t', na_rep='NA')
+    # per sequid/chromosomes:
+    repeats.df_summ_per_seq.round(decimals=2).to_csv(
+        'repeat_table_per_sequid.tsv', sep='\t', na_rep='NA')
     # create boxplots of whole df and summary df
     repeats.boxplot_entrance()        # whole
     repeats.boxplot_genome_content()  # summary
