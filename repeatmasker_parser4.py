@@ -78,9 +78,11 @@ class Repeat:
         file_list: "List of file-paths to a table.out given by RepeatMasker",
         species_names: "List of species names of each file-path, "+
             "in the same order (in order to pair file and sp.name)",
-        gensizes_dict: "Dict with gensize value for species in species_names"):
+        gensizes_dict: "Dict with gensize value for species in species_names",
+        seqsizes_dict: "Dict with sequid size value for all sequids in file"):
         """
         """
+        self.seqsizes_dict = seqsizes_dict
         # try to open the file (make sure provided path is correct)
         for file in file_list:
             try:
@@ -667,9 +669,12 @@ class Repeat:
 
         # subset all repeats in chrs (and minor sequids)
         df = self.df_input_table.loc[:]
-        # rename all scaffolds, so they share a single name; simply, "Scaffold"
+        # rename all scaffolds, so they share a single name; simply,
+        # species + "_Scaffold"
         # (instead of scaffold_1, scaffold_2, etc.)
-        df.loc[df['sequid'].str.contains('Scaffold|ctg'), 'sequid'] = "Scaffold"
+        for sp in df['Species'].unique():
+            df.loc[(df['sequid'].str.contains('Scaffold|ctg')) &
+                   (df['Species']==sp), 'sequid'] = sp+"_Scaffold"
         # groupby species, sequid and class...
         df_summ_per_seq = self.df_input_table.groupby(['Species', 'sequid', 'class'])['replen'
                                               ].agg(['sum','mean','count']
@@ -753,6 +758,137 @@ class Repeat:
 
         return df_new_classes
 
+    def overlapping_summary(self):
+        """
+        Many repetitive elements are overlapping between themselves.
+
+        This function tries to compute overlapping between REs of the same
+        class (overlapping between DNA, Retrotransposon, etc.)
+
+        Overlapping between different classes is omitted.
+        """
+        # try to return the computed df
+        try:
+            return self.df_overlapping_summary
+        except:
+            pass
+        # if it is the first time the function is called, compute df...
+
+        df = self.df_input_table
+        df_out = pd.DataFrame(columns=[
+            'Species', 'sequid', 'class', 'cumulative_bp_len'])
+
+        for species in self.df_summ_per_seq['Species'].unique():
+            for sequid in self.df_summ_per_seq['sequid'].unique():
+                for repclass in self.df_summ_per_seq['class'].unique()[:-1]:
+                    # get the list of intervals (begin, end)
+                    d = df.loc[
+                        (df['Species']==species) &
+                        (df['sequid']==sequid) &
+                        (df['class']==repclass), ]
+                    intervals = []
+                    for row in d.iterrows():
+                        intervals.append([row[1]['begin'], row[1]['end']])
+
+                    # Create a point-list from an interval-list
+                    # from [begin, end], [begin, end], etc.
+                    # to [coord, begin, 1], [coord, end, 1], [coord, begin, 2], etc.
+                    point_list = []
+
+                    for i in range(0, len(intervals)):
+                        # Left points labeled '0'
+                        point_list += [ [intervals[i][0], 0, i] ]
+                        # Right points labeled '1'
+                        point_list += [ [intervals[i][1], 1, i] ]
+
+                    # sort point list by position (by first value in sublists)
+                    point_list.sort()
+
+                    # Init algorithm variables
+                    currentOpen = -1
+                    added = False
+                    answer = []
+
+                    # for each point in point list:
+                    for i in range(0, len(point_list)):
+
+                        # If the loop landed on a left point (0)
+                        # opens an interval
+                        if point_list[i][1] == 0:
+
+                            # if there is no interval opened:
+                            if currentOpen == -1:
+                                # enters interval 'i'
+                                currentOpen = point_list[i][2]
+                                interval_begin = point_list[i][0]
+
+                            # else, there already was an open interval:
+                            else:
+                                # index the new interval which is overlapping
+                                index = point_list[i][2]
+                                # Check which of the couple of overlapping
+                                # intervals has the longest tail/end and would
+                                # overlap with most intervals...
+                                if (intervals[currentOpen][1] < intervals[index][1]):
+                                    currentOpen = index
+
+                        # If the loop landed on a right point (1)
+                        # closes an interval
+                        # moreover, it has to be the right point of the
+                        # currently open interval 'i'
+                        elif point_list[i][2] == currentOpen:
+                            # Close this interval
+                            currentOpen = -1
+                            answer.append([interval_begin, point_list[i][0]])
+
+                    # Once you have the non-overlapping intervals, compute
+                    # cumulative basepair length for species, sequid, repclass.
+                    cumulative_bp_len = 0
+                    for i in answer:
+                        cumulative_bp_len += abs(i[1] - i[0]) + 1
+                    df_out = df_out.append({
+                        'Species': species,
+                        'sequid': sequid,
+                        'class': repclass,
+                        'cumulative_bp_len': cumulative_bp_len},
+                        ignore_index=True)
+
+                # compute sum of basepair per sequid, per chr
+                sum_bp = df_out.loc[(df_out['Species']==species) &
+                                    (df_out['sequid']==sequid),
+                                    'cumulative_bp_len'].sum()
+                df_out = df_out.append({
+                    'Species': species,
+                    'sequid': sequid,
+                    'class': 'Total',
+                    'cumulative_bp_len': sum_bp},
+                    ignore_index=True)
+
+        # correct % sequid occupancy's dtype
+        df_out = df_out.astype({'cumulative_bp_len': 'float64'})
+
+        # Complement cumulative_bp_len with other data
+        # (from other tables)
+        # avg ele bp len is the same as summ per seq dataframe;
+        df_out['avgele_bp_len'] = self.df_summ_per_seq['avgele_bp_len']
+        # num of elements is also identical;
+        df_out['num_elements'] = self.df_summ_per_seq['num_elements']
+        # compute non-overlapping chromosomal occupancy
+        for sp in df_out['Species'].unique():
+            msp = df_out['Species']==sp
+            for sequid in self.seqsizes_dict.keys():
+                msq = df_out['sequid']==sequid
+                df_out.loc[
+                    (msq) & (msp),
+                    'sequid_occupancy'] = (
+                df_out.loc[
+                    (msq) & (msp),
+                    'cumulative_bp_len'] /
+                int(self.seqsizes_dict[sequid])) * 100
+
+        self.df_overlapping_summary = df_out
+        return df_out
+
     def boxplot_entrance(self):
         """
         Draw boxplots of dataframe by
@@ -820,6 +956,8 @@ class Repeat:
             outlier_top_lim = xvar_q3 + 1 * (xvar_q3 - xvar_q1)
             outlier_bot_lim = xvar_q1 - 1 * (xvar_q3 - xvar_q1)
 
+            # it's hard to place outlier labels... pair species-repclass with
+            # track (0, 1, etc) in boxplot.
             categorical_pos = {
                 'DcatDNA': 0,
                 'DtilDNA': 0,
@@ -873,7 +1011,24 @@ if __name__ == '__main__':
     repeats = Repeat(files, species,
                      gensizes_dict=dict(
                          Dcat=3279770110,
-                         Dtil=1550000000))
+                         Dtil=1549768629),
+                     seqsizes_dict=dict(
+                        Dcatchr1=827927493,
+                        Dcatchr2=604492468,
+                        Dcatchr3=431906129,
+                        Dcatchr4=421735357,
+                        DcatchrX=662930524,
+                        Dcat_Scaffold=330778139,
+                        Dtilchr1=210826211,
+                        Dtilchr2=210901293,
+                        Dtilchr3=205634564,
+                        Dtilchr4=158554970,
+                        Dtilchr5=152324531,
+                        Dtilchr6=125744329,
+                        DtilchrX=434793700,
+                        Dtil_Scaffold=50989031,
+                        ))
+
     # check wheather classification is done correctly
     # store reclassification in a TSV file
     repeats.check_classification(
@@ -889,6 +1044,9 @@ if __name__ == '__main__':
     # per sequid/chromosomes:
     repeats.df_summ_per_seq.round(decimals=2).to_csv(
         'repeat_table_per_sequid.tsv', sep='\t', na_rep='NA')
+    # remove overlapping sequences:
+    repeats.overlapping_summary().round(decimals=3).to_csv(
+        'repeat_table_nonoverlap.tsv', sep='\t', na_rep='NA')
     # create boxplots of whole df and summary df
     repeats.boxplot_entrance()        # whole
     repeats.boxplot_genome_content()  # summary

@@ -93,7 +93,7 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
     [ [position, Left(0)/Right(1), Interval_Index] ]
 
     """
-    
+
     # Create point_list from interval_list:
     point_list = []
 
@@ -102,7 +102,7 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
         point_list += [ [interval_list[i][0], 0, i] ]
         # Right point == 1.
         point_list += [ [interval_list[i][1], 1, i] ]
-	
+
     # Sort the list by position (first val in sublists):
     point_list.sort()
 
@@ -110,26 +110,26 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
     currentOpen = -1
     added = False
     answer = []
-  
+
     # for each point in the point_list:
     for i in range(0, len(point_list)):
-  
+
         # Si el punt actual és 'Left; opens an interval'
         if point_list[i][1] == 0:
-   
+
             # Si no hi ha cap interval actualment obert:
             if currentOpen == -1:
                 # 'Entra' a l'interval 'i'.
                 currentOpen = point_list[i][2]
                 added = False
-    
+
             # Si es trobava dins un interval anterior:
             else:
                 # Index del nou interval:
                 index = point_list[i][2]
                 # Aquest forma part de la resposta (intervals solapats).
                 answer += [index]
-    
+
                 # Si l'interval currentOpen no ha sigut encara afegit:
                 if (not added):
                     # Fes-ho:
@@ -142,7 +142,7 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
                     if (interval_list[currentOpen][1] < interval_list[index][1]):
                         currentOpen = index
                         added = True
-    
+
         # Si troba un punt que és 'Right'; que tanca interval:
         else:
             # I és el punt esquerra de l'interval actual:
