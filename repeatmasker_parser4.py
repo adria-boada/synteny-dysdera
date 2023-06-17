@@ -850,23 +850,23 @@ class Repeat:
                     cumulative_bp_len = 0
                     for i in answer:
                         cumulative_bp_len += abs(i[1] - i[0]) + 1
-                    df_out = df_out.append({
-                        'Species': species,
-                        'sequid': sequid,
-                        'class': repclass,
-                        'cumulative_bp_len': cumulative_bp_len},
-                        ignore_index=True)
+                    new_rows = pd.DataFrame({
+                        'Species': [species],
+                        'sequid': [sequid],
+                        'class': [repclass],
+                        'cumulative_bp_len': [int(cumulative_bp_len)]})
+                    df_out = pd.concat([df_out, new_rows])
 
                 # compute sum of basepair per sequid, per chr
                 sum_bp = df_out.loc[(df_out['Species']==species) &
                                     (df_out['sequid']==sequid),
                                     'cumulative_bp_len'].sum()
-                df_out = df_out.append({
-                    'Species': species,
-                    'sequid': sequid,
-                    'class': 'Total',
-                    'cumulative_bp_len': sum_bp},
-                    ignore_index=True)
+                new_rows = pd.DataFrame({
+                    'Species': [species],
+                    'sequid': [sequid],
+                    'class': ['Total'],
+                    'cumulative_bp_len': [int(sum_bp)]})
+                df_out = pd.concat([df_out, new_rows])
 
         # correct % sequid occupancy's dtype
         df_out = df_out.astype({'cumulative_bp_len': 'float64'})
