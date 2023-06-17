@@ -10,7 +10,7 @@ with the amount, length and average length of each
 group of classified repetitions.
 
 For example, returns a row for unspecified DNA TEs,
-another one for unspecified LTRs, another one for 
+another one for unspecified LTRs, another one for
 TEs classified in the Gypsy superfamily...
 
 To parse only for a given scaffold, create a new
@@ -32,16 +32,16 @@ import gzip
 
 def unique_class_list(fn):
     """Funció per extreure les famílies úniques d'un fitxer de
-    repeticions de RepeatMasker. 
+    repeticions de RepeatMasker.
     """
 
     out=[]
-    
+
     with gzip.open(fn) if fn.endswith('.gz') else open(fn) as fh:
         for line in fh:
             # Create a Repeat obj.
             obj = Repeat(line)
-        
+
             # Si repout (la classe extreta) és nova:
             if not obj.repclass in out:
                 out += [obj.repclass]
@@ -62,18 +62,18 @@ class Repeat(object):
 
         (self.swsc,  # score
                 self.pctdiv,
-                self.pctdel, 
-                self.pctins, 
+                self.pctdel,
+                self.pctins,
                 self.refid, # query sequence
                 self.begin, # begin in query
                 self.end, # end in query
-                self.ref_remain, 
+                self.ref_remain,
                 self.orient, # strand
                 self.rep_nm,
                 self.original_cl, # original assigned classification
                 self.rep_i, # begin in repeat
                 self.rep_f, # end in repeat
-                self.rep_prior, 
+                self.rep_prior,
                 self.id, # arbitrary id, from 1 to infinity.
                 self.unknown, # unknown type of data.
                 self.quality, # quality tag, either '.' or '?'
@@ -91,7 +91,7 @@ class Repeat(object):
         # Get a unique tag for each repeat, excluding
         # the last 'N/A's.
         repclasses = (self.Class, self.Subclass, self.Order, self.Super_family)
-        # [0]: retrotrans., dnatrans. or others. 
+        # [0]: retrotrans., dnatrans. or others.
         # [1]: DNA subclass or tandem repeat subclass.
         # [2]: Transposable Element Order.
         # [3]: Transposable Element Super-family.
@@ -100,9 +100,9 @@ class Repeat(object):
 #        if d != 'N/A':
 #            repout = repclasses
 #        elif c != 'N/A':
-#            repout = repclasses[:-1] 
+#            repout = repclasses[:-1]
 #        elif b != 'N/A':
-#            repout = repclasses[:-2] 
+#            repout = repclasses[:-2]
 #        else:
 #            repout = repclasses[:-3]
 
@@ -135,11 +135,11 @@ def parse_repeats_with_results(fn, crm='all'):
 
     # List of filtered in scaffolds.
     scaffolds = []
-    
+
     if crm=='all':
         """ Parse the repeatmasker file. For each line, append
         the amount and length of each classified element.
-    
+
         This block takes in all scaffolds.
         """
         # Can open both gzipped or normal files...?
@@ -162,7 +162,7 @@ def parse_repeats_with_results(fn, crm='all'):
             for line in fh:
                 # Create a Repeat obj.
                 obj = Repeat(line)
-                
+
                 # If the regexp is in the line's REF ID (scaffold name):
                 # .casefold() method is recommended in case-insensitive comparison.
                 if crm.casefold() in obj.refid.casefold():
@@ -181,14 +181,14 @@ def parse_repeats_with_results(fn, crm='all'):
 
 def walkresults(r, i=0):
     """ Funció recursiva que entra dins un diccionari
-    amb múltiples nivells (fins a `cols` nivells), 
+    amb múltiples nivells (fins a `cols` nivells),
     busca les branques apicals amb dos resultats,
     `amount` i `length`,
     els imprimeix amb format tabular, i torna enrere
     per imprimir els resultats dels ítems antecedents.
 
     S'ha de cridar amb for k, v in results: walkdict(v)
-    """ 
+    """
     out = []
 
     for k, v in r.items():
@@ -228,7 +228,7 @@ def walkresults_version2(r):
             avg_length = 0
 
         out += [ TE_name + [v['amount'], v['length'], round(avg_length, 1)] ]
-    
+
     return out
 
 
@@ -268,11 +268,11 @@ if __name__ == '__main__':
         print("Analysed File:", sys.argv[1])
         print("Genome size used:", gsize, "bp")
         print()
-    
+
     # Crea capçalera:
     capçalera = ["Class", "Sub-Class", "Order", "Super-family", # Columnes que classifiquen repeats.
-            "# Amount", 
-            "# Sum-BP-len", 
+            "# Amount",
+            "# Sum-BP-len",
             "% Relative Amt.",
             "% Relative-BP",    # (bp-repeat)/(sum-bp-repeats) # relative to total repeats
             "% Masked-Genome", # (bp-repeat)/(genome-size)    # relative to genome size
@@ -327,20 +327,20 @@ if __name__ == '__main__':
     data_listed += [ ('----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------', '----------') ]
 
     if total['avg.counter']!=0:
-        data_listed += [ ('Total', '.', '.', '.', 
-            total['amount'], 
-            total['BP-Total'], 
-            total['col_perc_amount'], 
-            total['col_bp_repeats'], 
-            total['col_masked_genome'], 
+        data_listed += [ ('Total', '.', '.', '.',
+            total['amount'],
+            total['BP-Total'],
+            total['col_perc_amount'],
+            total['col_bp_repeats'],
+            total['col_masked_genome'],
             round(total['avg']/total['avg.counter'], 1) ) ]
     else:
-        data_listed += [ ('Total', '.', '.', '.', 
-            total['amount'], 
-            total['BP-Total'], 
-            total['col_perc_amount'], 
-            total['col_bp_repeats'], 
-            total['col_masked_genome'], 
+        data_listed += [ ('Total', '.', '.', '.',
+            total['amount'],
+            total['BP-Total'],
+            total['col_perc_amount'],
+            total['col_bp_repeats'],
+            total['col_masked_genome'],
             0) ]
 
     print( tabulate.tabulate (data_listed, headers=capçalera, tablefmt='pipe') )
