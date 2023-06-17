@@ -783,8 +783,14 @@ class Repeat:
             'Species', 'sequid', 'class', 'cumulative_bp_len'])
 
         for species in self.df_summ_per_seq['Species'].unique():
-            for sequid in self.df_summ_per_seq['sequid'].unique():
-                for repclass in self.df_summ_per_seq['class'].unique()[:-1]:
+            sequid_list = self.df_summ_per_seq.loc[
+                self.df_summ_per_seq['Species']==species,
+                'sequid'].unique()
+            for sequid in sequid_list:
+                repclass_list = self.df_summ_per_seq.loc[
+                    self.df_summ_per_seq['Species']==species,
+                    'class'].unique()[:-1]
+                for repclass in repclass_list:
                     # get the list of intervals (begin, end)
                     d = df.loc[
                         (df['Species']==species) &
@@ -874,9 +880,11 @@ class Repeat:
         # Complement cumulative_bp_len with other data
         # (from other tables)
         # avg ele bp len is the same as summ per seq dataframe;
-        df_out['avgele_bp_len'] = self.df_summ_per_seq['avgele_bp_len']
         # num of elements is also identical;
-        df_out['num_elements'] = self.df_summ_per_seq['num_elements']
+        df_merging = self.df_summ_per_seq.loc[:,
+            ['Species', 'sequid', 'class', 'avgele_bp_len', 'num_elements']]
+        df_out = df_out.merge(df_merging, on=[
+            'Species', 'sequid', 'class'])
         # compute non-overlapping chromosomal occupancy
         for sp in df_out['Species'].unique():
             msp = df_out['Species']==sp
@@ -890,7 +898,7 @@ class Repeat:
                     'cumulative_bp_len'] /
                 int(self.seqsizes_dict[sequid])) * 100
 
-        self.df_overlapping_summary = df_out
+        self.df_overlapping_summary = df_out.reset_index()
         return df_out
 
     def boxplot_entrance(self):
