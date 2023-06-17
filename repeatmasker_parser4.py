@@ -11,10 +11,14 @@ Let's parse from default output.
 All changes ought to be done by pandas, temporally...
 The input RM.out was modified as little as possible.
 
-However, some changes are inevitable. With awk:
-# awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
+However, some changes are inevitable. With `awk`:
+awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
 There are rows with an asterisk as 16th field, and rows with only 15 fields.
 Make sure all rows are of the same length (16 fields for all)
+
+Also, make sure to tag scaffolds and chromosomes in column 5
+ - chromosomes should contain 'chr' in col. 5 string
+ - scaffolds should contain 'Scaffold' in col. 5 string
 
 """
 
@@ -916,7 +920,7 @@ class Repeat:
                         meanprops=dict(color='green',
                                        marker='*',
                                        markeredgecolor='black',
-                                       markersize='15'))
+                                       markersize='7'))
             plt.title(fig_titles[xvar])
             plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
             plt.xlabel(fig_xlabel[xvar])
@@ -947,7 +951,7 @@ class Repeat:
                         meanprops=dict(color='green',
                                        marker='*',
                                        markeredgecolor='black',
-                                       markersize='15'))
+                                       markersize='7'))
             # lets try to label outlier subclasses in a class
             xvar_q1 = g.groupby(['class', 'Species']
                             )[xvar].quantile(0.25)
