@@ -1087,11 +1087,12 @@ class Repeat:
         ##colors = ["#EB8F46", "#30ACAC"]
         ##sns.set_palette(colors)
 
+        plt.figure(figsize=(12, 4.8))
         ax = sns.histplot(data=df, y="Species", hue="Repeat type", weights="sum",
                      multiple="stack", shrink=0.7)
         sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
         plt.title("Distribution of REs orders content per species")
-        plt.subplots_adjust(left=0.13, bottom=0.1, right=0.65, top=0.91)
+        plt.subplots_adjust(left=0.07, bottom=0.1, right=0.8, top=0.91)
         plt.xlabel("basepairs")
         plt.savefig('histo_stacked_totalbp_matplotlib.png', dpi=300)
         plt.close('all')
