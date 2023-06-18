@@ -19,9 +19,9 @@ if (length(args) != 1) {
   path_to_paf = args[1]
   
 # Variables per a filtrar el PAF i reduir-ne la mida:
-  min_map_qual = 40  # No es mira per sota d'aquesta qualitat de mapatge.
+  min_map_qual = 30  # No es mira per sota d'aquesta qualitat de mapatge.
   # El rang de qualitats de mapatge vira entre zero i seixanta. 
-  min_align_len = 3e3  # No es mira alineaments que siguin més petits de 6 kb.
+  min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
   
 ## PALETA DE COLORS ESCUER--SILVATICA ##
 
@@ -57,18 +57,18 @@ if (length(args) != 1) {
       (grepl('cat.*X', raw_aln_circos$tname) & grepl('til.*X', raw_aln_circos$qname)) |
       (grepl('til.*X', raw_aln_circos$tname) & grepl('cat.*X', raw_aln_circos$qname)) |
       # til7 and til6 vs cat1
-      (grepl('til.*7', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
-      (grepl('til.*6', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
-      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*6', raw_aln_circos$qname)) |
-      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*7', raw_aln_circos$qname)) |
-      # til3 and til5 vs cat2
-      (grepl('til.*3', raw_aln_circos$tname) & grepl('cat.*2', raw_aln_circos$qname)) |
       (grepl('til.*5', raw_aln_circos$tname) & grepl('cat.*2', raw_aln_circos$qname)) |
+      (grepl('til.*6', raw_aln_circos$tname) & grepl('cat.*2', raw_aln_circos$qname)) |
+      (grepl('cat.*2', raw_aln_circos$tname) & grepl('til.*6', raw_aln_circos$qname)) |
       (grepl('cat.*2', raw_aln_circos$tname) & grepl('til.*5', raw_aln_circos$qname)) |
-      (grepl('cat.*2', raw_aln_circos$tname) & grepl('til.*3', raw_aln_circos$qname)) |
+      # til3 and til5 vs cat2
+      (grepl('til.*1', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
+      (grepl('til.*4', raw_aln_circos$tname) & grepl('cat.*1', raw_aln_circos$qname)) |
+      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*4', raw_aln_circos$qname)) |
+      (grepl('cat.*1', raw_aln_circos$tname) & grepl('til.*1', raw_aln_circos$qname)) |
       # til4 vs cat3
-      (grepl('cat.*3', raw_aln_circos$tname) & grepl('til.*4', raw_aln_circos$qname)) |
-      (grepl('til.*4', raw_aln_circos$tname) & grepl('cat.*3', raw_aln_circos$qname)) |
+      (grepl('cat.*3', raw_aln_circos$tname) & grepl('til.*3', raw_aln_circos$qname)) |
+      (grepl('til.*3', raw_aln_circos$tname) & grepl('cat.*3', raw_aln_circos$qname)) |
       # til 2 vs cat 4
       (grepl('cat.*4', raw_aln_circos$tname) & grepl('til.*2', raw_aln_circos$qname)) |
       (grepl('til.*2', raw_aln_circos$tname) & grepl('cat.*4', raw_aln_circos$qname))
@@ -129,10 +129,10 @@ if (length(args) != 1) {
   colors_correspondencia = data.frame(
     sequid = c("DtilchrX", "Dtilchr1", "Dtilchr2",
                "Dtilchr3", "Dtilchr4", "Dtilchr5",
-               "Dtilchr6", "Dtilchr7"),
-    colors = c("#f659a5", "#c5090a", "#ff7f07",
-               "#cabf0a", "#41a62a", "#4fa1ca",
-               "#4f3b97", "#a29a9c"))
+               "Dtilchr6"),
+    colors = c("#ff6dd3", "#ff0008", "#5bc358",
+               "#ffbb54", "#ff7777", "#55e8f0",
+               "#b9dae9"))
 
   # inicialitza columna amb colors
   aln_circos$colors <- NA
@@ -218,8 +218,9 @@ cat('\n')
 # ho indiquin...
 inverted_sequids = c(
   'DtilchrX',
-  'Dtilchr3',
-  'Dcatchr1')
+  'Dtilchr1',
+  'Dcatchr2'
+)
 
 reverse_coord_windows <- function(dfw, inverted_sequids) {
   # reverse start and end columns of dfw only for selected inverted_sequids
@@ -246,7 +247,7 @@ aln_circos = reverse_coord_windows(aln_circos, inverted_sequids)
 
 ########################## Obre output pdf
 pdf(paste0('genplot_', args[1], '.pdf'),
-    width=9)
+    width=8)
 ##########################
 
 species_query = dysdera_tracks[grepl('^Q', dysdera_tracks$sequid), 'sequid'][1]
@@ -257,23 +258,23 @@ species_target = substr(species_target, start=3, stop=6)
 plot.new()
 legend('center', title='General summary information', cex=0.9,
   legend = c(
-  paste0('Query: ', species_query, '; Target: ', species_target, '; Total rows: ', nrow(raw_aln_circos)),
-  paste0('Rows mapping pairs of homologous chromosomes: ',
+  paste0('(1) Query: ', species_query, '; (2) Target: ', species_target, '; (3) Total rows: ', nrow(raw_aln_circos)),
+  paste0('+ Rows mapping pairs of homologous chromosomes: ',
              round((homologous/t)*100, digits=1), ' %'),
-  paste0('Rows mapping one minor scaffold to another\nminor scaffold (discarded from plot): ',
+  paste0('+ Rows mapping one minor scaffold to another\nminor scaffold (discarded from plot): ',
              round((removed.both_min_scaffold/t)*100, digits=1), ' %'),
-  paste0('Rows mapping one minor scaffold to a main\nchromosome (discarded from plot): ',
+  paste0('+ Rows mapping one minor scaffold to a main\nchromosome (discarded from plot): ',
              round((removed.single_min_scaffold/t)*100, digits=1), ' %'),
-  paste0('Rows mapping one minor scaffold to a main chromosome\nWITH HIGH QUAL.',
+  paste0('+ Rows mapping one minor scaffold to a main chromosome\nWITH HIGH QUAL.',
          ' (outmost red/white track,\nbeside coordinate axis): ',
              round((removed.single_min_scaffold.qualfiltered/t)*100, digits=1), ' %'),
-  paste0('Rows removed because their mapQ. was lower than ',
+  paste0('+ Rows removed because their mapQ. was lower than ',
              min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %'),
-  paste0('Rows removed because their ali. length was lower than ',
+  paste0('+ Rows removed because their ali. length was lower than ',
              min_align_len, ': ', round((removed.alilen/t)*100, digits=1), ' %'),
-  paste0('Rows removed because they were secondary mappings: ',
+  paste0('+ Rows removed because they were secondary mappings: ',
              round((removed.secali/t)*100,digits=1), ' %\n'),
-  paste0('The combined percentage of original rows\nthat have been removed is: ',
+  paste0('+ The combined percentage of original rows\nthat have been removed is: ',
              round((removed.all/t)*100,digits=1), ' %')
 ))
 
@@ -346,12 +347,12 @@ circos.genomicLink(aln_circos[, c('qname', 'qstart', 'qend')],
 # Text que marca la posició de les dues espècies: 
   # Si tilosensis és query, situar el seu nom a la part inferior dreta
   if (any(grepl('^Q.*til', dysdera_tracks$sequid))) {
-    text(-0.85, 0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
-    text(0.9, -0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
+    text(-0.85, 0.9, "D. catalonica\ngenome", col = "#eb8f46", cex = 1.1, font=2)
+    text(0.9, -0.9, "D. tilosensis\ngenome", col = "#30acac", cex = 1.1, font=2)
   # Si tilosensis és target, situar el seu nom a la part superior dreta
   } else if (any(grepl('^T.*til', dysdera_tracks$sequid))) {
-    text(-0.85, -0.9, "D. catalonica\ngenome", col = "blue", cex = 1.1)
-    text(0.9, 0.9, "D. tilosensis\ngenome", col = "red", cex = 1.1)
+    text(-0.85, -0.9, "D. catalonica\ngenome", col = "#eb8f46", cex = 1.1, font=2)
+    text(0.9, 0.9, "D. tilosensis\ngenome", col = "#30acac", cex = 1.1, font=2)
 }
 
 circos.clear()
