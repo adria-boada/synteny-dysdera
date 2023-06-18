@@ -1081,7 +1081,7 @@ class Repeat:
 
         df = df.sort_values(by=["Species", "Repeat type"], ascending=True
             ).reset_index(drop=True)
-        print(df.to_markdown()) # debug
+        print('\n', df.to_markdown()) # debug
 
         # Set up colour palette (employed by hue=) manually:
         ##colors = ["#EB8F46", "#30ACAC"]
@@ -1095,6 +1095,8 @@ class Repeat:
         plt.xlabel("basepairs")
         plt.savefig('histo_stacked_totalbp_matplotlib.png', dpi=300)
         plt.close('all')
+
+        return None
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
