@@ -87,6 +87,7 @@ class Repeat:
         """
         """
         self.seqsizes_dict = seqsizes_dict
+        self.gensizes_dict = gensizes_dict
         # try to open the file (make sure provided path is correct)
         for file in file_list:
             try:
@@ -971,16 +972,16 @@ class Repeat:
             # it's hard to place outlier labels... pair species-repclass with
             # track (0, 1, etc) in boxplot.
             categorical_pos = {
-                'DcatDNA': 0,
-                'DtilDNA': 0,
-                'DcatOther': 1,
-                'DtilOther': 1,
-                'DcatRetrotransposon': 2,
-                'DtilRetrotransposon': 2,
-                'DcatTandem_repeat': 3,
-                'DtilTandem_repeat': 3,
-                'DcatUnclassified': 4,
-                'DtilUnclassified': 4,
+                'DcatDNA': -0.25,
+                'DtilDNA': 0.25,
+                'DcatOther': 0.75,
+                'DtilOther': 1.25,
+                'DcatRetrotransposon': 1.75,
+                'DtilRetrotransposon': 2.25,
+                'DcatTandem_repeat': 2.75,
+                'DtilTandem_repeat': 3.25,
+                'DcatUnclassified': 3.75,
+                'DtilUnclassified': 4.25,
             }
             # labeling values not bonded by limits
             for row in g.to_dict(orient='index').items():
@@ -1001,6 +1002,99 @@ class Repeat:
             plt.close('all')
 
         return None
+
+    def scatter_genome_content(self):
+        """
+        """
+        ##import seaborn.objects as so
+        df = self.df_overlapping_summary.loc[:]
+        # add a column labeling rows in chr X
+        # (hue by species and autosomal/sex chromosome)
+        df['Sequid type'] = "Autosomes"
+        df.loc[df['sequid'].str.contains('X'), 'Sequid type'] = (
+            "Sexual chr.")
+        df.loc[df['sequid'].str.contains('Scaffold'), 'Sequid type'] = (
+            "Minor scffs.")
+
+        ##coldict = {"Dcat": "#EB8F46", "Dtil": "#30ACAC"}
+        ##markdict = {"Autosomes": "o", "Sexual chr.": "X", "Minor scffs.": "v"}
+        # Plot
+        ##(so.Plot(df, x="sequid_occupancy", y="class",
+        ##         color="Species", marker="Sequid type", alpha=0.75,
+        ##    ).add(
+        ##    so.Dot(pointsize=7),
+        ##    so.Dodge(), # use this if you want to separate the markers with different colors
+        ##)
+        ## .scale(
+        ##     color=so.Nominal(coldict),
+        ##     marker=so.Nominal(markdict)
+        ##     )
+        ##)
+
+        # Set up colour palette (employed by hue=) manually:
+        colors = ["#EB8F46", "#30ACAC"]
+
+        sns.set_palette(colors)
+        sns.stripplot(data=df.query("`Sequid type` == 'Autosomes'"),
+                      x="sequid_occupancy", y="class", hue="Species",
+                      marker="o", dodge=True, alpha=0.5, jitter=0)
+        sns.stripplot(data=df.query("`Sequid type` == 'Sexual chr.'"),
+                      x="sequid_occupancy", y="class", hue="Species",
+                      marker="X", dodge=True, jitter=0)
+        sns.stripplot(data=df.query("`Sequid type` == 'Minor scffs.'"),
+                      x="sequid_occupancy", y="class", hue="Species",
+                      marker="v", dodge=True, jitter=0)
+        plt.title("Non-overlapping REs occupancy in sequids per class")
+        plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
+        plt.xlabel("% occupancy")
+        plt.savefig('scatterplot_sequid_occupancy_matplotlib.png', dpi=300)
+        plt.close('all')
+
+        return None
+
+    def histo_stacked_repeat_content(self):
+        """
+        """
+        df = self.df_input_table.loc[:]
+        df = df.groupby(['Species', 'class', 'order'])['replen'
+                                              ].agg(['sum']
+                                                  ).reset_index()
+        # compute non-repetitive size per species...
+        for species in self.gensizes_dict.keys():
+            tot_bp_repeat = df.loc[df['Species']==species, 'sum'].sum()
+            new_rows = pd.DataFrame({
+                "Species": [species],
+                "class": ["Non_repetitive_fraction"],
+                "order": ["NA"],
+                "sum": [int(self.gensizes_dict[species] - tot_bp_repeat)]
+            })
+            df = pd.concat([df, new_rows])
+        df = df.sort_values(by=["Species", "sum"], ascending=False
+            ).reset_index(drop=True)
+        df.loc[df['class']=="Retrotransposon", 'class'] = "RT"
+        df['Repeat type'] = df['class']
+        df.loc[df['order']!="NA", "Repeat type"] = df['class'] +"-"+ df['order']
+        df.loc[(df['class']=="DNA") &
+               (df['order']=="NA"), "Repeat type"] = "DNA-Other"
+        df.loc[(df['class']=="RT") &
+               (df['order']=="NA"), "Repeat type"] = "RT-Other"
+
+        df = df.sort_values(by=["Species", "Repeat type"], ascending=True
+            ).reset_index(drop=True)
+        print(df.to_markdown()) # debug
+
+        # Set up colour palette (employed by hue=) manually:
+        ##colors = ["#EB8F46", "#30ACAC"]
+        ##sns.set_palette(colors)
+
+        ax = sns.histplot(data=df, y="Species", hue="Repeat type", weights="sum",
+                     multiple="stack", shrink=0.7)
+        sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
+        plt.title("Distribution of REs orders content per species")
+        plt.subplots_adjust(left=0.13, bottom=0.1, right=0.65, top=0.91)
+        plt.xlabel("basepairs")
+        plt.savefig('histo_stacked_totalbp_matplotlib.png', dpi=300)
+        plt.close('all')
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1062,4 +1156,6 @@ if __name__ == '__main__':
     # create boxplots of whole df and summary df
     repeats.boxplot_entrance()        # whole
     repeats.boxplot_genome_content()  # summary
+    repeats.scatter_genome_content()
+    repeats.histo_stacked_repeat_content()
 
