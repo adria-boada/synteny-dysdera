@@ -887,9 +887,10 @@ class Repeat:
         df_out = df_out.merge(df_merging, on=[
             'Species', 'sequid', 'class'])
         # compute non-overlapping chromosomal occupancy
-        for sp in df_out['Species'].unique():
+        for sp in self.seqsizes_dict.keys():  # these keys are species
             msp = df_out['Species']==sp
-            for sequid in self.seqsizes_dict.keys():
+            for sequid in self.seqsizes_dict[sp].keys(): # these keys are
+                # sequids found in species `sp`
                 msq = df_out['sequid']==sequid
                 df_out.loc[
                     (msq) & (msp),
@@ -897,7 +898,7 @@ class Repeat:
                 df_out.loc[
                     (msq) & (msp),
                     'cumulative_bp_len'] /
-                int(self.seqsizes_dict[sequid])) * 100
+                int(self.seqsizes_dict[sp][sequid])) * 100
 
         self.df_overlapping_summary = df_out.reset_index()
         return df_out
@@ -1056,10 +1057,53 @@ class Repeat:
         """
         """
         df = self.df_input_table.loc[:]
+        df_per_seqtype = df.groupby(['Species', 'sequid', 'class', 'order'])['replen'
+                                              ].agg(['sum']
+                                                  ).reset_index()
         df = df.groupby(['Species', 'class', 'order'])['replen'
                                               ].agg(['sum']
                                                   ).reset_index()
-        # compute non-repetitive size per species...
+        df_per_seqtype['Sequid_type'] = df_per_seqtype['Species'] + "_Autosomes"
+        df_per_seqtype.loc[df_per_seqtype['sequid'].str.contains('X'), 'Sequid_type'] = (
+            df_per_seqtype.loc[df_per_seqtype['sequid'].str.contains('X'), 'Species'] + "_Sexual_chr")
+        df_per_seqtype.loc[df_per_seqtype['sequid'].str.contains('Scaffold'), 'Sequid_type'] = (
+            df_per_seqtype.loc[df_per_seqtype['sequid'].str.contains('Scaffold'), 'Species'] + "_Minor_scffs")
+        # Remove minor scaffolds
+        df_per_seqtype = df_per_seqtype.loc[
+                           df_per_seqtype['Sequid_type'
+                            ].str.contains('Minor_scffs') == False]
+
+        # compute non-repetitive size per autosomes-sexual sequids...
+        df_per_seqtype = df_per_seqtype.groupby(['Sequid_type', 'class',
+                                                 'order'])['sum'].agg('sum').reset_index()
+        for species in self.seqsizes_dict.keys():
+            auto_bp_repeat = (
+                df_per_seqtype.loc[(df_per_seqtype['Sequid_type'].str.contains(species))
+                                    &
+                                   (df_per_seqtype['Sequid_type'].str.contains('Autosomes')),
+                                   'sum']).sum()
+            allo_bp_repeat = (
+                df_per_seqtype.loc[(df_per_seqtype['Sequid_type'].str.contains(species))
+                                    &
+                                   (df_per_seqtype['Sequid_type'].str.contains('Sex')),
+                                   'sum']).sum()
+            allosome = 0
+            autosomes = 0
+            for sequid in self.seqsizes_dict[species].keys():
+                if 'X' in sequid:
+                    allosome += self.seqsizes_dict[species][sequid]
+                else:
+                    autosomes += self.seqsizes_dict[species][sequid]
+            new_rows = pd.DataFrame({
+                "Sequid_type": [species + "_Autosomes", species + "_Sexual_chr"],
+                "class": ["Non_repetitive_fraction", "Non_repetitive_fraction"],
+                "order": ["NA", "NA"],
+                "sum": [int(autosomes - auto_bp_repeat),
+                        int(allosome - allo_bp_repeat)]
+            })
+            df_per_seqtype = pd.concat([df_per_seqtype, new_rows])
+
+        # compute non-repetitive size per total-species...
         for species in self.gensizes_dict.keys():
             tot_bp_repeat = df.loc[df['Species']==species, 'sum'].sum()
             new_rows = pd.DataFrame({
@@ -1069,6 +1113,8 @@ class Repeat:
                 "sum": [int(self.gensizes_dict[species] - tot_bp_repeat)]
             })
             df = pd.concat([df, new_rows])
+        df_total = df.loc[:]
+
         df = df.sort_values(by=["Species", "sum"], ascending=False
             ).reset_index(drop=True)
         df.loc[df['class']=="Retrotransposon", 'class'] = "RT"
@@ -1079,22 +1125,56 @@ class Repeat:
         df.loc[(df['class']=="RT") &
                (df['order']=="NA"), "Repeat type"] = "RT-Other"
 
-        df = df.sort_values(by=["Species", "Repeat type"], ascending=True
+        # concat df_total and df_per_seqtype
+        df_total['Sequid_type'] = df_total['Species'] + "_Total"
+        df_per_seqtype = pd.concat([df_per_seqtype,
+                                    df_total[["Sequid_type", "class", "order",
+                                              "sum"]]])
+
+        # sort newly concatenated df_per_seqtype
+        df_per_seqtype = df_per_seqtype.sort_values(by=["Sequid_type", "sum"], ascending=False
             ).reset_index(drop=True)
+        df_per_seqtype.loc[df_per_seqtype['class']=="Retrotransposon", 'class'] = "RT"
+        df_per_seqtype['Repeat_type'] = df_per_seqtype['class']
+        df_per_seqtype.loc[df_per_seqtype['order']!="NA", "Repeat_type"] = (
+            df_per_seqtype['class'] +"-"+ df_per_seqtype['order'] )
+        df_per_seqtype.loc[(df_per_seqtype['class']=="DNA") &
+               (df_per_seqtype['order']=="NA"), "Repeat_type"] = "DNA-Other"
+        df_per_seqtype.loc[(df_per_seqtype['class']=="RT") &
+               (df_per_seqtype['order']=="NA"), "Repeat_type"] = "RT-Other"
+        df_per_seqtype = df_per_seqtype.sort_values(by=["Sequid_type", "Repeat_type"], ascending=True
+            ).reset_index(drop=True)
+        df_per_seqtype = df_per_seqtype[["Sequid_type", "sum", "Repeat_type"]]
+
+        df = df.sort_values(by=["Species", "Repeat type", "sum"], ascending=False
+            ).reset_index(drop=True)
+
         print('\n', df.to_markdown()) # debug
+        print('\n', df_per_seqtype.to_markdown()) # debug
 
         # Set up colour palette (employed by hue=) manually:
         ##colors = ["#EB8F46", "#30ACAC"]
         ##sns.set_palette(colors)
 
-        plt.figure(figsize=(12, 4.8))
-        ax = sns.histplot(data=df, y="Species", hue="Repeat type", weights="sum",
-                     multiple="stack", shrink=0.7)
+        # remove edgecolor from bars
+        plt.rcParams['patch.edgecolor'] = 'none'
+        # set the size of the plot (more wider than taller)
+        plt.figure(figsize=(15, 4.8))
+        # plot
+##        plt.margins(y=0.6) # push the bars to the center;
+##        ax = sns.histplot(data=df, y="Species", hue="Repeat type", weights="sum",
+##                     multiple="stack", shrink=0.3)
+        plt.margins(y=0.1) # push the bars to the center;
+        ax = sns.histplot(data=df_per_seqtype, y="Sequid_type", hue="Repeat_type", weights="sum",
+                     multiple="stack", shrink=0.2)
+        # move legend outside of the plotting box
         sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
         plt.title("Distribution of REs orders content per species")
-        plt.subplots_adjust(left=0.07, bottom=0.1, right=0.8, top=0.91)
-        plt.xlabel("basepairs")
-        plt.savefig('histo_stacked_totalbp_matplotlib.png', dpi=300)
+        # adjust margins of figure, so legend, axis, etc.
+        # has enough space to be drawn
+        plt.subplots_adjust(left=0.13, bottom=0.1, right=0.85, top=0.91)
+        plt.xlabel("Gb")
+        plt.savefig('histo_alt_stacked_totalbp_matplotlib.png', dpi=300)
         plt.close('all')
 
         return None
@@ -1121,13 +1201,14 @@ if __name__ == '__main__':
                      gensizes_dict=dict(
                          Dcat=3279770110,
                          Dtil=1549768629),
-                     seqsizes_dict=dict(
+                     seqsizes_dict=dict(Dcat=dict(
                         Dcatchr1=827927493,
                         Dcatchr2=604492468,
                         Dcatchr3=431906129,
                         Dcatchr4=421735357,
                         DcatchrX=662930524,
-                        Dcat_Scaffold=330778139,
+                        Dcat_Scaffold=330778139),
+                                        Dtil=dict(
                         Dtilchr1=210826211,
                         Dtilchr2=210901293,
                         Dtilchr3=205634564,
@@ -1135,7 +1216,7 @@ if __name__ == '__main__':
                         Dtilchr5=152324531,
                         Dtilchr6=125744329,
                         DtilchrX=434793700,
-                        Dtil_Scaffold=50989031,
+                        Dtil_Scaffold=50989031)
                         ))
 
     # check wheather classification is done correctly
