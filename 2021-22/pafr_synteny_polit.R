@@ -347,12 +347,12 @@ circos.genomicLink(aln_circos[, c('qname', 'qstart', 'qend')],
 # Text que marca la posició de les dues espècies: 
   # Si tilosensis és query, situar el seu nom a la part inferior dreta
   if (any(grepl('^Q.*til', dysdera_tracks$sequid))) {
-    text(-0.85, 0.9, "D. catalonica\ngenome", col = "#eb8f46", cex = 1.1, font=2)
-    text(0.9, -0.9, "D. tilosensis\ngenome", col = "#30acac", cex = 1.1, font=2)
+    text(-0.85, 0.9, "D. catalonica", col = "#eb8f46", cex = 1.1, font=4)
+    text(0.9, -0.9, "D. tilosensis", col = "#30acac", cex = 1.1, font=4)
   # Si tilosensis és target, situar el seu nom a la part superior dreta
   } else if (any(grepl('^T.*til', dysdera_tracks$sequid))) {
-    text(-0.85, -0.9, "D. catalonica\ngenome", col = "#eb8f46", cex = 1.1, font=2)
-    text(0.9, 0.9, "D. tilosensis\ngenome", col = "#30acac", cex = 1.1, font=2)
+    text(-0.85, -0.9, "D. catalonica", col = "#eb8f46", cex = 1.1, font=4)
+    text(0.9, 0.9, "D. tilosensis", col = "#30acac", cex = 1.1, font=4)
 }
 
 circos.clear()
