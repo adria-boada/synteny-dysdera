@@ -683,13 +683,14 @@ class Repeat:
         # rename all scaffolds, so they share a single name; simply,
         # species + "_Scaffold"
         # (instead of scaffold_1, scaffold_2, etc.)
+        print_green("STATUS: Rows containing `scaffold` as sequid:")
         for sp in df['Species'].unique():
             df.loc[(df['sequid'].str.contains('Scaffold|ctg')) &
                    (df['Species']==sp), "sequid"] = sp+"_Scaffold"
             nrows_scaff = df.loc[(df['sequid'].str.contains('Scaffold|ctg')) &
                    (df['Species']==sp)].shape[0]
-            print("Rows containing scaffolds for", sp, end="")
-            print(": ", nrows_scaff)
+            nrows_tot = df.shape[0]
+            print(" + ", sp, ": ", round((nrows_scaff/nrows_tot) * 100, 3), " %", sep='')
         # groupby species, sequid and class...
         df_summ_per_seq = self.df_input_table.groupby(['Species', 'sequid', 'class'])['replen'
                                               ].agg(['sum','mean','count']
@@ -703,7 +704,6 @@ class Repeat:
             'sum': 'cumulative_bp_len',
             'mean': 'avgele_bp_len',
             'count': 'num_elements'})
-        print(df_summ_per_seq) # debug
 
         # Compute proportions for the last df, too...
         for sp in gensizes_dict.keys():
@@ -724,7 +724,6 @@ class Repeat:
                     (msq) & (msp) &
                     (df_summ_per_seq['class'] == 'Total'),
                     'cumulative_bp_len']).sum())
-                print("tot_bp:", tot_bp) # debug
                 df_summ_per_seq.loc[
                     (msq) & (msp),
                     'relative_repeat_fraction'] = (
@@ -1301,8 +1300,8 @@ if __name__ == '__main__':
     # remove overlapping sequences:
     repeats.overlapping_summary().round(decimals=3).to_csv(
         'repeat_table_nonoverlap.tsv', sep='\t', na_rep='NA')
-    print(repeats.complete_table().to_csv(
-        'repeat_table_complete.tsv', sep='\t', na_rep='NA'))
+    repeats.complete_table().to_csv(
+        'repeat_table_complete.tsv', sep='\t', na_rep='NA')
     # create boxplots of whole df and summary df
     repeats.boxplot_entrance()        # whole
     repeats.boxplot_genome_content()  # summary
