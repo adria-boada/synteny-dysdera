@@ -82,12 +82,18 @@ class Repeat:
         file_list: "List of file-paths to a table.out given by RepeatMasker",
         species_names: "List of species names of each file-path, "+
             "in the same order (in order to pair file and sp.name)",
-        gensizes_dict: "Dict with gensize value for species in species_names",
         seqsizes_dict: "Dict with sequid size value for all sequids in file"):
         """
         """
         self.seqsizes_dict = seqsizes_dict
+
+        gensizes_dict = dict()
+        for species in seqsizes_dict.keys():
+            gensizes_dict[species] = 0
+            for sequid in seqsizes_dict[species].keys():
+                gensizes_dict[species] += seqsizes_dict[species][sequid]
         self.gensizes_dict = gensizes_dict
+
         # try to open the file (make sure provided path is correct)
         for file in file_list:
             try:
@@ -1159,21 +1165,26 @@ class Repeat:
         # remove edgecolor from bars
         plt.rcParams['patch.edgecolor'] = 'none'
         # set the size of the plot (more wider than taller)
-        plt.figure(figsize=(15, 4.8))
+        plt.figure(figsize=(5.2, 15))
         # plot
 ##        plt.margins(y=0.6) # push the bars to the center;
 ##        ax = sns.histplot(data=df, y="Species", hue="Repeat type", weights="sum",
 ##                     multiple="stack", shrink=0.3)
-        plt.margins(y=0.1) # push the bars to the center;
-        ax = sns.histplot(data=df_per_seqtype, y="Sequid_type", hue="Repeat_type", weights="sum",
-                     multiple="stack", shrink=0.2)
+        plt.margins(x=0.1) # push the bars to the center;
+        ##sns.set_context("talk")
+        ax = sns.histplot(data=df_per_seqtype, x="Sequid_type", hue="Repeat_type", weights="sum",
+                    multiple="stack", shrink=0.5)
+        plt.grid(axis='y')
         # move legend outside of the plotting box
         sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
-        plt.title("Distribution of REs orders content per species")
+        ax.tick_params(axis='y', labelsize=20)
+        plt.title("Distribution of REs orders content per species", y=1.02)
         # adjust margins of figure, so legend, axis, etc.
         # has enough space to be drawn
-        plt.subplots_adjust(left=0.13, bottom=0.1, right=0.85, top=0.91)
-        plt.xlabel("Gb")
+        plt.subplots_adjust(left=0.2, bottom=0.1, right=0.55, top=0.95)
+        plt.ylabel("Gb")
+        plt.xticks(rotation=90)
+        plt.xlabel("")
         plt.savefig('histo_alt_stacked_totalbp_matplotlib.png', dpi=300)
         plt.close('all')
 
@@ -1198,9 +1209,6 @@ if __name__ == '__main__':
 
     # send genome length in bases (compute % genome occupancy)
     repeats = Repeat(files, species,
-                     gensizes_dict=dict(
-                         Dcat=3279770110,
-                         Dtil=1549768629),
                      seqsizes_dict=dict(Dcat=dict(
                         Dcatchr1=827927493,
                         Dcatchr2=604492468,
