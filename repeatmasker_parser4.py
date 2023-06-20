@@ -180,7 +180,7 @@ class Repeat:
         df.loc[
             df["default_repclass"]=='__unknown',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Unclassified', 'NA', 'NA', 'NA')
+        ] = ('Unknown', 'NA', 'NA', 'NA')
 
         # "ENZYMATIC" RNAs
         df.loc[
@@ -679,13 +679,17 @@ class Repeat:
         # Broaden `df_compressed_summary` scope to introduce content per chr.
 
         # subset all repeats in chrs (and minor sequids)
-        df = self.df_input_table.loc[:]
+        df = self.df_input_table
         # rename all scaffolds, so they share a single name; simply,
         # species + "_Scaffold"
         # (instead of scaffold_1, scaffold_2, etc.)
         for sp in df['Species'].unique():
             df.loc[(df['sequid'].str.contains('Scaffold|ctg')) &
-                   (df['Species']==sp), 'sequid'] = sp+"_Scaffold"
+                   (df['Species']==sp), "sequid"] = sp+"_Scaffold"
+            nrows_scaff = df.loc[(df['sequid'].str.contains('Scaffold|ctg')) &
+                   (df['Species']==sp)].shape[0]
+            print("Rows containing scaffolds for", sp, end="")
+            print(": ", nrows_scaff)
         # groupby species, sequid and class...
         df_summ_per_seq = self.df_input_table.groupby(['Species', 'sequid', 'class'])['replen'
                                               ].agg(['sum','mean','count']
@@ -699,6 +703,7 @@ class Repeat:
             'sum': 'cumulative_bp_len',
             'mean': 'avgele_bp_len',
             'count': 'num_elements'})
+        print(df_summ_per_seq) # debug
 
         # Compute proportions for the last df, too...
         for sp in gensizes_dict.keys():
@@ -715,10 +720,11 @@ class Repeat:
             for sequid in df_summ_per_seq.loc[msp,
                                               'sequid'].unique():
                 msq = df_summ_per_seq['sequid']==sequid
-                tot_bp = int(df_summ_per_seq.loc[
+                tot_bp = int((df_summ_per_seq.loc[
                     (msq) & (msp) &
                     (df_summ_per_seq['class'] == 'Total'),
-                    'cumulative_bp_len'])
+                    'cumulative_bp_len']).sum())
+                print("tot_bp:", tot_bp) # debug
                 df_summ_per_seq.loc[
                     (msq) & (msp),
                     'relative_repeat_fraction'] = (
@@ -892,6 +898,7 @@ class Repeat:
             ['Species', 'sequid', 'class', 'avgele_bp_len', 'num_elements']]
         df_out = df_out.merge(df_merging, on=[
             'Species', 'sequid', 'class'])
+
         # compute non-overlapping chromosomal occupancy
         for sp in self.seqsizes_dict.keys():  # these keys are species
             msp = df_out['Species']==sp
@@ -908,6 +915,55 @@ class Repeat:
 
         self.df_overlapping_summary = df_out.reset_index()
         return df_out
+
+    def complete_table(self):
+        """
+        Merge information from naive bp, non-overlapping bp, etc.
+        """
+        df_nover = self.overlapping_summary().sort_values(
+            by=["Species", "sequid", "class"], ignore_index=True)
+        df_naive = self.df_summ_per_seq.sort_values(
+            by=["Species", "sequid", "class"], ignore_index=True)
+        df_out   = pd.DataFrame()
+
+        # cut values from existing dfs
+        df_out[["Species", "sequid", "class", "avgele_bp_len", "num_elements",
+                "bp_naive", "relative_naive"]] = (
+            df_naive[["Species", "sequid", "class", "avgele_bp_len",
+                      "num_elements", "cumulative_bp_len",
+                      "relative_repeat_fraction"]] )
+        df_out["bp_nonoverlap"] = df_nover["cumulative_bp_len"]
+
+        # compute relative nonoverlapping repeats
+        df_out["relative_nonoverlap"] = 0
+        for species in df_out["Species"].unique():
+            msp = df_out["Species"] == species  # species in loop mask
+            for sequid in df_out.loc[msp, "sequid"].unique():
+                msq = df_out["sequid"] == sequid # query in loop mask
+                totbp_nonover = int(df_out.loc[
+                    (msp) & (msq) & ((df_out["class"]=="Total")==False),
+                    "bp_nonoverlap"].sum()) # sum a single cell to output
+                    # integer value
+                df_out.loc[(msp) & (msq), "relative_nonoverlap"] = (
+                    df_out.loc[(msp) & (msq), "bp_nonoverlap"] /
+                    totbp_nonover) * 100
+
+        # compute naive sequid occupancy
+        df_out["naive_seq_occupancy"] = 0
+        df_out["nonoverlap_seq_occupancy"] = 0
+        for species in df_out["Species"].unique():
+            msp = df_out["Species"] == species  # species in loop mask
+            for sequid in df_out.loc[msp, "sequid"].unique():
+                msq = df_out["sequid"] == sequid # query in loop mask
+                seqlen = int(self.seqsizes_dict[species][sequid])
+                df_out.loc[(msp) & (msq), "naive_seq_occupancy"] = (
+                    df_out.loc[(msp) & (msq), "bp_naive"] /
+                    seqlen) * 100
+                df_out.loc[(msp) & (msq), "nonoverlap_seq_occupancy"] = (
+                    df_out.loc[(msp) & (msq), "bp_nonoverlap"] /
+                    seqlen) * 100
+
+        return df_out.round(3)
 
     def boxplot_entrance(self):
         """
@@ -987,8 +1043,8 @@ class Repeat:
                 'DtilRetrotransposon': 2.25,
                 'DcatTandem_repeat': 2.75,
                 'DtilTandem_repeat': 3.25,
-                'DcatUnclassified': 3.75,
-                'DtilUnclassified': 4.25,
+                'DcatUnknown': 3.75,
+                'DtilUnknown': 4.25,
             }
             # labeling values not bonded by limits
             for row in g.to_dict(orient='index').items():
@@ -1245,6 +1301,8 @@ if __name__ == '__main__':
     # remove overlapping sequences:
     repeats.overlapping_summary().round(decimals=3).to_csv(
         'repeat_table_nonoverlap.tsv', sep='\t', na_rep='NA')
+    print(repeats.complete_table().to_csv(
+        'repeat_table_complete.tsv', sep='\t', na_rep='NA'))
     # create boxplots of whole df and summary df
     repeats.boxplot_entrance()        # whole
     repeats.boxplot_genome_content()  # summary
