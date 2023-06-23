@@ -705,6 +705,8 @@ class Repeat:
                 df_absolute_summary = pd.concat([df_absolute_summary,
                                         pd.DataFrame(new_rows)])
         print(df_absolute_summary.to_markdown()) # debug
+        df_absolute_summary.round(decimals=2).to_csv(
+            'rpm5_prova.tsv', sep="\t", na_rep="NA")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
