@@ -48,6 +48,133 @@ with open(inputfile) as file:
       ...
 """
 
+def remove_overlapping(intervals):
+    """
+    Parse intervals of a given Species-sequid and remove overlapping.
+
+    INPUT
+
+    * intervals: A list with sublists. Each sublist is a couple of coordinates;
+    begin and end (integers). Add score for intervals as the third item of
+    sublists. Include a tuple with (class, subclass, order, superfam)
+
+    [[begin_1, end_1, score_1, class_tuple_1], ...,
+    [begin_N, end_N, score_N, class_tuple_N]]
+
+    OUTPUT
+
+    Sum of lengths, each one computed as `(end-begin)+1`. Removes all
+    overlapping segments (counts each nucleotide a single time).
+    """
+    # Init dataframe which will be returned
+    # compute unique repeat types
+    unique_class_tuples = list(set(tuple(x[3]) for x in intervals))
+    unique_class_tuples.sort()
+    # covert into pd.MultiIndex()
+    idx = pd.MultiIndex.from_tuples(unique_class_tuples, names=[
+            'class', 'subclass', 'order', 'superfam'])
+    # create df
+    df_resulting = pd.DataFrame(index=idx)
+    df_resulting['algor_bp'] = 0
+
+    # Create a point-list from an interval-list
+    # from [begin, end], [begin, end], etc.
+    # to [coord, begin, 0], [coord, end, 0], [coord, begin, 1], etc.
+    point_list = []
+    for i in range(0, len(intervals)):
+        # Left/starting points labeled '0'
+        point_list += [ [intervals[i][0], 0, i] ]
+        # Right/ending points labeled '1'
+        point_list += [ [intervals[i][1], 1, i] ]
+    # sort point list by position (by first value in sublists)
+    point_list.sort()
+
+    # Init algorithm variables
+    currentBest = -1
+    open_intervals = []
+
+    # for each point in point list:
+    for i in range(0, len(point_list)):
+        # DEBUG #
+##        print(df_resulting)
+##        print('currentBest:', currentBest)
+##        print('iterate:', point_list[i])
+##        print('open_intervals:', open_intervals)
+        # DEBUG #
+
+        # If the loop landed on a left point (0)
+        # opens an interval
+        if point_list[i][1] == 0:
+
+            # if there is no other interval opened:
+            if currentBest == -1:
+                # enters interval 'i'
+                currentBest = point_list[i][2]
+                currentBegin = int(point_list[i][0])
+                currentScore = int(intervals[currentBest][2])
+
+            # else, there already was an open interval:
+            # (and it is of lower score than currentBest)
+            elif currentScore > intervals[point_list[i][2]][2]:
+                # do not close currentBest, because the next interval (repeat)
+                # is of lower score; however, append to open intervals list
+                iden = point_list[i][2]
+                open_intervals.append(
+                    [int(intervals[iden][2]),     # score
+                     iden])                       # ID
+                open_intervals.sort(reverse=True) # sort by score
+
+            # else, currentScore should be higher
+            else:
+                # compute length up until now (begin2 -begin1)
+                interval_length = point_list[i][0] -currentBegin
+                # add this length to the resulting pandas df
+                reptype = intervals[currentBest][3]
+                df_resulting.loc[reptype, "algor_bp"] += interval_length
+                # append index of past Best to open_intervals
+                iden = currentBest
+                open_intervals.append(
+                    [int(intervals[iden][2]),     # score
+                     iden])                       # ID
+                open_intervals.sort(reverse=True) # sort by score
+                # and change currentBest
+                currentBest = point_list[i][2]
+                currentBegin = point_list[i][0]
+                currentScore = intervals[currentBest][2]
+
+        # If the loop landed on a right point (1)
+        # closes an interval
+        # moreover, it has to be the right point of the
+        # currently open interval 'i'
+        elif point_list[i][2] == currentBest:
+            # DEBUG
+##            print('point_list[i][2] (', point_list[i], ') == currentBest')
+            # compute length up until now (end -begin +1)
+            interval_length = point_list[i][0] -currentBegin +1
+            # add this length to the resulting pandas df
+            reptype = intervals[currentBest][3]
+            df_resulting.loc[reptype, "algor_bp"] += interval_length
+            # Close this interval and open the next best one in open_intervals
+            if len(open_intervals) == 0:
+                currentBest = -1
+            else:
+                # remove second best from open_intervals and use it as
+                # currentBest
+                c = open_intervals.pop(0)
+                currentBest = c[1]
+                currentScore = c[0]
+                currentBegin = point_list[i][0] +1
+
+        # Otherwise, it is closing an interval listed in `open_intervals`
+        else:
+            # remove the interval from `open_intervals`
+            iden = point_list[i][2]
+            open_intervals.remove(
+                [int(intervals[iden][2]), # score
+                iden])                    # ID
+
+    return df_resulting
+
 class Repeat:
 
     def __init__(self,
@@ -669,6 +796,54 @@ class Repeat:
         # merge naive, tagged dataframes
         df_absolute_summary = df_naive.join([df_tagged]).reset_index()
 
+        # Remove overlapping regions algorithmically
+        # the function `remove_overlapping` outputs a df with a "algor_bp"
+        # column
+        df_absolute_summary["algor_bp"] = 0
+
+        pd.options.display.max_rows = None # debug
+        print(df_absolute_summary.head())  # debug
+
+        for species in df_concat["Species"].unique():
+            sequid_list = df_concat.loc[
+                df_concat["Species"] == species,
+                "sequid"].unique()
+            for seq in sequid_list:
+                d = df_concat.loc[
+                    (df_concat["Species"]==species) &
+                    (df_concat["sequid"]==seq), ]
+                seqtype = d["sequid_type"].unique()[0]
+                tuple_repclass = tuple(zip(
+                    list(d["class"]),
+                    list(d["subclass"]),
+                    list(d["order"]),
+                    list(d["superfam"]) ))
+                intervals = list(zip(
+                    list(d["begin"]),
+                    list(d["end"]),
+                    list(d["score_SW"]),
+                    tuple_repclass
+                ))
+                df_return = remove_overlapping(intervals).reset_index()
+                df_return.insert(0, "Species", [species]*df_return.shape[0])
+                df_return.insert(1, "sequid_type", [seqtype]*df_return.shape[0])
+                df_absolute_summary = pd.merge(right=df_absolute_summary, left=df_return,
+                                               # preserve right dataframe's keys
+                                               how="right",
+                                               on=["Species", "sequid_type",
+                                                   "class", "subclass", "order",
+                                                   "superfam"])
+                print(df_absolute_summary[["algor_bp_x", "algor_bp_y"]].info()) # debug
+                df_absolute_summary["algor_bp_x"] = (
+                df_absolute_summary["algor_bp_x"].fillna(0))
+                df_absolute_summary["algor_bp_y"] = (
+                    df_absolute_summary["algor_bp_x"] +
+                    df_absolute_summary["algor_bp_y"])
+                df_absolute_summary.drop(columns=["algor_bp_x"], inplace=True)
+                df_absolute_summary.rename(columns={"algor_bp_y": "algor_bp"},
+                                           inplace=True)
+                print(df_absolute_summary[["algor_bp"]].info()) # debug
+
         # compute non-repeat size per sequid_type
         for species in df_absolute_summary["Species"].unique():
             for sequid in df_absolute_summary.loc[
@@ -686,24 +861,36 @@ class Repeat:
                     "tagged_bpsum"].sum()),
                 }
                 # compute non-repeat fraction
+                # add a row with non-repeat and repeat total bps
                 new_rows = {
-                    "Species": [species],
-                    "sequid_type": [sequid],
-                    "class": ["Nonrepetitive_fraction"],
-                    "subclass": ["NA"],
-                    "order": ["NA"],
-                    "superfam": ["NA"],
-                    "naive_numele": ["NA"],
-                    "naive_avglen": ["NA"],
+                    "Species": [species] *2,
+                    "sequid_type": [sequid] *2,
+                    "class": ["Nonrepetitive_fraction",
+                              "Repetitive_fraction"],
+                    "subclass": ["NA"] *2,
+                    "order": ["NA"] *2,
+                    "superfam": ["NA"] *2,
+                    "naive_numele": ["NA"] *2,
+                    "naive_avglen": ["NA"] *2,
                     "naive_bpsum": [
-                        seqsizes_dict[species][sequid] - repetitive_bps["naive"]],
-                    "tagged_numele": ["NA"],
-                    "tagged_avglen": ["NA"],
+                        seqsizes_dict[species][sequid] - repetitive_bps["naive"],
+                        repetitive_bps["naive"] ],
+                    "tagged_numele": ["NA"] *2,
+                    "tagged_avglen": ["NA"] *2,
                     "tagged_bpsum": [
-                        seqsizes_dict[species][sequid] - repetitive_bps["tagged"]],
+                        seqsizes_dict[species][sequid] - repetitive_bps["tagged"],
+                        repetitive_bps["tagged"]],
                 }
                 df_absolute_summary = pd.concat([df_absolute_summary,
                                         pd.DataFrame(new_rows)])
+
+        # avgele length might not be interpreted as float dtype
+
+        # compute non-overlapping length
+        # removing all repeats with overlapping overshoots the correct bp
+        # the value is ~twice as close, although smaller instead of larger
+        # compute all true. then add overlapping between False and True?
+
         print(df_absolute_summary.to_markdown()) # debug
         df_absolute_summary.round(decimals=2).to_csv(
             'rpm5_prova.tsv', sep="\t", na_rep="NA")
