@@ -75,7 +75,7 @@ def remove_overlapping(intervals):
             'class', 'subclass', 'order', 'superfam'])
     # create df
     df_resulting = pd.DataFrame(index=idx)
-    df_resulting['algor_bp'] = 0
+    df_resulting['algor_bpsum'] = 0
 
     # Create a point-list from an interval-list
     # from [begin, end], [begin, end], etc.
@@ -130,7 +130,7 @@ def remove_overlapping(intervals):
                 interval_length = point_list[i][0] -currentBegin
                 # add this length to the resulting pandas df
                 reptype = intervals[currentBest][3]
-                df_resulting.loc[reptype, "algor_bp"] += interval_length
+                df_resulting.loc[reptype, "algor_bpsum"] += interval_length
                 # append index of past Best to open_intervals
                 iden = currentBest
                 open_intervals.append(
@@ -153,7 +153,7 @@ def remove_overlapping(intervals):
             interval_length = point_list[i][0] -currentBegin +1
             # add this length to the resulting pandas df
             reptype = intervals[currentBest][3]
-            df_resulting.loc[reptype, "algor_bp"] += interval_length
+            df_resulting.loc[reptype, "algor_bpsum"] += interval_length
             # Close this interval and open the next best one in open_intervals
             if len(open_intervals) == 0:
                 currentBest = -1
@@ -797,9 +797,9 @@ class Repeat:
         df_absolute_summary = df_naive.join([df_tagged]).reset_index()
 
         # Remove overlapping regions algorithmically
-        # the function `remove_overlapping` outputs a df with a "algor_bp"
+        # the function `remove_overlapping` outputs a df with a "algor_bpsum"
         # column
-        df_absolute_summary["algor_bp"] = 0
+        df_absolute_summary["algor_bpsum"] = 0
 
         pd.options.display.max_rows = None # debug
         print(df_absolute_summary.head())  # debug
@@ -833,16 +833,16 @@ class Repeat:
                                                on=["Species", "sequid_type",
                                                    "class", "subclass", "order",
                                                    "superfam"])
-                print(df_absolute_summary[["algor_bp_x", "algor_bp_y"]].info()) # debug
-                df_absolute_summary["algor_bp_x"] = (
-                df_absolute_summary["algor_bp_x"].fillna(0))
-                df_absolute_summary["algor_bp_y"] = (
-                    df_absolute_summary["algor_bp_x"] +
-                    df_absolute_summary["algor_bp_y"])
-                df_absolute_summary.drop(columns=["algor_bp_x"], inplace=True)
-                df_absolute_summary.rename(columns={"algor_bp_y": "algor_bp"},
-                                           inplace=True)
-                print(df_absolute_summary[["algor_bp"]].info()) # debug
+                print(df_absolute_summary[["algor_bpsum_x", "algor_bpsum_y"]].info()) # debug
+                df_absolute_summary["algor_bpsum_x"] = (
+                df_absolute_summary["algor_bpsum_x"].fillna(0))
+                df_absolute_summary["algor_bpsum_y"] = (
+                    df_absolute_summary["algor_bpsum_x"] +
+                    df_absolute_summary["algor_bpsum_y"])
+                df_absolute_summary.drop(columns=["algor_bpsum_x"], inplace=True)
+                df_absolute_summary.rename(columns={
+                    "algor_bpsum_y": "algor_bpsum"}, inplace=True)
+                print(df_absolute_summary[["algor_bpsum"]].info()) # debug
 
         # compute non-repeat size per sequid_type
         for species in df_absolute_summary["Species"].unique():
@@ -859,6 +859,10 @@ class Repeat:
                     (df_absolute_summary["Species"] == species) &
                     (df_absolute_summary["sequid_type"] == sequid),
                     "tagged_bpsum"].sum()),
+                    'algor': int(df_absolute_summary.loc[
+                    (df_absolute_summary["Species"] == species) &
+                    (df_absolute_summary["sequid_type"] == sequid),
+                    "algor_bpsum"].sum()),
                 }
                 # compute non-repeat fraction
                 # add a row with non-repeat and repeat total bps
@@ -880,6 +884,9 @@ class Repeat:
                     "tagged_bpsum": [
                         seqsizes_dict[species][sequid] - repetitive_bps["tagged"],
                         repetitive_bps["tagged"]],
+                    "algor_bpsum": [
+                        seqsizes_dict[species][sequid] - repetitive_bps["algor"],
+                        repetitive_bps["algor"]],
                 }
                 df_absolute_summary = pd.concat([df_absolute_summary,
                                         pd.DataFrame(new_rows)])
