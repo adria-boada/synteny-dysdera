@@ -6,6 +6,33 @@
 # 22 Jun 2023  <adria@molevol-OptiPlex-9020>
 
 """
+INPUT:
+======
+
+ ## RepeatMasker.out modified.
+
+Output given by RepeatMasker with a few modifications...
+
+awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
+There are rows with an asterisk as 16th field, and rows with only 15 fields.
+Make sure all rows are of the same length (16 fields for all)
+
+Also, make sure to tag scaffolds and chromosomes in column 5
+
+ ## Index file/Sequid lengths
+
+TSV file with pairs of "sequid" and "sequid_length"
+"Sequids" are regexes to match in the RepeatMasker file.
+ie. 'chr1' will match 'Species_chr1', and 'Scaffold' will match 'Scaffold_1527'
+
+```idx
+Species       whatever
+Chr1          3600
+Chr2          5000
+...           ...
+ChrN          100
+Scaffolds     $(sum_len_scaffolds)
+```
 """
 
 import sys
@@ -801,8 +828,8 @@ class Repeat:
         # column
         df_absolute_summary["algor_bpsum"] = 0
 
-        pd.options.display.max_rows = None # debug
-        print(df_absolute_summary.head())  # debug
+#        pd.options.display.max_rows = None # debug
+#        print(df_absolute_summary.head())  # debug
 
         for species in df_concat["Species"].unique():
             sequid_list = df_concat.loc[
@@ -898,10 +925,45 @@ class Repeat:
         # the value is ~twice as close, although smaller instead of larger
         # compute all true. then add overlapping between False and True?
 
-        print(df_absolute_summary.to_markdown()) # debug
-        df_absolute_summary.round(decimals=2).to_csv(
-            'rpm5_prova.tsv', sep="\t", na_rep="NA")
+        self.df_complete = df_absolute_summary
+        self.df_main = df_concat
 
+        # another long __init__ function
+        return None
+
+    def check_classification(self):
+        """
+        Checks how the default classes have been re-classified
+        """
+        df = self.df_main
+
+        print("STATUS: Reclassification of dataframe...")
+        # show the new classification
+        # (drop rows sharing the same repeat class/subclass/etc.)
+        df_new_classes = df.drop_duplicates(
+            subset=['default_repclass', 'class',
+                    'subclass', 'order', 'superfam'])
+        # sort dataframe by classes (then subclass, etc.)
+        df_new_classes = df_new_classes.sort_values(
+            by=['class', 'subclass', 'order', 'superfam'])
+        # reset index
+        df_new_classes = df_new_classes.reset_index()
+        # only print columns with repeat class names
+        df_new_classes = df_new_classes[['class',
+                                     'subclass', 'order',
+                                     'superfam', 'mite',
+                                     'default_repclass']]
+        # print df in markdown format (requires tabulate package)
+        print(df_new_classes.round(decimals=2).to_markdown(None))
+
+        return df_new_classes
+
+    """
+    Draw boxplots of input dataframe (self.df_main) by
+      + X variable (e.g. SW score, repeat length...)
+      + Y category (e.g. repeat classes)
+      + Z hue (e.g. species, sequid...)
+    """
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -910,12 +972,21 @@ if __name__ == '__main__':
 
     ### PARSE ARGUMENTS ###
     if len(sys.argv) < 3:
-        sys.exit(f"Lacking RepeatMasker's output\n{sys.argv[0]} rm_sp1.out "+
-                 "species1_name rm_sp2.out species2_name ...")
+        sys.exit(f"Lacking RepeatMasker's output\n{sys.argv[0]} sp1_RM.out "+
+                 "sp1_sequidsizes.idx sp2_RM.out sp2_sequidsizes.idx ...\n"+
+                 "\n"+
+                 "The argv. `sequidsizes.idx` is an index portraying the "+
+                 "length of each sequid; TSV with two columns, one sequid "+
+                 "name and the other sequid length.")
 
     files = []
-    for i in range(1, len(sys.argv)):
+    seqsizes_dict = dict()
+    for i in range(1, len(sys.argv), 2):
         files.append(sys.argv[i])
+        df = pd.read_table(
+            sys.argv[i+1],
+            sep='\s+', index_col=0)
+        seqsizes_dict[df.index.name]=df.iloc[:,0].to_dict()
 
     repeats = Repeat(files,
     # send genome length in bases (to compute % genome occupancy)

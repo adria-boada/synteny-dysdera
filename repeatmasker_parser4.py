@@ -748,8 +748,6 @@ class Repeat:
         """
         df = self.df_input_table # check on created self.dataframe
 
-        pd.set_option('display.max_rows', None)
-        pd.set_option('display.max_colwidth', None)
         print_green(f'STATUS: Reclassification of dataframe:')
         # show the new classification
         # (drop rows sharing the same repeat class)
@@ -762,15 +760,12 @@ class Repeat:
         # reset index
         df_new_classes = df_new_classes.reset_index()
         # only print columns with repeat class names
-        df_new_classes = df_new_classes.loc[:, ['class',
+        df_new_classes = df_new_classes[['class',
                                      'subclass', 'order',
                                      'superfam', 'mite',
                                      'default_repclass']]
         # print df in markdown format (requires tabulate package)
         print(df_new_classes.round(decimals=2).to_markdown(None))
-        # return to default pandas options
-        pd.set_option('display.max_rows', 60)
-        pd.set_option('display.max_colwidth', 80)
 
         return df_new_classes
 
