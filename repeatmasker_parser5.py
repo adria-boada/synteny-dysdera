@@ -948,8 +948,9 @@ class Repeat:
         # compute groupby 'sequid' and 'species' values
         df_groupby_seq_and_species = df_absolute_summary.groupby([
             "Species", "sequid_type", "class"])[
-                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                    "count", "sum"]).reset_index()
+                ["naive_numele", "naive_bpsum", "tagged_numele",
+                 "tagged_bpsum", "algor_bpsum"]].agg([
+                    "sum"]).reset_index()
         self.df_groupby_seq_and_species = df_groupby_seq_and_species
 
         # compute groupby 'Species-only' values
@@ -1091,13 +1092,17 @@ if __name__ == '__main__':
         sep='\t', na_rep='NA',)
 
     repeats.df_complete.round(decimals=2).to_csv(
-        "repeat_df_complete.tsv", sep="\t", na_rep="NA")
+        "repeat_df_complete.tsv", sep="\t",
+        na_rep="NA", index=False)
     repeats.df_groupby_seq_and_species.round(decimals=2).to_csv(
-        "repeat_df_gby_seq_species.tsv", sep="\t", na_rep="NA")
+        "repeat_df_gby_seq_species.tsv", sep="\t",
+        na_rep="NA", index=False)
     repeats.df_groupby_species.round(decimals=2).to_csv(
-        "repeat_df_gby_species.tsv", sep="\t", na_rep="NA")
+        "repeat_df_gby_species.tsv", sep="\t",
+        na_rep="NA", index=False)
     repeats.df_groupby_reptype_and_species.round(decimals=2).to_csv(
-        "repeat_df_gby_reptype_species.tsv", sep="\t", na_rep="NA")
+        "repeat_df_gby_reptype_species.tsv", sep="\t",
+        na_rep="NA", index=False)
 
     repeats.boxplots_df_main()
 
