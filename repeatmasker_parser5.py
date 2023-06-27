@@ -321,7 +321,7 @@ class Repeat:
         # and rows not matching a single sequid
         # also, display what is the key matching (print unique matching fields)
         print_green(
-            "STATUS: REVISING REGEX MATCHES BETWEEN PROVIDED DICT AND TSV")
+            "STATUS: REVISING REGEX MATCHES BETWEEN PROVIDED CHR.INDEX AND RM.OUT")
         for species in seqsizes_dict.keys():
             df_species = df_concat.loc[df_concat["Species"] == species]
             df_species_totnrows = df_species.shape[0]
@@ -786,12 +786,6 @@ class Repeat:
             ['mite']
         ] = (False)
 
-        # check whether dtypes have been recorded properly
-        print_green(
-            "STATUS: INFO ABOUT LOADED DATAFRAME")
-        df_concat.info()
-        df_concat.head()
-
         # Summarize dataframe into absolute bp count per pairs of Species,
         # sequid-regex for each type of repeat.
         df_naive = df.groupby(
@@ -827,6 +821,7 @@ class Repeat:
         # the function `remove_overlapping` outputs a df with a "algor_bpsum"
         # column
         df_absolute_summary["algor_bpsum"] = 0
+        print_green("STATUS: COMPUTING BP ACCOUNTING FOR OVERLAPPING")
 
 #        pd.options.display.max_rows = None # debug
 #        print(df_absolute_summary.head())  # debug
@@ -860,7 +855,7 @@ class Repeat:
                                                on=["Species", "sequid_type",
                                                    "class", "subclass", "order",
                                                    "superfam"])
-                print(df_absolute_summary[["algor_bpsum_x", "algor_bpsum_y"]].info()) # debug
+#                print(df_absolute_summary[["algor_bpsum_x", "algor_bpsum_y"]].info()) # debug
                 df_absolute_summary["algor_bpsum_x"] = (
                 df_absolute_summary["algor_bpsum_x"].fillna(0))
                 df_absolute_summary["algor_bpsum_y"] = (
@@ -869,7 +864,7 @@ class Repeat:
                 df_absolute_summary.drop(columns=["algor_bpsum_x"], inplace=True)
                 df_absolute_summary.rename(columns={
                     "algor_bpsum_y": "algor_bpsum"}, inplace=True)
-                print(df_absolute_summary[["algor_bpsum"]].info()) # debug
+#                print(df_absolute_summary[["algor_bpsum"]].info()) # debug
 
         # compute non-repeat size per sequid_type
         for species in df_absolute_summary["Species"].unique():
@@ -918,15 +913,51 @@ class Repeat:
                 df_absolute_summary = pd.concat([df_absolute_summary,
                                         pd.DataFrame(new_rows)])
 
-        # avgele length might not be interpreted as float dtype
-
-        # compute non-overlapping length
-        # removing all repeats with overlapping overshoots the correct bp
-        # the value is ~twice as close, although smaller instead of larger
-        # compute all true. then add overlapping between False and True?
-
+        # check whether dtypes have been recorded properly
+        df_absolute_summary[["naive_numele", "naive_avglen",
+                             "tagged_numele", "tagged_avglen"]] = (
+        df_absolute_summary[["naive_numele", "naive_avglen",
+                             "tagged_numele", "tagged_avglen"]].apply(
+                                 pd.to_numeric, errors="coerce"))
+        print_green(
+            "STATUS: INFO ABOUT INPUT/RECEIVED DATAFRAME")
+        df_concat.info()
+        df_absolute_summary.info()
         self.df_complete = df_absolute_summary
         self.df_main = df_concat
+
+        # compute num_eles for 'Repetitive_fraction' (=total by sequid) class
+        for species in df_absolute_summary["Species"].unique():
+            sequid_list = df_absolute_summary.loc[
+                df_absolute_summary["Species"]==species,
+                "sequid_type"].unique()
+            for seq in sequid_list:
+                msp = df_absolute_summary["Species"]==species
+                msq = df_absolute_summary["sequid_type"]==seq
+                df_absolute_summary.loc[
+                    (df_absolute_summary["class"]=="Repetitive_fraction") &
+                    (msp) & (msq),
+                "naive_numele"] = df_absolute_summary.loc[
+                    (msp)&(msq), "naive_numele"].sum()
+                df_absolute_summary.loc[
+                    (df_absolute_summary["class"]=="Repetitive_fraction") &
+                    (msp) & (msq),
+                "tagged_numele"] = df_absolute_summary.loc[
+                    (msp)&(msq), "tagged_numele"].sum()
+
+        # compute groupby 'sequid' or 'species' values
+        df_groupby_seq_and_species = df_absolute_summary.groupby([
+            "Species", "sequid_type", "class"])[
+                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                    "count", "sum"]).reset_index()
+        self.df_groupby_seq_and_species = df_groupby_seq_and_species
+
+        # compute groupby 'Species-only' values
+        df_groupby_species = df_absolute_summary.groupby([
+            "Species", "class"])[
+                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                    "count", "sum"]).reset_index()
+        self.df_groupby_species = df_groupby_species
 
         # another long __init__ function
         return None
@@ -937,7 +968,7 @@ class Repeat:
         """
         df = self.df_main
 
-        print("STATUS: Reclassification of dataframe...")
+        print_green("STATUS: CHECKING RE-CLASSIFICATION OF REPEAT 'TYPES'")
         # show the new classification
         # (drop rows sharing the same repeat class/subclass/etc.)
         df_new_classes = df.drop_duplicates(
@@ -958,12 +989,47 @@ class Repeat:
 
         return df_new_classes
 
-    """
-    Draw boxplots of input dataframe (self.df_main) by
-      + X variable (e.g. SW score, repeat length...)
-      + Y category (e.g. repeat classes)
-      + Z hue (e.g. species, sequid...)
-    """
+    def boxplots_df_main(self):
+        """
+        Draw boxplots of data from input dataframe (self.df_main) by
+          + X variable (e.g. SW score, repeat length...)
+          + Y category (e.g. repeat classes)
+          + Z hue (e.g. species, sequid...)
+        """
+        df = self.df_main
+
+        # pair x-variables with figure labels and titles
+        fig_titles = {
+            'score_SW': 'Smith-Waterman score',
+            'perc_divg': 'Divergence from consensus sequence',
+            'perc_indel': 'Indels from consensus sequence',
+            'replen': 'Repetitive element lengths',
+        }
+        fig_xlabel = {
+            'score_SW': 'score',
+            'perc_divg': '% divergence',
+            'perc_indel': '% indels (?)',
+            'replen': 'basepairs',
+        }
+        for xvar in ['score_SW', 'perc_divg', 'perc_indel',
+                     'replen']:
+            sns.boxplot(data=df, x=xvar, y='class',
+                        hue='Species', showmeans='True',
+                        # determine species hue
+                        palette={"Dcat": "#eb8f46",
+                                 "Dtil": "#30acac"},
+                        meanprops=dict(color='green',
+                                       marker='*',
+                                       markeredgecolor='black',
+                                       markersize='7'))
+            plt.title(fig_titles[xvar])
+            plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
+            plt.xlabel(fig_xlabel[xvar])
+            plt.savefig('matplotlib_boxplots_'+str(xvar)+'.png', dpi=300)
+            plt.close('all')
+
+        return None
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -979,6 +1045,27 @@ if __name__ == '__main__':
                  "length of each sequid; TSV with two columns, one sequid "+
                  "name and the other sequid length.")
 
+    """
+    seqsizes_dict=dict(
+       Dcat={
+           "Dcatchr1": 827927493,
+           "Dcatchr2": 604492468,
+           "Dcatchr3": 431906129,
+           "Dcatchr4": 421735357,
+           "DcatchrX": 662930524,
+           "Scaffold|ctg": 330778139},
+       Dtil={
+           "Dtilchr1": 210826211,
+           "Dtilchr2": 210901293,
+           "Dtilchr3": 205634564,
+           "Dtilchr4": 158554970,
+           "Dtilchr5": 152324531,
+           "Dtilchr6": 125744329,
+           "DtilchrX": 434793700,
+           "Scaffold": 50989031}
+       )
+    """
+
     files = []
     seqsizes_dict = dict()
     for i in range(1, len(sys.argv), 2):
@@ -990,23 +1077,19 @@ if __name__ == '__main__':
 
     repeats = Repeat(files,
     # send genome length in bases (to compute % genome occupancy)
-                     seqsizes_dict=dict(
-                        Dcat={
-                            "Dcatchr1": 827927493,
-                            "Dcatchr2": 604492468,
-                            "Dcatchr3": 431906129,
-                            "Dcatchr4": 421735357,
-                            "DcatchrX": 662930524,
-                            "Scaffold|ctg": 330778139},
-                        Dtil={
-                            "Dtilchr1": 210826211,
-                            "Dtilchr2": 210901293,
-                            "Dtilchr3": 205634564,
-                            "Dtilchr4": 158554970,
-                            "Dtilchr5": 152324531,
-                            "Dtilchr6": 125744329,
-                            "DtilchrX": 434793700,
-                            "Scaffold": 50989031}
-                        ))
+                    seqsizes_dict=seqsizes_dict)
+
+    repeats.check_classification(
+        ).round(decimals=2).to_csv('repeat_reclassification.tsv',
+        sep='\t', na_rep='NA',)
+
+    repeats.df_complete.round(decimals=2).to_csv(
+        "repeat_df_complete.tsv", sep="\t", na_rep="NA")
+    repeats.df_groupby_seq_and_species.round(decimals=2).to_csv(
+        "repeat_df_gby_seq_species.tsv", sep="\t", na_rep="NA")
+    repeats.df_groupby_species.round(decimals=2).to_csv(
+        "repeat_df_gby_species.tsv", sep="\t", na_rep="NA")
+
+    repeats.boxplots_df_main()
 
 
