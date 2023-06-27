@@ -750,11 +750,6 @@ class Repeat:
         ] = ('DNA', '1', 'TIR', 'Mutator')
 
         df.loc[
-            df["default_repclass"].str.contains('Maverick'),
-            ['class', 'subclass', 'order', 'superfam']
-        ] = ('DNA', '1', 'Maverick', 'Maverick')
-
-        df.loc[
             df["default_repclass"].str.contains('IS3EU'),
             ['class', 'subclass', 'order', 'superfam']
         ] = ('DNA', '1', 'NA', 'IS3EU')
@@ -774,6 +769,11 @@ class Repeat:
             (df["default_repclass"].str.contains('Helitron')),
             ['class', 'subclass', 'order', 'superfam']
         ] = ('DNA', '2', 'Helitron', 'Helitron')
+
+        df.loc[
+            df["default_repclass"].str.contains('Maverick'),
+            ['class', 'subclass', 'order', 'superfam']
+        ] = ('DNA', '2', 'Maverick', 'Maverick')
 
         # MITE or nMITE?
         df.loc[
@@ -945,7 +945,7 @@ class Repeat:
                 "tagged_numele"] = df_absolute_summary.loc[
                     (msp)&(msq), "tagged_numele"].sum()
 
-        # compute groupby 'sequid' or 'species' values
+        # compute groupby 'sequid' and 'species' values
         df_groupby_seq_and_species = df_absolute_summary.groupby([
             "Species", "sequid_type", "class"])[
                 ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
@@ -958,6 +958,13 @@ class Repeat:
                 ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
                     "count", "sum"]).reset_index()
         self.df_groupby_species = df_groupby_species
+
+        # compute groupby 'repeat-type' and 'species' values
+        df_groupby_reptype_and_species = df_absolute_summary.groupby([
+            "Species", "class", "subclass", "order", "superfam"])[
+                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                    "count", "sum"]).reset_index()
+        self.df_groupby_reptype_and_species = df_groupby_reptype_and_species
 
         # another long __init__ function
         return None
@@ -1089,6 +1096,8 @@ if __name__ == '__main__':
         "repeat_df_gby_seq_species.tsv", sep="\t", na_rep="NA")
     repeats.df_groupby_species.round(decimals=2).to_csv(
         "repeat_df_gby_species.tsv", sep="\t", na_rep="NA")
+    repeats.df_groupby_reptype_and_species.round(decimals=2).to_csv(
+        "repeat_df_gby_reptype_species.tsv", sep="\t", na_rep="NA")
 
     repeats.boxplots_df_main()
 
