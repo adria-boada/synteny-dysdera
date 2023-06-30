@@ -1038,6 +1038,105 @@ class Repeat:
 
         return None
 
+def compress_super_fams(df: "df_complete",
+                        minimum_percent: "int [0-100]" =5):
+    """
+    Compress superfamilies that are smaller than 5%
+    of the repetitive fraction (group as "ClassX - Other"
+    whilst keeping tack of grouped superfamilies)
+
+    minimum_percent: group superfamilies to class_Other which occupy less than
+    this value of the sequid length.
+    """
+    pre_df_return = {
+        "Species": [], "genome_subset": [], "class": [],
+        "superfam": [], "algor_bpsum": []}
+    regex_to_gensubs = {
+        "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
+    df["tupled_repclass"] = tuple(zip(
+                    list(df["class"]),
+                    list(df["subclass"]),
+                    list(df["order"]),
+                    list(df["superfam"]) ))
+
+    for species in df["Species"].unique():
+        d1 = df.loc[df["Species"]==species]
+        for genome_subset, regex in regex_to_gensubs.items():
+            d2 = d1.loc[d1["sequid_type"].str.contains(regex, regex=True)]
+            df_fraction_sum = d2.loc[d2["class"].str.contains("_fraction"),
+                                 "algor_bpsum"].sum()
+            for repclass in d2["tupled_repclass"].unique():
+                d3 = d2.loc[d2["tupled_repclass"]==repclass]
+                pre_df_return["Species"].append(species)
+                pre_df_return["genome_subset"].append(genome_subset)
+                pre_df_return["algor_bpsum"].append(d3["algor_bpsum"].sum())
+                # check whether this superfamily is greater than 5% of the
+                # repetitive fraction and is not NaN value...
+                pre_df_return["class"].append(repclass[0])
+                if d3["algor_bpsum"].sum() > (df_fraction_sum*minimum_percent)/100:
+                    if pd.isna(repclass[3])==False:
+                        pre_df_return["superfam"].append(repclass[3])
+                    elif pd.isna(repclass[2])==False:
+                        pre_df_return["superfam"].append(repclass[2])
+                    elif pd.isna(repclass[1])==False:
+                        pre_df_return["superfam"].append(repclass[1])
+                    else:
+                        pre_df_return["superfam"].append("NA")
+                else:
+                    pre_df_return["superfam"].append("Other")
+
+    r = pd.DataFrame(pre_df_return)
+    r = r.groupby(["Species", "genome_subset", "class",
+                "superfam"])["algor_bpsum"].agg(["sum", "count"])
+    r = r.sort_values(["sum"], ascending=False).sort_values(
+        ["Species", "genome_subset"]).reset_index()
+    r = r.loc[(r["class"]=="Repetitive_fraction")==False]
+
+    print(r.to_markdown())
+    return r
+
+def histogram_stacked_absolute(df):
+    """
+    INPUT
+    =====
+    pandas.DataFrame from the function `compress_super_fams()`
+
+    OUTPUT
+    ======
+    PNG file `filename` with the plotted histogram
+    """
+    df["xval"] = df["Species"]+"_ "+df["genome_subset"]
+    df["reptype"] = df["class"]+"_"+df["superfam"]
+    #first colour for nonrepetitive-fraction should be gray
+    # the other colors we do not care as much
+    needed_colours = len(df["reptype"].unique())
+    colors = sns.color_palette("hls", needed_colours)
+    colors[0] = "dimgrey"
+
+    # remove edgecolor from bars
+    plt.rcParams["patch.edgecolor"] = "none"
+    # set the size of the plot (wider than tall)
+    plt.figure(figsize=(8, 14))
+
+    ax = sns.histplot(data=df, x='xval', hue="reptype", weights="sum",
+                multiple="stack", shrink=0.9, palette=colors)
+    plt.grid(axis='y')
+    # move legend outside of the plotting box
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
+    ax.tick_params(axis='y', labelsize=20, rotation=90)
+    ax.tick_params(axis='x', labelsize=15)
+    plt.title("Distribution of repetitive and nonrepetitive fraction", y=1.02,
+              fontsize=20)
+    # adjust margins of figure, so legend, axis, etc.
+    # has enough space to be drawn
+    plt.subplots_adjust(left=0.3, bottom=0.18, right=0.59, top=0.95)
+    plt.ylabel("Gb", fontsize=18)
+    plt.xticks(rotation=90)
+    plt.xlabel("")
+    plt.savefig('histo_stacked_absolute_matplotlib.png', dpi=300)
+    plt.close('all')
+
+    return None
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
