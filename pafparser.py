@@ -39,7 +39,8 @@ import sys
 # Dataframes manipulation, akin to the R project
 import pandas as pd
 import numpy as np
-import natsort
+from natsort import index_natsorted
+import seaborn as sns
 
 # Plotting data into barplots, histograms, etc.
 import matplotlib.pyplot as plt
@@ -172,7 +173,7 @@ class Mapping(object):
         # tag (`Scaff`) which groups all of them under a single name: 
         if 'scaffold' in self.qname.lower() or 'ctg' in self.qname.lower():
             self.qname = 'Scf'
-        if 'scaffold' in self.tname.lower() or 'ctg' in self.qname.lower():
+        if 'scaffold' in self.tname.lower() or 'ctg' in self.tname.lower():
             self.tname = 'Scf'
         # `Scaff` results will be a mean/sum of all minor contigs. The lower
         # function makes the string lowercase (case-insensitive matching).
@@ -312,29 +313,59 @@ if __name__ == "__main__":
     print(df['Qname'].value_counts(normalize=True), end='\n\n')
     print(df['Tname'].value_counts(normalize=True), end='\n\n')
 
-    ## Plotting section ##
+    ## BoxPlotting section ##
 
-    # Box plot of mapping quality for each chromosome.
-    # Create a dataframe in which each column is the mapping qualities of a
-    # single chromosome/scaffold.
-    df_mapq = pd.DataFrame()
-    for name in ['Tname', 'Qname']:
-        for crm in df[name].unique():
-            df_crm_mapq = df[df[name]==crm].reset_index()['MapQ.']
-            df_crm_mapq = df_crm_mapq.rename(crm)
-            df_mapq = pd.concat([df_mapq, df_crm_mapq], axis=1)
+    # Create a concatenate of query and target values
+    # (mapqual, ali-len, etc.)
+    query = df.loc[:, ['Qname', 'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']]
+    query['Indel'] = df['Deletions'] + df['Insertions']
+    query.rename(columns={'Qname': 'Sequid'}, inplace=True)
+    target = df.loc[:, ['Tname', 'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']]
+    target['Indel'] = df['Deletions'] + df['Insertions']
+    target.rename(columns={'Tname': 'Sequid'}, inplace=True)
+    df_concat = pd.concat([query, target])
 
-    # natsort the df_mapq
-    df_mapq = df_mapq.reindex(columns=natsort.humansorted(df_mapq.columns))
+    # natsort df_concat by sequid
+    # (removing 'Q.' or 'T.', sorting by 'Dcat' or 'Dtil')
+    df_concat = df_concat.sort_values(
+                            by=['Sequid'],
+                            key=lambda x: np.argsort(index_natsorted(
+                            # sort by "Sequid", removing first two
+                            # characters from string in column
+                            df_concat["Sequid"].str[2:])))
 
-    print("# Writing mapqual-boxplot.jpg...")
-    print("----------")
-    # Plot `df_mapq` with matplotlib.
-    fig, ax = plt.subplots(figsize=(6.8, 10.5))
-    df_mapq.plot.box(showmeans=True, ax=ax)
-    plt.xticks(rotation = 85) # Rotates X-Axis Ticks by 85-degrees
-    plt.title('Mapping qualities for individual chromosomes'+
-              '\nGreen bar/triangle are median/mean, black circles outliers')
-    plt.savefig("mapqual-boxplot.jpg")
-
+    fig_titles = {
+        # 'df_colname': 'Fig. title',
+        'Alig. len.': 'Length of sequences alignment (xlim cut)',
+        'BLAST-id.': 'Standard/BLAST sequences identity',
+        'Compressed-id.': 'Gap-compressed sequences identity',
+        'Indel': 'Indels/gaps in sequences (xlim cut)',
+        'MapQ.': 'Mapping quality'}
+    fig_xlabel = {
+        # 'df_colname': 'Fig. xlabel',
+        'Alig. len.': 'Basepairs',
+        'BLAST-id.': 'Percent identity',
+        'Compressed-id.': 'Percent identity',
+        'Indel': 'Basepairs',
+        'MapQ.': 'Mapping quality'}
+    for xvar in ['Indel',
+            'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']:
+        sns.boxplot(data=df_concat, x=xvar, y='Sequid',
+                    showmeans=True,
+                    meanprops=dict(color='green',
+                                   marker='*',
+                                   markeredgecolor='black',
+                                   markersize='15'))
+        # Els rangs de l'eix X en alguns casos és massa ample
+        if xvar == 'Alig. len.':
+            plt.xlim(0, 10000) # Restringeix xlim
+        elif xvar == 'Indel':
+            plt.xlim(0, 2000) # Restringeix xlim
+        plt.title(fig_titles[xvar])
+        plt.subplots_adjust(left=0.2, bottom=0.1, right=0.95, top=0.91)
+        plt.xlabel(fig_xlabel[xvar])
+        print("# Plotting", str(xvar)+'_matplotlib.png')
+        print("----------")
+        plt.savefig(str(xvar)+'_matplotlib.png', dpi=300)
+        plt.close('all')
 
