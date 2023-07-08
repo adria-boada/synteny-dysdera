@@ -43,6 +43,7 @@ import os # compute file-size
 
 # plotting
 import seaborn as sns, matplotlib.pyplot as plt
+import matplotlib as mpl
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -386,29 +387,12 @@ class Repeat:
                 "tagged_numele"] = df_absolute_summary.loc[
                     (msp)&(msq), "tagged_numele"].sum()
 
-        # compute groupby 'sequid' and 'species' values
-        df_groupby_seq_and_species = df_absolute_summary.groupby([
-            "Species", "sequid_type", "class"])[
-                ["naive_numele", "naive_bpsum", "tagged_numele",
-                 "tagged_bpsum", "algor_bpsum"]].agg([
-                    "sum"]).reset_index()
-        self.df_groupby_seq_and_species = df_groupby_seq_and_species
+        (self.df_groupby_seq_and_species,
+         self.df_groupby_species,
+         self.df_groupby_reptype_and_species) = (
+            df_complete_summary_grouping(self.df_complete))
 
-        # compute groupby 'Species-only' values
-        df_groupby_species = df_absolute_summary.groupby([
-            "Species", "class"])[
-                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                    "count", "sum"]).reset_index()
-        self.df_groupby_species = df_groupby_species
-
-        # compute groupby 'repeat-type' and 'species' values
-        df_groupby_reptype_and_species = df_absolute_summary.groupby([
-            "Species", "class", "subclass", "order", "superfam"])[
-                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                    "count", "sum"]).reset_index()
-        self.df_groupby_reptype_and_species = df_groupby_reptype_and_species
-
-        # write newly created dataframes to tabular files
+        # Write newly created dataframes to tabular files
 
         # store the classification of REs in case it has to be checked...
         self.check_classification(
@@ -1044,7 +1028,7 @@ class Repeat:
         """
         df = self.df_main
 
-        print_green("STATUS: CHECKING RE-CLASSIFICATION OF REPEAT 'TYPES'")
+        print_green("\nSTATUS: CHECKING RE-CLASSIFICATION OF REPEAT 'TYPES'")
         # show the new classification
         # (drop rows sharing the same repeat class/subclass/etc.)
         df_new_classes = df.drop_duplicates(
@@ -1065,10 +1049,271 @@ class Repeat:
 
         return df_new_classes
 
+def df_complete_summary_grouping(df):
+    """
+    Group complete summary by certain columns/variables
+
+    Reduces information (e.g. from rep-length by chromosome
+    to whole species rep-length)
+    """
+
+    # compute groupby 'sequid' and 'species' values
+    df_groupby_seq_and_species = df.groupby([
+        "Species", "sequid_type", "class"])[
+            ["naive_numele", "naive_bpsum", "tagged_numele",
+             "tagged_bpsum", "algor_bpsum"]].agg([
+                "sum"]).reset_index()
+
+    # compute groupby 'Species-only' values
+    df_groupby_species = df.groupby([
+        "Species", "class"])[
+            ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                "count", "sum"]).reset_index()
+
+    # compute groupby 'repeat-type' and 'species' values
+    df_groupby_reptype_and_species = df.groupby([
+        "Species", "class", "subclass", "order", "superfam"])[
+            ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                "count", "sum"]).reset_index()
+
+    return (df_groupby_seq_and_species,
+            df_groupby_species,
+            df_groupby_reptype_and_species)
+
 
 class Plotting:
 
-    def boxplots_df_main(self):
+    def __init__(self,
+                 tsv_main,
+                 tsv_complete_summary,
+                 seqsizes_dict,):
+        """
+        Read TSVs from `Repeat` class
+        """
+        # list of file-paths
+        file_list = [tsv_main, tsv_complete_summary]
+
+        # might be useful further on
+        self.seqsizes_dict = seqsizes_dict
+
+        # complete genome sizes
+        gensizes_dict = dict()
+        for species in seqsizes_dict.keys():
+            gensizes_dict[species] = 0
+            for sequid in seqsizes_dict[species].keys():
+                gensizes_dict[species] += seqsizes_dict[species][sequid]
+        self.gensizes_dict = gensizes_dict
+
+        # make sure path to provided files exists
+        for file in file_list:
+            try:
+                with open(file) as ft:
+                    pass
+            except:
+                sys.exit(f'ERROR: Cannot read the provided path: {file}')
+
+        # read provided TSVs
+        self.df_main = pd.read_table(tsv_main).fillna("NA")
+        self.df_complete_summary = pd.read_table(tsv_complete_summary).fillna("NA")
+
+        # create a new column, where each class has a given colour
+        def apply_class_colours(x):
+            if x["class"] == 'DNA': return 'blue'
+            elif x["class"] == 'Other': return 'olive'
+            elif x["class"] == 'Retrotransposon': return 'red'
+            elif x["class"] == 'Unknown': return 'yellow'
+            elif x["class"] == 'Tandem_repeat': return 'lime'
+
+        self.df_main["colours_class"] = self.df_main.apply(apply_class_colours, axis=1)
+        self.df_complete_summary["colours_class"] = self.df_complete_summary.apply(
+            apply_class_colours, axis=1)
+
+        return None
+
+    def histogram_divergence(self, df, write_to_filepath,
+                             title="Divergence from consensus sequence",
+                             hue: "colname to hue by (e.g. Species)" =False):
+        """
+        Draw a distribution of divergence from main df or a subset of main df
+
+        df colname with divergence values: 'perc_divg'
+        df colname with colours for each bin: 'colours_class'
+        `write_to_filepath`: save PNG figure to this path
+        """
+        if hue:
+            ax = sns.histplot(data=df, x='perc_divg',
+                              hue=hue, multiple="dodge",
+                        palette={"Dcat": "#eb8f46",
+                                 "Dtil": "#30acac"})
+            plt.title(title, fontsize=12)
+            plt.xlabel("% divergence")
+            plt.savefig(write_to_filepath, dpi=300)
+            plt.close('all')
+
+        else:
+            ax = sns.histplot(data=df, x='perc_divg')
+            plt.title(title, fontsize=12)
+            plt.xlabel("% divergence")
+            plt.savefig(write_to_filepath, dpi=300)
+            plt.close('all')
+
+        return None
+
+    def histogram_both_species_and_reptype_pairs(self, folder=None,
+                                            filter_overlap_label=False):
+        """
+        """
+        d1 = self.df_main
+        if filter_overlap_label:
+            d1 = d1.loc[d1["overlapping"]]
+
+        for rep_class in d1["class"].unique():
+            d2 = d1.loc[d1["class"] == rep_class]
+            if folder:
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+                write_to_filepath = (folder+"/matplotlib_divhist_"+
+                    str(rep_class)+'.png')
+            else:
+                write_to_filepath = ('matplotlib_divhist_'+
+                    str(rep_class)+'.png')
+            self.histogram_divergence(
+                d2, write_to_filepath,
+                title=str(rep_class)+" divergence from consensus sequence",
+                hue="Species")
+
+            # compute subclass, order and superfam, but only
+            # for both 'DNA' and 'Retrotransposon' classes
+            if rep_class in ["DNA", "Retrotransposon"]:
+                # by subclass
+                for rep_type in d2["subclass"].unique():
+                    d3 = d2.loc[d2["subclass"] == rep_type]
+                    if folder:
+                        if not os.path.exists(folder):
+                            os.makedirs(folder)
+                        write_to_filepath = (folder+'/matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    else:
+                        write_to_filepath = ('matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    self.histogram_divergence(
+                        d3, write_to_filepath,
+                        title=str(rep_class)+"-"+str(rep_type)+
+                            " divergence from consensus sequence",
+                        hue="Species")
+
+                # by order
+                for rep_type in d2["order"].unique():
+                    d3 = d2.loc[d2["order"] == rep_type]
+                    if folder:
+                        if not os.path.exists(folder):
+                            os.makedirs(folder)
+                        write_to_filepath = (folder+'/matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    else:
+                        write_to_filepath = ('matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    self.histogram_divergence(
+                        d3, write_to_filepath,
+                        title=str(rep_class)+"-"+str(rep_type)+
+                            " divergence from consensus sequence",
+                        hue="Species")
+
+                # by superfam
+                for rep_type in d2["superfam"].unique():
+                    d3 = d2.loc[d2["superfam"] == rep_type]
+                    if folder:
+                        if not os.path.exists(folder):
+                            os.makedirs(folder)
+                        write_to_filepath = (folder+'/matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    else:
+                        write_to_filepath = ('matplotlib_divhist_'+
+                            str(rep_class)+"_"+str(rep_type)+".png")
+                    self.histogram_divergence(
+                        d3, write_to_filepath,
+                        title=str(rep_class)+"-"+str(rep_type)+
+                            " divergence from consensus sequence",
+                        hue="Species")
+
+        return None
+
+    def histogram_for_species_and_reptype_pairs(self, folder=None):
+        """
+        """
+        df = self.df_main
+
+        for species in df["Species"].unique():
+            # subset by species
+            d1 = df.loc[df["Species"] == species]
+            for rep_class in d1["class"].unique():
+                d2 = d1.loc[d1["class"] == rep_class]
+                if folder:
+                    if not os.path.exists(folder):
+                        os.makedirs(folder)
+                    write_to_filepath = (folder+'/matplotlib_divhist_'+
+                        str(species)+'_'+str(rep_class)+'.png')
+                else:
+                    write_to_filepath = ('matplotlib_divhist_'+
+                        str(species)+'_'+str(rep_class)+'.png')
+                self.histogram_divergence(
+                    d2, write_to_filepath,
+                    title=str(rep_class)+" divergence from consensus sequence")
+
+                # compute subclass, order and superfam, but only
+                # for both 'DNA' and 'Retrotransposon' classes
+                if rep_class in ["DNA", "Retrotransposon"]:
+                    # by subclass
+                    for rep_type in d2["subclass"].unique():
+                        d3 = d2.loc[d2["subclass"] == rep_type]
+                        if folder:
+                            if not os.path.exists(folder):
+                                os.makedirs(folder)
+                            write_to_filepath = (folder+'/matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        else:
+                            write_to_filepath = ('matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        self.histogram_divergence(
+                            d3, write_to_filepath,
+                            title=str(rep_class)+"-"+str(rep_type)+
+                                " divergence from consensus sequence")
+
+                    # by order
+                    for rep_type in d2["order"].unique():
+                        d3 = d2.loc[d2["order"] == rep_type]
+                        if folder:
+                            if not os.path.exists(folder):
+                                os.makedirs(folder)
+                            write_to_filepath = (folder+'/matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        else:
+                            write_to_filepath = ('matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        self.histogram_divergence(
+                            d3, write_to_filepath,
+                            title=str(rep_class)+"-"+str(rep_type)+
+                                " divergence from consensus sequence")
+
+                    # by superfam
+                    for rep_type in d2["superfam"].unique():
+                        d3 = d2.loc[d2["superfam"] == rep_type]
+                        if folder:
+                            if not os.path.exists(folder):
+                                os.makedirs(folder)
+                            write_to_filepath = (folder+'/matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        else:
+                            write_to_filepath = ('matplotlib_divhist_'+
+                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
+                        self.histogram_divergence(
+                            d3, write_to_filepath,
+                            title=str(rep_class)+"-"+str(rep_type)+
+                                " divergence from consensus sequence")
+
+        return None
+
+    def boxplots_df_main(self, folder=None):
         """
         Draw boxplots of data from input dataframe (self.df_main) by
           + X variable (e.g. SW score, repeat length...)
@@ -1104,7 +1349,12 @@ class Plotting:
             plt.title(fig_titles[xvar])
             plt.subplots_adjust(left=0.25, bottom=0.1, right=0.95, top=0.91)
             plt.xlabel(fig_xlabel[xvar])
-            plt.savefig('matplotlib_boxplots_'+str(xvar)+'.png', dpi=300)
+            if folder:
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+                plt.savefig(folder+'/matplotlib_boxplots_'+str(xvar)+'.png', dpi=300)
+            else:
+                plt.savefig('matplotlib_boxplots_'+str(xvar)+'.png', dpi=300)
             plt.close('all')
 
         return None
@@ -1456,27 +1706,61 @@ if __name__ == '__main__':
 
     ### PARSE ARGUMENTS ###
     if len(sys.argv) < 3:
-        sys.exit(f"Lacking RepeatMasker's output\n{sys.argv[0]} sp1_RM.out "+
-                 "sp1_sequidsizes.idx sp2_RM.out sp2_sequidsizes.idx ...\n"+
+        sys.exit(f"Lacking RepeatMasker's output\n{sys.argv[0]} [type:r|p]\n"+
+                 f"For r[epeat-parsing] option:\n{sys.argv[0]} r sp1_RM.out "+
+                 "sp1_sequidsizes.idx sp2_RM.out sp2_sequidsizes.idx ..."+
                  "\n"+
+                 f"For p[lotting] option:\n{sys.argv[0]} p main.tsv summary.tsv "
+                 "sp1_sequidsizes.idx sp2_sequidsizes.idx ...\n\n"+
                  "The argv. `sequidsizes.idx` is an index portraying the "+
                  "length of each sequid; TSV with two columns, one sequid "+
                  "name and the other sequid length.")
 
-    files = []
-    seqsizes_dict = dict()
+    if sys.argv[1]=='r':
+        print("Selected 'r' option (repeat-parsing)\n")
+        files = []
+        seqsizes_dict = dict()
 
-    for i in range(1, len(sys.argv), 2):
-        # store a list of file-paths as strings
-        files.append(sys.argv[i])
-        # from idx tabular file to python dict...
-        df = pd.read_table(
-            sys.argv[i+1],
-            sep='\s+', index_col=0)
-        seqsizes_dict[df.index.name]=df.iloc[:,0].to_dict()
+        for i in range(2, len(sys.argv), 2):
+            # store a list of file-paths as strings
+            files.append(sys.argv[i])
+            # from idx tabular file to python dict...
+            df = pd.read_table(
+                sys.argv[i+1],
+                sep='\s+', index_col=0)
+            seqsizes_dict[df.index.name]=df.iloc[:,0].to_dict()
 
-    repeats = Repeat(files,
-    # send genome length in bases (to compute % genome occupancy)
+        repeats = Repeat(files,
+        # send genome length in bases (to compute % genome occupancy)
                     seqsizes_dict=seqsizes_dict)
+
+    elif sys.argv[1]=='p':
+        print("Selected 'p' option (plotting)\n")
+        # load TSV path created by previous Repeat class...
+        tsv_main_path = sys.argv[2]
+        tsv_complete_summary_path = sys.argv[3]
+
+        seqsizes_dict = dict()
+        for i in range(4, len(sys.argv)):
+            # from idx tabular file to python dict...
+            df = pd.read_table(
+                sys.argv[i],
+                sep='\s+', index_col=0)
+            seqsizes_dict[df.index.name]=df.iloc[:,0].to_dict()
+
+        plots = Plotting(
+            tsv_main_path,
+            tsv_complete_summary_path,
+            seqsizes_dict)
+
+        # create plots
+        plots.boxplots_df_main(folder="Boxplots")
+        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
+        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
+        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
+
+    else:
+        print("Send either 'r' or 'p' as first argv "+
+              "to specify in which mode the script should run")
 
 
