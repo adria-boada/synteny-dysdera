@@ -17,7 +17,7 @@ awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.o
 There are rows with an asterisk as 16th field, and rows with only 15 fields.
 Make sure all rows are of the same length (16 fields for all)
 
-Also, make sure to tag scaffolds and chromosomes in column 5
+Moreover, make sure to correctly label minor scaffolds from chromosomes in column 5
 
  ## Index file/Sequid lengths
 
@@ -75,133 +75,6 @@ with open(inputfile) as file:
       ...
 """
 
-def remove_overlapping(intervals):
-    """
-    Parse intervals of a given Species-sequid and remove overlapping.
-
-    INPUT
-
-    * intervals: A list with sublists. Each sublist is a couple of coordinates;
-    begin and end (integers). Add score for intervals as the third item of
-    sublists. Include a tuple with (class, subclass, order, superfam)
-
-    [[begin_1, end_1, score_1, class_tuple_1], ...,
-    [begin_N, end_N, score_N, class_tuple_N]]
-
-    OUTPUT
-
-    Sum of lengths, each one computed as `(end-begin)+1`. Removes all
-    overlapping segments (counts each nucleotide a single time).
-    """
-    # Init dataframe which will be returned
-    # compute unique repeat types
-    unique_class_tuples = list(set(tuple(x[3]) for x in intervals))
-    unique_class_tuples.sort()
-    # covert into pd.MultiIndex()
-    idx = pd.MultiIndex.from_tuples(unique_class_tuples, names=[
-            'class', 'subclass', 'order', 'superfam'])
-    # create df
-    df_resulting = pd.DataFrame(index=idx)
-    df_resulting['algor_bpsum'] = 0
-
-    # Create a point-list from an interval-list
-    # from [begin, end], [begin, end], etc.
-    # to [coord, begin, 0], [coord, end, 0], [coord, begin, 1], etc.
-    point_list = []
-    for i in range(0, len(intervals)):
-        # Left/starting points labeled '0'
-        point_list += [ [intervals[i][0], 0, i] ]
-        # Right/ending points labeled '1'
-        point_list += [ [intervals[i][1], 1, i] ]
-    # sort point list by position (by first value in sublists)
-    point_list.sort()
-
-    # Init algorithm variables
-    currentBest = -1
-    open_intervals = []
-
-    # for each point in point list:
-    for i in range(0, len(point_list)):
-        # DEBUG #
-##        print(df_resulting)
-##        print('currentBest:', currentBest)
-##        print('iterate:', point_list[i])
-##        print('open_intervals:', open_intervals)
-        # DEBUG #
-
-        # If the loop landed on a left point (0)
-        # opens an interval
-        if point_list[i][1] == 0:
-
-            # if there is no other interval opened:
-            if currentBest == -1:
-                # enters interval 'i'
-                currentBest = point_list[i][2]
-                currentBegin = int(point_list[i][0])
-                currentScore = int(intervals[currentBest][2])
-
-            # else, there already was an open interval:
-            # (and it is of lower score than currentBest)
-            elif currentScore > intervals[point_list[i][2]][2]:
-                # do not close currentBest, because the next interval (repeat)
-                # is of lower score; however, append to open intervals list
-                iden = point_list[i][2]
-                open_intervals.append(
-                    [int(intervals[iden][2]),     # score
-                     iden])                       # ID
-                open_intervals.sort(reverse=True) # sort by score
-
-            # else, currentScore should be higher
-            else:
-                # compute length up until now (begin2 -begin1)
-                interval_length = point_list[i][0] -currentBegin
-                # add this length to the resulting pandas df
-                reptype = intervals[currentBest][3]
-                df_resulting.loc[reptype, "algor_bpsum"] += interval_length
-                # append index of past Best to open_intervals
-                iden = currentBest
-                open_intervals.append(
-                    [int(intervals[iden][2]),     # score
-                     iden])                       # ID
-                open_intervals.sort(reverse=True) # sort by score
-                # and change currentBest
-                currentBest = point_list[i][2]
-                currentBegin = point_list[i][0]
-                currentScore = intervals[currentBest][2]
-
-        # If the loop landed on a right point (1)
-        # closes an interval
-        # moreover, it has to be the right point of the
-        # currently open interval 'i'
-        elif point_list[i][2] == currentBest:
-            # DEBUG
-##            print('point_list[i][2] (', point_list[i], ') == currentBest')
-            # compute length up until now (end -begin +1)
-            interval_length = point_list[i][0] -currentBegin +1
-            # add this length to the resulting pandas df
-            reptype = intervals[currentBest][3]
-            df_resulting.loc[reptype, "algor_bpsum"] += interval_length
-            # Close this interval and open the next best one in open_intervals
-            if len(open_intervals) == 0:
-                currentBest = -1
-            else:
-                # remove second best from open_intervals and use it as
-                # currentBest
-                c = open_intervals.pop(0)
-                currentBest = c[1]
-                currentScore = c[0]
-                currentBegin = point_list[i][0] +1
-
-        # Otherwise, it is closing an interval listed in `open_intervals`
-        else:
-            # remove the interval from `open_intervals`
-            iden = point_list[i][2]
-            open_intervals.remove(
-                [int(intervals[iden][2]), # score
-                iden])                    # ID
-
-    return df_resulting
-
 class Repeat:
 
     def __init__(self,
@@ -248,7 +121,7 @@ class Repeat:
                 gensizes_dict[species] += seqsizes_dict[species][sequid]
         self.gensizes_dict = gensizes_dict
 
-        # make sure path is correct
+        # make sure path to provided files exists
         for file in file_list:
             try:
                 with open(file) as ft:
@@ -335,8 +208,8 @@ class Repeat:
                 print(" + Regex matching count:",
                       len(list(df_species_and_regex["sequid"].unique())),
                       "unique sequids")
-                print(" + Regex matching list:",
-                      list(df_species_and_regex["sequid"].unique()))
+#                print(" + Regex matching list:",
+#                      list(df_species_and_regex["sequid"].unique()))
                 # add new col to keep track of these 'sequid_types'
                 df_concat.loc[
                     (df_concat["Species"] == species) &
@@ -348,9 +221,257 @@ class Repeat:
                   round((df_species_matchrows/df_species_totnrows) *100, ndigits=3),
                   "%)\n")
 
-        # Long paragraphs to classify "default_repclass" into
-        # four new columns, easier to read and employ
-        df = df_concat
+        # reclassify repeat types into 4 new neat columns
+        df_concat = self.reclassification(df_concat)
+
+        # Summarize dataframe into absolute bp count per pairs of Species,
+        # sequid-regex for each type of repeat.
+        df_naive = df_concat.groupby(
+            ["Species", "sequid_type", "class", "subclass", "order",
+                    "superfam"])["replen"].agg(["count",   # sum lens of repeats
+                                                "mean",  # avg len of repeat
+                                                "sum"] # amount of repeat
+                                        )
+        # rename columns
+        df_naive = df_naive.rename(columns={
+            'sum': 'naive_bpsum',
+            'mean': 'naive_avglen',
+            'count': 'naive_numele'})
+
+        # remove 'Overlapping' tagged repeats by RepeatMasker from the sum
+        df = df_concat.loc[df_concat["overlapping"] == False]
+        df_tagged = df.groupby(
+            ["Species", "sequid_type", "class", "subclass", "order",
+                    "superfam"])["replen"].agg(["count",   # sum lens of repeats
+                                                "mean",  # avg len of repeat
+                                                "sum"] # amount of repeat
+                                        )
+        # rename columns
+        df_tagged = df_tagged.rename(columns={
+            'sum': 'tagged_bpsum',
+            'mean': 'tagged_avglen',
+            'count': 'tagged_numele'})
+
+        # merge naive, tagged dataframes
+        df_absolute_summary = df_naive.join([df_tagged]).reset_index()
+
+        # Remove overlapping regions algorithmically
+        # the function `remove_overlapping` outputs a df with a new column
+        # called "algor_bpsum"
+        df_absolute_summary["algor_bpsum"] = 0
+        print_green("STATUS: COMPUTING BP ACCOUNTING FOR OVERLAPPING")
+        # subset the dataframe for each sequid in each species
+        for species in df_concat["Species"].unique():
+            sequid_list = df_concat.loc[
+                df_concat["Species"] == species,
+                "sequid"].unique()
+            for seq in sequid_list:
+                # subset the dataframe for each sequid in each species
+                d = df_concat.loc[
+                    (df_concat["Species"]==species) &
+                    (df_concat["sequid"]==seq), ]
+                # instead of grouping by the loop var `seq`, group by
+                # sequid_type because then ALL scaffolds will be together
+                seqtype = d["sequid_type"].unique()[0]
+                tuple_repclass = tuple(zip(
+                    list(d["class"]),
+                    list(d["subclass"]),
+                    list(d["order"]),
+                    list(d["superfam"]) ))
+                intervals = list(zip(
+                    list(d["begin"]),
+                    list(d["end"]),
+                    list(d["score_SW"]),
+                    tuple_repclass
+                ))
+                df_return = self.remove_overlapping(intervals).reset_index()
+                df_return.insert(0, "Species", [species]*df_return.shape[0])
+                df_return.insert(1, "sequid_type", [seqtype]*df_return.shape[0])
+                df_absolute_summary = pd.merge(right=df_absolute_summary, left=df_return,
+                                               # preserve right dataframe's keys
+                                               how="right",
+                                               on=["Species", "sequid_type",
+                                                   "class", "subclass", "order",
+                                                   "superfam"])
+#                print(df_absolute_summary[["algor_bpsum_x", "algor_bpsum_y"]].info()) # debug
+                df_absolute_summary["algor_bpsum_x"] = (
+                df_absolute_summary["algor_bpsum_x"].fillna(0))
+                df_absolute_summary["algor_bpsum_y"] = (
+                    df_absolute_summary["algor_bpsum_x"] +
+                    df_absolute_summary["algor_bpsum_y"])
+                df_absolute_summary.drop(columns=["algor_bpsum_x"], inplace=True)
+                df_absolute_summary.rename(columns={
+                    "algor_bpsum_y": "algor_bpsum"}, inplace=True)
+#                print(df_absolute_summary[["algor_bpsum"]].info()) # debug
+
+        # print the sum of algorithmically overlapping bps
+        self.how_much_overlapping(df_absolute_summary)
+
+        # compute non-repeat size per sequid_type
+        for species in df_absolute_summary["Species"].unique():
+            for sequid in df_absolute_summary.loc[
+                    df_absolute_summary["Species"] == species,
+                    "sequid_type"].unique():
+                # compute fraction of repetitive repeats
+                repetitive_bps = {
+                    'naive': int(df_absolute_summary.loc[
+                    (df_absolute_summary["Species"] == species) &
+                    (df_absolute_summary["sequid_type"] == sequid),
+                    "naive_bpsum"].sum()),
+                    'tagged': int(df_absolute_summary.loc[
+                    (df_absolute_summary["Species"] == species) &
+                    (df_absolute_summary["sequid_type"] == sequid),
+                    "tagged_bpsum"].sum()),
+                    'algor': int(df_absolute_summary.loc[
+                    (df_absolute_summary["Species"] == species) &
+                    (df_absolute_summary["sequid_type"] == sequid),
+                    "algor_bpsum"].sum()),
+                }
+                # compute non-repeat fraction
+                # add a row with non-repeat and repeat total bps
+                new_rows = {
+                    "Species": [species] *2,
+                    "sequid_type": [sequid] *2,
+                    "class": ["Nonrepetitive_fraction",
+                              "Repetitive_fraction"],
+                    "subclass": ["NA"] *2,
+                    "order": ["NA"] *2,
+                    "superfam": ["NA"] *2,
+                    "naive_numele": ["NA"] *2,
+                    "naive_avglen": ["NA"] *2,
+                    "naive_bpsum": [
+                        seqsizes_dict[species][sequid] - repetitive_bps["naive"],
+                        repetitive_bps["naive"] ],
+                    "tagged_numele": ["NA"] *2,
+                    "tagged_avglen": ["NA"] *2,
+                    "tagged_bpsum": [
+                        seqsizes_dict[species][sequid] - repetitive_bps["tagged"],
+                        repetitive_bps["tagged"]],
+                    "algor_bpsum": [
+                        seqsizes_dict[species][sequid] - repetitive_bps["algor"],
+                        repetitive_bps["algor"]],
+                }
+                df_absolute_summary = pd.concat([df_absolute_summary,
+                                        pd.DataFrame(new_rows)])
+
+        # check whether dtypes have been recorded properly
+        df_absolute_summary[["naive_numele", "naive_avglen",
+                             "tagged_numele", "tagged_avglen"]] = (
+        df_absolute_summary[["naive_numele", "naive_avglen",
+                             "tagged_numele", "tagged_avglen"]].apply(
+                                 pd.to_numeric, errors="coerce"))
+        print_green(
+            "\nSTATUS: INFO ABOUT INPUT/RECEIVED DATAFRAME")
+        df_concat.info()
+        df_absolute_summary.info()
+        self.df_complete = df_absolute_summary
+        self.df_main = df_concat
+
+        # compute num_eles for 'Repetitive_fraction' (=total by sequid) class
+        for species in df_absolute_summary["Species"].unique():
+            sequid_list = df_absolute_summary.loc[
+                df_absolute_summary["Species"]==species,
+                "sequid_type"].unique()
+            for seq in sequid_list:
+                msp = df_absolute_summary["Species"]==species
+                msq = df_absolute_summary["sequid_type"]==seq
+                df_absolute_summary.loc[
+                    (df_absolute_summary["class"]=="Repetitive_fraction") &
+                    (msp) & (msq),
+                "naive_numele"] = df_absolute_summary.loc[
+                    (msp)&(msq), "naive_numele"].sum()
+                df_absolute_summary.loc[
+                    (df_absolute_summary["class"]=="Repetitive_fraction") &
+                    (msp) & (msq),
+                "tagged_numele"] = df_absolute_summary.loc[
+                    (msp)&(msq), "tagged_numele"].sum()
+
+        # compute groupby 'sequid' and 'species' values
+        df_groupby_seq_and_species = df_absolute_summary.groupby([
+            "Species", "sequid_type", "class"])[
+                ["naive_numele", "naive_bpsum", "tagged_numele",
+                 "tagged_bpsum", "algor_bpsum"]].agg([
+                    "sum"]).reset_index()
+        self.df_groupby_seq_and_species = df_groupby_seq_and_species
+
+        # compute groupby 'Species-only' values
+        df_groupby_species = df_absolute_summary.groupby([
+            "Species", "class"])[
+                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                    "count", "sum"]).reset_index()
+        self.df_groupby_species = df_groupby_species
+
+        # compute groupby 'repeat-type' and 'species' values
+        df_groupby_reptype_and_species = df_absolute_summary.groupby([
+            "Species", "class", "subclass", "order", "superfam"])[
+                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
+                    "count", "sum"]).reset_index()
+        self.df_groupby_reptype_and_species = df_groupby_reptype_and_species
+
+        # write newly created dataframes to tabular files
+
+        # store the classification of REs in case it has to be checked...
+        self.check_classification(
+            ).round(decimals=2).to_csv('repeat_reclassification.tsv',
+            sep='\t', na_rep='NA',)
+
+        # "refined" RM out
+        self.df_main.round(decimals=2).to_csv(
+            "repeat_df_main.tsv", sep="\t",
+            na_rep="NA", index=False)
+
+        # df with a complete summary of the raw RM output
+        self.df_complete.round(decimals=2).to_csv(
+            "repeat_df_complete.tsv", sep="\t",
+            na_rep="NA", index=False)
+
+        # Groupings of sequence/species
+        self.df_groupby_seq_and_species.round(decimals=2).to_csv(
+            "repeat_df_gby_seq_species.tsv", sep="\t",
+            na_rep="NA", index=False)
+        self.df_groupby_species.round(decimals=2).to_csv(
+            "repeat_df_gby_species.tsv", sep="\t",
+            na_rep="NA", index=False)
+        self.df_groupby_reptype_and_species.round(decimals=2).to_csv(
+            "repeat_df_gby_reptype_species.tsv", sep="\t",
+            na_rep="NA", index=False)
+
+        # another long __init__ function
+        return None
+
+    def how_much_overlapping(self,
+        df: "input `df_absolute_summary` from __init__"):
+        """
+        Compute sum of bps for each method (naive_bpsum, tagged_bpsum and
+        algor_bpsum) and percentages relative to naive (how much overlapping of
+        repeats do we encounter)
+
+        Print it all to terminal
+        """
+
+        for species in df["Species"].unique():
+            d = df.loc[df["Species"] == species]
+            naive_bpsum = d["naive_bpsum"].sum()
+            print()
+            print(" ----- How much overlapping of REs is present in", species,
+                  "-----")
+            print("+ Naive sum of basepairs:", naive_bpsum, "/ 100 %")
+            print("+ Bps removing overlapping REs:",
+                d["tagged_bpsum"].sum(), "/",
+                round((d["tagged_bpsum"].sum()/naive_bpsum)*100, 1),
+                "%")
+            print("+ Bps algorithmically accounting for overlaps:",
+                d["algor_bpsum"].sum(), "/",
+                round((d["algor_bpsum"].sum()/naive_bpsum)*100, 1),
+                "%")
+
+        return None
+
+    def reclassification(self, df: "input df_concat from __init__"):
+        """
+        Long function of many paragraphs, each reclassifying the default repeat
+        type into four new columns, easily read and employed.
+        """
 
         # UNKNOWN
         df.loc[
@@ -786,189 +907,136 @@ class Repeat:
             ['mite']
         ] = (False)
 
-        # Summarize dataframe into absolute bp count per pairs of Species,
-        # sequid-regex for each type of repeat.
-        df_naive = df.groupby(
-            ["Species", "sequid_type", "class", "subclass", "order",
-                    "superfam"])["replen"].agg(["count",   # sum lens of repeats
-                                                "mean",  # avg len of repeat
-                                                "sum"] # amount of repeat
-                                        )
-        # rename columns
-        df_naive = df_naive.rename(columns={
-            'sum': 'naive_bpsum',
-            'mean': 'naive_avglen',
-            'count': 'naive_numele'})
+        return df
 
-        # remove 'Overlapping' tagged repeats by RepeatMasker from the sum
-        df = df_concat.loc[df_concat["overlapping"] == False]
-        df_tagged = df.groupby(
-            ["Species", "sequid_type", "class", "subclass", "order",
-                    "superfam"])["replen"].agg(["count",   # sum lens of repeats
-                                                "mean",  # avg len of repeat
-                                                "sum"] # amount of repeat
-                                        )
-        # rename columns
-        df_tagged = df_tagged.rename(columns={
-            'sum': 'tagged_bpsum',
-            'mean': 'tagged_avglen',
-            'count': 'tagged_numele'})
+    def remove_overlapping(self,
+        intervals):
+        """
+        Parse intervals of a given Species-sequid and remove overlapping.
 
-        # merge naive, tagged dataframes
-        df_absolute_summary = df_naive.join([df_tagged]).reset_index()
+        INPUT
 
-        # Remove overlapping regions algorithmically
-        # the function `remove_overlapping` outputs a df with a "algor_bpsum"
-        # column
-        df_absolute_summary["algor_bpsum"] = 0
-        print_green("STATUS: COMPUTING BP ACCOUNTING FOR OVERLAPPING")
+        * intervals: A list with sublists. Each sublist is a couple of coordinates;
+        begin and end (integers). Add score for intervals as the third item of
+        sublists. Include a tuple with (class, subclass, order, superfam)
 
-#        pd.options.display.max_rows = None # debug
-#        print(df_absolute_summary.head())  # debug
+        [[begin_1, end_1, score_1, class_tuple_1], ...,
+        [begin_N, end_N, score_N, class_tuple_N]]
 
-        for species in df_concat["Species"].unique():
-            sequid_list = df_concat.loc[
-                df_concat["Species"] == species,
-                "sequid"].unique()
-            for seq in sequid_list:
-                d = df_concat.loc[
-                    (df_concat["Species"]==species) &
-                    (df_concat["sequid"]==seq), ]
-                seqtype = d["sequid_type"].unique()[0]
-                tuple_repclass = tuple(zip(
-                    list(d["class"]),
-                    list(d["subclass"]),
-                    list(d["order"]),
-                    list(d["superfam"]) ))
-                intervals = list(zip(
-                    list(d["begin"]),
-                    list(d["end"]),
-                    list(d["score_SW"]),
-                    tuple_repclass
-                ))
-                df_return = remove_overlapping(intervals).reset_index()
-                df_return.insert(0, "Species", [species]*df_return.shape[0])
-                df_return.insert(1, "sequid_type", [seqtype]*df_return.shape[0])
-                df_absolute_summary = pd.merge(right=df_absolute_summary, left=df_return,
-                                               # preserve right dataframe's keys
-                                               how="right",
-                                               on=["Species", "sequid_type",
-                                                   "class", "subclass", "order",
-                                                   "superfam"])
-#                print(df_absolute_summary[["algor_bpsum_x", "algor_bpsum_y"]].info()) # debug
-                df_absolute_summary["algor_bpsum_x"] = (
-                df_absolute_summary["algor_bpsum_x"].fillna(0))
-                df_absolute_summary["algor_bpsum_y"] = (
-                    df_absolute_summary["algor_bpsum_x"] +
-                    df_absolute_summary["algor_bpsum_y"])
-                df_absolute_summary.drop(columns=["algor_bpsum_x"], inplace=True)
-                df_absolute_summary.rename(columns={
-                    "algor_bpsum_y": "algor_bpsum"}, inplace=True)
-#                print(df_absolute_summary[["algor_bpsum"]].info()) # debug
+        OUTPUT
 
-        # compute non-repeat size per sequid_type
-        for species in df_absolute_summary["Species"].unique():
-            for sequid in df_absolute_summary.loc[
-                    df_absolute_summary["Species"] == species,
-                    "sequid_type"].unique():
-                # compute fraction of repetitive repeats
-                repetitive_bps = {
-                    'naive': int(df_absolute_summary.loc[
-                    (df_absolute_summary["Species"] == species) &
-                    (df_absolute_summary["sequid_type"] == sequid),
-                    "naive_bpsum"].sum()),
-                    'tagged': int(df_absolute_summary.loc[
-                    (df_absolute_summary["Species"] == species) &
-                    (df_absolute_summary["sequid_type"] == sequid),
-                    "tagged_bpsum"].sum()),
-                    'algor': int(df_absolute_summary.loc[
-                    (df_absolute_summary["Species"] == species) &
-                    (df_absolute_summary["sequid_type"] == sequid),
-                    "algor_bpsum"].sum()),
-                }
-                # compute non-repeat fraction
-                # add a row with non-repeat and repeat total bps
-                new_rows = {
-                    "Species": [species] *2,
-                    "sequid_type": [sequid] *2,
-                    "class": ["Nonrepetitive_fraction",
-                              "Repetitive_fraction"],
-                    "subclass": ["NA"] *2,
-                    "order": ["NA"] *2,
-                    "superfam": ["NA"] *2,
-                    "naive_numele": ["NA"] *2,
-                    "naive_avglen": ["NA"] *2,
-                    "naive_bpsum": [
-                        seqsizes_dict[species][sequid] - repetitive_bps["naive"],
-                        repetitive_bps["naive"] ],
-                    "tagged_numele": ["NA"] *2,
-                    "tagged_avglen": ["NA"] *2,
-                    "tagged_bpsum": [
-                        seqsizes_dict[species][sequid] - repetitive_bps["tagged"],
-                        repetitive_bps["tagged"]],
-                    "algor_bpsum": [
-                        seqsizes_dict[species][sequid] - repetitive_bps["algor"],
-                        repetitive_bps["algor"]],
-                }
-                df_absolute_summary = pd.concat([df_absolute_summary,
-                                        pd.DataFrame(new_rows)])
+        Sum of lengths, each one computed as `(end-begin)+1`. Removes all
+        overlapping segments (counts each nucleotide a single time).
+        """
 
-        # check whether dtypes have been recorded properly
-        df_absolute_summary[["naive_numele", "naive_avglen",
-                             "tagged_numele", "tagged_avglen"]] = (
-        df_absolute_summary[["naive_numele", "naive_avglen",
-                             "tagged_numele", "tagged_avglen"]].apply(
-                                 pd.to_numeric, errors="coerce"))
-        print_green(
-            "STATUS: INFO ABOUT INPUT/RECEIVED DATAFRAME")
-        df_concat.info()
-        df_absolute_summary.info()
-        self.df_complete = df_absolute_summary
-        self.df_main = df_concat
+        # Init dataframe which will be returned
+        # compute unique repeat types
+        unique_class_tuples = list(set(tuple(x[3]) for x in intervals))
+        unique_class_tuples.sort()
+        # covert into pd.MultiIndex()
+        idx = pd.MultiIndex.from_tuples(unique_class_tuples, names=[
+                'class', 'subclass', 'order', 'superfam'])
+        # create df
+        df_resulting = pd.DataFrame(index=idx)
+        df_resulting['algor_bpsum'] = 0
 
-        # compute num_eles for 'Repetitive_fraction' (=total by sequid) class
-        for species in df_absolute_summary["Species"].unique():
-            sequid_list = df_absolute_summary.loc[
-                df_absolute_summary["Species"]==species,
-                "sequid_type"].unique()
-            for seq in sequid_list:
-                msp = df_absolute_summary["Species"]==species
-                msq = df_absolute_summary["sequid_type"]==seq
-                df_absolute_summary.loc[
-                    (df_absolute_summary["class"]=="Repetitive_fraction") &
-                    (msp) & (msq),
-                "naive_numele"] = df_absolute_summary.loc[
-                    (msp)&(msq), "naive_numele"].sum()
-                df_absolute_summary.loc[
-                    (df_absolute_summary["class"]=="Repetitive_fraction") &
-                    (msp) & (msq),
-                "tagged_numele"] = df_absolute_summary.loc[
-                    (msp)&(msq), "tagged_numele"].sum()
+        # Create a point-list from an interval-list
+        # from [begin, end], [begin, end], etc.
+        # to [coord, begin, 0], [coord, end, 0], [coord, begin, 1], etc.
+        point_list = []
+        for i in range(0, len(intervals)):
+            # Left/starting points labeled '0'
+            point_list += [ [intervals[i][0], 0, i] ]
+            # Right/ending points labeled '1'
+            point_list += [ [intervals[i][1], 1, i] ]
+        # sort point list by position (by first value in sublists)
+        point_list.sort()
 
-        # compute groupby 'sequid' and 'species' values
-        df_groupby_seq_and_species = df_absolute_summary.groupby([
-            "Species", "sequid_type", "class"])[
-                ["naive_numele", "naive_bpsum", "tagged_numele",
-                 "tagged_bpsum", "algor_bpsum"]].agg([
-                    "sum"]).reset_index()
-        self.df_groupby_seq_and_species = df_groupby_seq_and_species
+        # Init algorithm variables
+        currentBest = -1
+        open_intervals = []
 
-        # compute groupby 'Species-only' values
-        df_groupby_species = df_absolute_summary.groupby([
-            "Species", "class"])[
-                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                    "count", "sum"]).reset_index()
-        self.df_groupby_species = df_groupby_species
+        # for each point in point list:
+        for i in range(0, len(point_list)):
+            # DEBUG #
+    ##        print(df_resulting)
+    ##        print('currentBest:', currentBest)
+    ##        print('iterate:', point_list[i])
+    ##        print('open_intervals:', open_intervals)
+            # DEBUG #
 
-        # compute groupby 'repeat-type' and 'species' values
-        df_groupby_reptype_and_species = df_absolute_summary.groupby([
-            "Species", "class", "subclass", "order", "superfam"])[
-                ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                    "count", "sum"]).reset_index()
-        self.df_groupby_reptype_and_species = df_groupby_reptype_and_species
+            # If the loop landed on a left point (0)
+            # opens an interval
+            if point_list[i][1] == 0:
 
-        # another long __init__ function
-        return None
+                # if there is no other interval opened:
+                if currentBest == -1:
+                    # enters interval 'i'
+                    currentBest = point_list[i][2]
+                    currentBegin = int(point_list[i][0])
+                    currentScore = int(intervals[currentBest][2])
+
+                # else, there already was an open interval:
+                # (and it is of lower score than currentBest)
+                elif currentScore > intervals[point_list[i][2]][2]:
+                    # do not close currentBest, because the next interval (repeat)
+                    # is of lower score; however, append to open intervals list
+                    iden = point_list[i][2]
+                    open_intervals.append(
+                        [int(intervals[iden][2]),     # score
+                         iden])                       # ID
+                    open_intervals.sort(reverse=True) # sort by score
+
+                # else, currentScore should be higher
+                else:
+                    # compute length up until now (begin2 -begin1)
+                    interval_length = point_list[i][0] -currentBegin
+                    # add this length to the resulting pandas df
+                    reptype = intervals[currentBest][3]
+                    df_resulting.loc[reptype, "algor_bpsum"] += interval_length
+                    # append index of past Best to open_intervals
+                    iden = currentBest
+                    open_intervals.append(
+                        [int(intervals[iden][2]),     # score
+                         iden])                       # ID
+                    open_intervals.sort(reverse=True) # sort by score
+                    # and change currentBest
+                    currentBest = point_list[i][2]
+                    currentBegin = point_list[i][0]
+                    currentScore = intervals[currentBest][2]
+
+            # If the loop landed on a right point (1)
+            # closes an interval
+            # moreover, it has to be the right point of the
+            # currently open interval 'i'
+            elif point_list[i][2] == currentBest:
+                # DEBUG
+    ##            print('point_list[i][2] (', point_list[i], ') == currentBest')
+                # compute length up until now (end -begin +1)
+                interval_length = point_list[i][0] -currentBegin +1
+                # add this length to the resulting pandas df
+                reptype = intervals[currentBest][3]
+                df_resulting.loc[reptype, "algor_bpsum"] += interval_length
+                # Close this interval and open the next best one in open_intervals
+                if len(open_intervals) == 0:
+                    currentBest = -1
+                else:
+                    # remove second best from open_intervals and use it as
+                    # currentBest
+                    c = open_intervals.pop(0)
+                    currentBest = c[1]
+                    currentScore = c[0]
+                    currentBegin = point_list[i][0] +1
+
+            # Otherwise, it is closing an interval listed in `open_intervals`
+            else:
+                # remove the interval from `open_intervals`
+                iden = point_list[i][2]
+                open_intervals.remove(
+                    [int(intervals[iden][2]), # score
+                    iden])                    # ID
+
+        return df_resulting
 
     def check_classification(self):
         """
@@ -996,6 +1064,9 @@ class Repeat:
         print(df_new_classes.round(decimals=2).to_markdown(None))
 
         return df_new_classes
+
+
+class Plotting:
 
     def boxplots_df_main(self):
         """
@@ -1392,31 +1463,13 @@ if __name__ == '__main__':
                  "length of each sequid; TSV with two columns, one sequid "+
                  "name and the other sequid length.")
 
-    """
-    seqsizes_dict=dict(
-       Dcat={
-           "Dcatchr1": 827927493,
-           "Dcatchr2": 604492468,
-           "Dcatchr3": 431906129,
-           "Dcatchr4": 421735357,
-           "DcatchrX": 662930524,
-           "Scaffold|ctg": 330778139},
-       Dtil={
-           "Dtilchr1": 210826211,
-           "Dtilchr2": 210901293,
-           "Dtilchr3": 205634564,
-           "Dtilchr4": 158554970,
-           "Dtilchr5": 152324531,
-           "Dtilchr6": 125744329,
-           "DtilchrX": 434793700,
-           "Scaffold": 50989031}
-       )
-    """
-
     files = []
     seqsizes_dict = dict()
+
     for i in range(1, len(sys.argv), 2):
+        # store a list of file-paths as strings
         files.append(sys.argv[i])
+        # from idx tabular file to python dict...
         df = pd.read_table(
             sys.argv[i+1],
             sep='\s+', index_col=0)
@@ -1425,24 +1478,5 @@ if __name__ == '__main__':
     repeats = Repeat(files,
     # send genome length in bases (to compute % genome occupancy)
                     seqsizes_dict=seqsizes_dict)
-
-    repeats.check_classification(
-        ).round(decimals=2).to_csv('repeat_reclassification.tsv',
-        sep='\t', na_rep='NA',)
-
-    repeats.df_complete.round(decimals=2).to_csv(
-        "repeat_df_complete.tsv", sep="\t",
-        na_rep="NA", index=False)
-    repeats.df_groupby_seq_and_species.round(decimals=2).to_csv(
-        "repeat_df_gby_seq_species.tsv", sep="\t",
-        na_rep="NA", index=False)
-    repeats.df_groupby_species.round(decimals=2).to_csv(
-        "repeat_df_gby_species.tsv", sep="\t",
-        na_rep="NA", index=False)
-    repeats.df_groupby_reptype_and_species.round(decimals=2).to_csv(
-        "repeat_df_gby_reptype_species.tsv", sep="\t",
-        na_rep="NA", index=False)
-
-    repeats.boxplots_df_main()
 
 
