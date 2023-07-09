@@ -38,7 +38,7 @@ Scaffolds     $(sum_len_scaffolds)
 import sys
 
 # data (frames) handling
-import pandas as pd
+import pandas as pd, numpy as np
 import os # compute file-size
 
 # plotting
@@ -1080,6 +1080,7 @@ def df_complete_summary_grouping(df):
             df_groupby_species,
             df_groupby_reptype_and_species)
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 class Plotting:
 
@@ -1117,16 +1118,14 @@ class Plotting:
         self.df_complete_summary = pd.read_table(tsv_complete_summary).fillna("NA")
 
         # create a new column, where each class has a given colour
-        def apply_class_colours(x):
-            if x["class"] == 'DNA': return 'blue'
-            elif x["class"] == 'Other': return 'olive'
-            elif x["class"] == 'Retrotransposon': return 'red'
-            elif x["class"] == 'Unknown': return 'yellow'
-            elif x["class"] == 'Tandem_repeat': return 'lime'
-
-        self.df_main["colours_class"] = self.df_main.apply(apply_class_colours, axis=1)
-        self.df_complete_summary["colours_class"] = self.df_complete_summary.apply(
-            apply_class_colours, axis=1)
+        self.colours_by_class = {
+            "DNA": "lightblue",
+            "Other": "orange",
+            "Retrotransposon": "red",
+            "Unknown": "lime",
+            "Tandem_repeat": "yellow",
+            "Nonrepetitive_fraction": "dimgray"
+        }
 
         return None
 
@@ -1359,63 +1358,72 @@ class Plotting:
 
         return None
 
-def compress_super_fams(df: "`df_complete` TSV",
-                        minimum_percent: "int [0-100]" =5):
-    """
-    Compress superfamilies that are smaller than 5%
-    of the repetitive fraction (group as "ClassX - Other"
-    whilst keeping tack of grouped superfamilies)
+    def histogram_stacked_absolute(self):
+        """
+        INPUT
+        =====
+        `self.df_complete_summary`: Complete summary df
+        `self.colours_by_class`: Colours applied to each RE class
 
-    Moreover, group by "Autosomes", "Allosome" and "Genome"
+        OUTPUT
+        ======
+        PNG file with the plotted histogram
 
-    minimum_percent: group superfamilies to class_Other which occupy less than
-    this value of the sequid length.
-    """
-    pre_df_return = {
-        "Species": [], "genome_subset": [], "class": [],
-        "superfam": [], "algor_bpsum": []}
-    regex_to_gensubs = {
-        "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
-    df["tupled_repclass"] = tuple(zip(
-                    list(df["class"]),
-                    list(df["subclass"]),
-                    list(df["order"]),
-                    list(df["superfam"]) ))
+        More info/ references:
+        https://www.pythoncharts.com/matplotlib/stacked-bar-charts-labels/
+        """
+        # create a df copy of `df_complete_summary`
+        df = self.df_complete_summary.loc[:]
+        # remove repetitive fraction (sum of all repeats)
+        df = df.loc[(df["class"]=="Repetitive_fraction")==False]
+        # create a dict to subset df by kinds of chromosome
+        regex_to_gensubs = {  # pair regex with the name of the genome subset
+            "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
+            # contains `chr[[digit]]`, `chrX` or `anything`
 
-    for species in df["Species"].unique():
-        d1 = df.loc[df["Species"]==species]
-        for genome_subset, regex in regex_to_gensubs.items():
-            d2 = d1.loc[d1["sequid_type"].str.contains(regex, regex=True)]
-            df_fraction_sum = d2.loc[d2["class"].str.contains("_fraction"),
-                                 "algor_bpsum"].sum()
-            for repclass in d2["tupled_repclass"].unique():
-                d3 = d2.loc[d2["tupled_repclass"]==repclass]
-                pre_df_return["Species"].append(species)
-                pre_df_return["genome_subset"].append(genome_subset)
-                pre_df_return["algor_bpsum"].append(d3["algor_bpsum"].sum())
-                # check whether this superfamily is greater than 5% of the
-                # repetitive fraction and is not NaN value...
-                pre_df_return["class"].append(repclass[0])
-                if d3["algor_bpsum"].sum() > (df_fraction_sum*minimum_percent)/100:
-                    if pd.isna(repclass[3])==False:
-                        pre_df_return["superfam"].append(repclass[3])
-                    elif pd.isna(repclass[2])==False:
-                        pre_df_return["superfam"].append(repclass[2])
-                    elif pd.isna(repclass[1])==False:
-                        pre_df_return["superfam"].append(repclass[1])
-                    else:
-                        pre_df_return["superfam"].append("NA")
-                else:
-                    pre_df_return["superfam"].append("Other")
+        # remove edgecolor from bars
+        #plt.rcParams["patch.edgecolor"] = "k"
+        fig, ax = plt.subplots(figsize=(8,14))
 
-    r = pd.DataFrame(pre_df_return)
-    r = r.groupby(["Species", "genome_subset", "class",
-                "superfam"])["algor_bpsum"].agg(["sum", "count"])
-    r = r.sort_values(["sum"], ascending=False).sort_values(
-        ["Species", "genome_subset"]).reset_index()
-    r = r.loc[(r["class"]=="Repetitive_fraction")==False]
+        bottom = np.zeros(6)#debug (change 6 to len(species+genome subset))
+        for rep_class in df["class"].unique():
+            d1 = df.loc[df["class"] == rep_class]
+            bp_values = dict()
+            for rep_superfam in d1["superfam"].unique():
+                d2 = d1.loc[d1["superfam"] == rep_superfam]
+                for species in df["Species"].unique():
+                    d3 = d2.loc[d2["Species"] == species]
+                    for gsub_key in regex_to_gensubs.keys():
+                        # subset df where sequid type contains a regex
+                        d4 = d3.loc[d3["sequid_type"].str.contains(
+                            regex_to_gensubs[gsub_key])]
+                        xaxis = str(species) + "_" + str(gsub_key)
+                        # sum of basepairs for the triple-subsetted df
+                        bp_values[xaxis] = d4["algor_bpsum"].sum()
 
-    return r
+                # create the segment bar
+                print(bottom) # debug
+                print(bp_values) # debug
+                print(rep_class, self.colours_by_class[rep_class]) # debug
+                ax.bar(x=list(bp_values.keys()), height=list(bp_values.values()),
+                       bottom=bottom, label=rep_class,
+                       linewidth=.1, edgecolor='black',
+                       color=self.colours_by_class[rep_class])
+                # sum to bottom
+                bottom += np.array(list(bp_values.values()))
+
+        ax.set_title("Tips by day and gender")
+        handles, labels = plt.gca().get_legend_handles_labels()
+        labels, ids = np.unique(labels, return_index=True)
+        handles = [handles[i] for i in ids]
+        ax.legend(handles, labels, loc='best')
+        #plt.subplots_adjust(left=0.3, bottom=0.18, right=0.59, top=0.95)
+        plt.ylabel("Gb", fontsize=12)
+        plt.xticks(rotation=90)
+        #plt.xlabel("")
+        plt.savefig('matplotlib_histo_stacked_absolute.png', dpi=300)
+
+        return None
 
 def histogram_stacked_absolute(df):
     """
@@ -1430,7 +1438,7 @@ def histogram_stacked_absolute(df):
     See more:
     https://www.pythoncharts.com/matplotlib/stacked-bar-charts-labels/
     """
-    df["xval"] = df["Species"]+"_ "+df["genome_subset"]
+    df["xval"] = df["Species"]+"_"+df["genome_subset"]
     df["reptype"] = df["class"]+"_"+df["superfam"]
     #first colour for nonrepetitive-fraction should be gray
     # the other colors we do not care as much
@@ -1698,6 +1706,64 @@ def pies_relative(df: "`df_complete` TSV",
 
     return None
 
+def compress_super_fams(df: "`df_complete` TSV",
+                        minimum_percent: "int [0-100]" =5):
+    """
+    Compress superfamilies that are smaller than 5%
+    of the repetitive fraction (group as "ClassX - Other"
+    whilst keeping tack of grouped superfamilies)
+
+    Moreover, group by "Autosomes", "Allosome" and "Genome"
+
+    minimum_percent: group superfamilies to class_Other which occupy less than
+    this value of the sequid length.
+    """
+    pre_df_return = {
+        "Species": [], "genome_subset": [], "class": [],
+        "superfam": [], "algor_bpsum": []}
+    regex_to_gensubs = {
+        "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
+    df["tupled_repclass"] = tuple(zip(
+                    list(df["class"]),
+                    list(df["subclass"]),
+                    list(df["order"]),
+                    list(df["superfam"]) ))
+
+    for species in df["Species"].unique():
+        d1 = df.loc[df["Species"]==species]
+        for genome_subset, regex in regex_to_gensubs.items():
+            d2 = d1.loc[d1["sequid_type"].str.contains(regex, regex=True)]
+            df_fraction_sum = d2.loc[d2["class"].str.contains("_fraction"),
+                                 "algor_bpsum"].sum()
+            for repclass in d2["tupled_repclass"].unique():
+                d3 = d2.loc[d2["tupled_repclass"]==repclass]
+                pre_df_return["Species"].append(species)
+                pre_df_return["genome_subset"].append(genome_subset)
+                pre_df_return["algor_bpsum"].append(d3["algor_bpsum"].sum())
+                # check whether this superfamily is greater than 5% of the
+                # repetitive fraction and is not NaN value...
+                pre_df_return["class"].append(repclass[0])
+                if d3["algor_bpsum"].sum() > (df_fraction_sum*minimum_percent)/100:
+                    if pd.isna(repclass[3])==False:
+                        pre_df_return["superfam"].append(repclass[3])
+                    elif pd.isna(repclass[2])==False:
+                        pre_df_return["superfam"].append(repclass[2])
+                    elif pd.isna(repclass[1])==False:
+                        pre_df_return["superfam"].append(repclass[1])
+                    else:
+                        pre_df_return["superfam"].append("NA")
+                else:
+                    pre_df_return["superfam"].append("Other")
+
+    r = pd.DataFrame(pre_df_return)
+    r = r.groupby(["Species", "genome_subset", "class",
+                "superfam"])["algor_bpsum"].agg(["sum", "count"])
+    r = r.sort_values(["sum"], ascending=False).sort_values(
+        ["Species", "genome_subset"]).reset_index()
+    r = r.loc[(r["class"]=="Repetitive_fraction")==False]
+
+    return r
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1754,10 +1820,11 @@ if __name__ == '__main__':
             seqsizes_dict)
 
         # create plots
-        plots.boxplots_df_main(folder="Boxplots")
-        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
-        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
-        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
+#        plots.boxplots_df_main(folder="Boxplots")
+#        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
+#        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
+#        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
+        plots.histogram_stacked_absolute()
 
     else:
         print("Send either 'r' or 'p' as first argv "+
