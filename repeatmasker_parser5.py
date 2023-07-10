@@ -1376,14 +1376,28 @@ class Plotting:
         df = self.df_complete_summary.loc[:]
         # remove repetitive fraction (sum of all repeats)
         df = df.loc[(df["class"]=="Repetitive_fraction")==False]
+        # we are interested in sorting classes manually into the following order
+        ordering_classes = {
+            "DNA": 1, "Retrotransposon": 2, "Tandem_repeat": 3,
+            "Other": 4, "Unknown": 5, "Nonrepetitive_fraction": 6}
+        # we are also interested in secondarily sorting rows by 'algor_bpsum'
+        # (sum of basepairs for that entry/row in the table)
+        df = df.sort_values(["algor_bpsum"], ascending=True) # start by bp-sort
+        df = df.sort_values(["class"], key=lambda x: x.map(ordering_classes))
+        df = df.sort_values(["Species", "sequid_type"]).reset_index()
+        print(df.to_markdown())
+
         # create a dict to subset df by kinds of chromosome
         regex_to_gensubs = {  # pair regex with the name of the genome subset
-            "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
+            "Allosome": r"chrX", "Autosomes": r"chr\d", "Genome": r".*"}
             # contains `chr[[digit]]`, `chrX` or `anything`
 
         # remove edgecolor from bars
-        #plt.rcParams["patch.edgecolor"] = "k"
         fig, ax = plt.subplots(figsize=(8,14))
+        # `zorder` sends the grid to background
+        # it has to be also specified for `ax.bar()`
+        ax.grid(axis='y', color="darkslategrey", linestyle="dashed",
+                linewidth=2, zorder=0)
 
         bottom = np.zeros(6)#debug (change 6 to len(species+genome subset))
         for rep_class in df["class"].unique():
@@ -1402,17 +1416,16 @@ class Plotting:
                         bp_values[xaxis] = d4["algor_bpsum"].sum()
 
                 # create the segment bar
-                print(bottom) # debug
-                print(bp_values) # debug
-                print(rep_class, self.colours_by_class[rep_class]) # debug
                 ax.bar(x=list(bp_values.keys()), height=list(bp_values.values()),
                        bottom=bottom, label=rep_class,
-                       linewidth=.1, edgecolor='black',
-                       color=self.colours_by_class[rep_class])
+                       linewidth=0.4, edgecolor='black',
+                       color=self.colours_by_class[rep_class],
+                       zorder=3)
                 # sum to bottom
                 bottom += np.array(list(bp_values.values()))
 
-        ax.set_title("Tips by day and gender")
+        ax.set_title("Absolute occupancy (in Gb) by species and genome subset")
+        plt.suptitle("Each black division segregates classes by superfamilies")
         handles, labels = plt.gca().get_legend_handles_labels()
         labels, ids = np.unique(labels, return_index=True)
         handles = [handles[i] for i in ids]
