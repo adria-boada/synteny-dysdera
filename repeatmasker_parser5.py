@@ -1125,14 +1125,19 @@ class Plotting:
         self.df_main = pd.read_table(tsv_main).fillna("NA")
         self.df_complete_summary = pd.read_table(tsv_complete_summary).fillna("NA")
 
+        # create a dict to subset df by kinds of chromosome
+        self.regex_to_genome_subset = {  # pair regex with the name of the genome subset
+            "ChrX": r"chrX", "Autosomes": r"chr\d", "Genome": r".*"}
+            # contains `chr[[digit]]`, `chrX` or `anything`
+
         # create a new column, where each class has a given colour
         self.colours_by_class = {
-            "DNA": "lightblue",
+            "DNA": "blue",
             "Other": "orange",
             "Retrotransposon": "red",
             "Unknown": "lime",
             "Tandem_repeat": "yellow",
-            "Nonrepetitive_fraction": "dimgray"
+            "Nonrepetitive_fraction": "gray"
         }
 
         return None
@@ -1382,6 +1387,8 @@ class Plotting:
         """
         # create a df copy of `df_complete_summary`
         df = self.df_complete_summary.loc[:]
+        # create a dict to subset df by kinds of chromosome
+        rgensub = self.regex_to_genome_subset
         # remove repetitive fraction (sum of all repeats)
         df = df.loc[(df["class"]=="Repetitive_fraction")==False]
         # we are interested in sorting classes manually into the following order
@@ -1391,14 +1398,9 @@ class Plotting:
         # we are also interested in secondarily sorting rows by 'algor_bpsum'
         # (sum of basepairs for that entry/row in the table)
         df = df.sort_values(["algor_bpsum"], ascending=True) # start by bp-sort
-        df = df.sort_values(["class"], key=lambda x: x.map(ordering_classes))
-        df = df.sort_values(["Species", "sequid_type"]).reset_index()
-        print(df.to_markdown())
-
-        # create a dict to subset df by kinds of chromosome
-        regex_to_gensubs = {  # pair regex with the name of the genome subset
-            "Allosome": r"chrX", "Autosomes": r"chr\d", "Genome": r".*"}
-            # contains `chr[[digit]]`, `chrX` or `anything`
+        df = df.sort_values(["class"], key=lambda x: x.map(ordering_classes),
+                            kind="mergesort")
+        df = df.sort_values(["Species", "sequid_type"], kind="mergesort").reset_index(drop=True)
 
         # remove edgecolor from bars
         fig, ax = plt.subplots(figsize=(8,14))
@@ -1415,15 +1417,17 @@ class Plotting:
                 d2 = d1.loc[d1["superfam"] == rep_superfam]
                 for species in df["Species"].unique():
                     d3 = d2.loc[d2["Species"] == species]
-                    for gsub_key in regex_to_gensubs.keys():
+                    for gsub_key in rgensub.keys():
                         # subset df where sequid type contains a regex
                         d4 = d3.loc[d3["sequid_type"].str.contains(
-                            regex_to_gensubs[gsub_key])]
+                            rgensub[gsub_key])]
                         xaxis = str(species) + "_" + str(gsub_key)
                         # sum of basepairs for the triple-subsetted df
                         bp_values[xaxis] = d4["algor_bpsum"].sum()
 
                 # create the segment bar
+                print("Creating segment bar for", # debug
+                      rep_class, rep_superfam, list(bp_values.values())) # debug
                 ax.bar(x=list(bp_values.keys()), height=list(bp_values.values()),
                        bottom=bottom, label=rep_class,
                        linewidth=0.4, edgecolor='black',
@@ -1443,6 +1447,56 @@ class Plotting:
         plt.xticks(rotation=90)
         #plt.xlabel("")
         plt.savefig('matplotlib_histo_stacked_absolute.png', dpi=300)
+
+        return None
+
+    def pie_chart(self, df: "unfiltered or filtered `df_complete_summary`",
+                  grouptype: "reptype colname which will groupby() the df",
+                  threshold: "% by which to cut abundant from scarce",
+                  folder: "Folder to save the figure in" =None):
+        """
+        INPUT
+        =====
+
+        + df
+        `df_complete_summary`. Could be filtered (only contains "DNA" class,
+        only contains "LINEs", etc.
+
+        + grouptype
+        Groupby() REs by this categorical level ("class", "subclass", etc.)
+
+        + threshold
+        Pool into `Others` the REs below the specified percentage.
+
+        + folder
+        Create a folder where the PNGs will be stored.
+
+        OUTPUT
+        ======
+
+        PNG plot/figure/piechart on the working directory/in the specified
+        folder (new folder would be created if there didnt exist one)
+        """
+        # create a dict to subset df by kinds of chromosome
+        rgensub = self.regex_to_genome_subset
+
+        Species = list(df["Species"].unique())
+        Gensub  = list(rgensub.keys())
+
+        for i in range(0, len(Species)):
+            for j in range(0, len(Gensub)):
+                sp = Species[i]
+                gs_key   = Gensub[j]
+                gs_regex = rgensub[gs_key]
+                # subset main df for each of the i*j pies
+                d1 = df.loc[ (df["Species"]==sp) &
+                       (df["sequid_type"].str.contains(gs_regex))]
+                d1 = d1.groupby(grouptype)["algor_bpsum"].agg(["sum", "count"])
+                d1 = d1.sort_values(["sum"], ascending=False).reset_index()
+                # compute relative occupancy of the pie
+                d1["relative_to_Rfrac"] = 
+                # make sure previously computed occupancy is above the
+                # threshold; if it is not, pool into `Others`
 
         return None
 
