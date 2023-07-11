@@ -1382,10 +1382,13 @@ class Plotting:
             "Other": 4, "Unknown": 5, "Nonrepetitive_fraction": 6}
         # we are also interested in secondarily sorting rows by 'algor_bpsum'
         # (sum of basepairs for that entry/row in the table)
-        df = df.sort_values(["algor_bpsum"], ascending=True) # start by bp-sort
-        df = df.sort_values(["class"], key=lambda x: x.map(ordering_classes))
-        df = df.sort_values(["Species", "sequid_type"]).reset_index()
-        print(df.to_markdown())
+        #df = df.sort_values(["algor_bpsum"], ascending=True) # start by bp-sort
+        # kind of sort = mergesort: to preserve relative order of previous sort
+        # reference:
+        # https://stackoverflow.com/questions/47440621/numpy-argsort-behavior-for-equal-numbers
+        df = df.sort_values(["class", "algor_bpsum"], key=lambda x: x.replace(ordering_classes),
+                            ascending=[True, True])
+        df = df.sort_values(["Species", "sequid_type"], kind="mergesort").reset_index(drop=True)
 
         # create a dict to subset df by kinds of chromosome
         regex_to_gensubs = {  # pair regex with the name of the genome subset
@@ -1399,7 +1402,7 @@ class Plotting:
         ax.grid(axis='y', color="darkslategrey", linestyle="dashed",
                 linewidth=2, zorder=0)
 
-        bottom = np.zeros(6)#debug (change 6 to len(species+genome subset))
+        bottom = np.zeros(3 * len(df["Species"].unique()))
         for rep_class in df["class"].unique():
             d1 = df.loc[df["class"] == rep_class]
             bp_values = dict()
