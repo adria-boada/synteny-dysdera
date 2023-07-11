@@ -33,6 +33,14 @@ Chr2          5000
 ChrN          100
 Scaffolds     $(sum_len_scaffolds)
 ```
+
+WARNING:
+========
+
+RepeatMasker output is massive. The file can weigh Gbytes. Pandas.DataFrame is
+loaded into memory. If the file is too big, the script might be killed. My
+solution for the whilebeing was using computers with a lot of RAM. Another
+solution could be to employ the `dask` module for `pandas`.
 """
 
 import sys
@@ -1142,7 +1150,7 @@ def histogram_stacked_absolute(df):
 
     return None
 
-def add_coloured_palette(df,
+def add_categorical_palette(df,
     colname: "string which names a categorical column"):
     """
     """
@@ -1155,6 +1163,20 @@ def add_coloured_palette(df,
         df_return.loc[mask, "colours"] = pd.Series([
             col for x in range(df_return.loc[mask].shape[0])],
             index=df_return.loc[mask].index)
+
+    return df_return
+
+def add_singlecol_palette(df,
+    main_colname: "string which names the main categorical column",
+    sub_colname: "string which names the most inner/subdivided categorical column",):
+    """
+    """
+    df_return = df.copy()
+    df_return["colours"]="k" #"k" is "black" as init. value
+    uniq_main_cat = df[main_colname].unique()
+    uniq_sub_cat  = df[sub_colname].unique()
+
+
 
     return df_return
 
@@ -1175,7 +1197,7 @@ def pies_relative(df: "`df_complete` TSV",
                              figsize=(18,12))
     # prepare the same colours for each given class across species
     # colname: colours; palette from seaborn.colors_palette("hls")
-    d1 = add_coloured_palette(df, "class")
+    d1 = add_categorical_palette(df, "class")
     # each species is a column, and each subset of genome a row
     i=0
     for species in d1["Species"].unique():
@@ -1227,7 +1249,7 @@ def pies_relative(df: "`df_complete` TSV",
         # subset df by `repeat_class` and create `colours`
         # column for each subclass
         d1 = df.loc[df["class"]==repeat_class]
-        d1 = add_coloured_palette(d1, "subclass")
+        d1 = add_categorical_palette(d1, "subclass")
         i=0
         for species in d1["Species"].unique():
             # remove repetitive fraction sum from rows
@@ -1279,7 +1301,7 @@ def pies_relative(df: "`df_complete` TSV",
         # column for each order
         d1 = df.loc[(df["class"].str.contains(repeat_subclass[0])) &
                     (df["subclass"].str.contains(repeat_subclass[1]))]
-        d1 = add_coloured_palette(d1, "order")
+        d1 = add_categorical_palette(d1, "order")
         i=0
         for species in d1["Species"].unique():
             # remove repetitive fraction sum from rows
@@ -1332,7 +1354,7 @@ def pies_relative(df: "`df_complete` TSV",
         d1 = df.loc[(df["class"].str.contains(repeat_subclass[0])) &
                     (df["subclass"].str.contains(repeat_subclass[1])) &
                     (df["order"].str.contains(repeat_subclass[2]))]
-        d1 = add_coloured_palette(d1, "superfam")
+        d1 = add_categorical_palette(d1, "superfam")
         i=0
         for species in d1["Species"].unique():
             # remove repetitive fraction sum from rows
