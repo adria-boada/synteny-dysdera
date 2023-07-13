@@ -1470,19 +1470,27 @@ class Plotting:
         """
         # create a copy; even though df should be a local var,
         # pandas issues a warning nonetheless
-        df_return = df.loc[:]
-        # init colours column with "k" (black col)
-        df_return["colours"] = "k"
-        unique_categories = df_return[colname].unique()
-        list_cols = sns.color_palette(shade, len(unique_categories))
-        list_cols.reverse()  # send the dark: or light: colours to the end
-        for uniqcell, col in zip(unique_categories, list_cols):
-            mask = df_return[colname] == uniqcell
-            df_return.loc[mask, "colours"] = pd.Series([
-                col for x in range(df_return.loc[mask].shape[0])],
-                index=df_return.loc[mask].index)
 
-        return df_return
+        # init colours column with "k" (black col)
+        df["colours"] = "k"
+        unique_categories = df[colname].unique()
+
+        # if there is a single categorical entry do not
+        # return a palette, but a single colour for all rows
+        if len(unique_categories) == 1:
+            # split and remove 'dark:' or 'light:' seaborn suffix
+            df["colours"] = shade.split(':')[-1]
+
+        else:
+            list_cols = sns.color_palette(shade, len(unique_categories))
+            list_cols.reverse()  # send the dark: or light: colours to the end
+            for uniqcell, col in zip(unique_categories, list_cols):
+                mask = df[colname] == uniqcell
+                df.loc[mask, "colours"] = pd.Series([
+                    col for x in range(df.loc[mask].shape[0])],
+                    index=df.loc[mask].index)
+
+        return df
 
     def pie_chart(self, df: "unfiltered or filtered `df_complete_summary`",
         grouptype: "reptype colname which will groupby() the df",
