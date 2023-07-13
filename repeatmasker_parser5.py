@@ -1131,13 +1131,15 @@ class Plotting:
             # contains `chr[[digit]]`, `chrX` or `anything`
 
         # create a new column, where each class has a given colour
+        # For available shades, take a look at:
+        # https://matplotlib.org/stable/gallery/color/named_colors.html
         self.colours_by_class = {
-            "DNA": "blue",
+            "DNA": "mediumslateblue",
             "Other": "orange",
-            "Retrotransposon": "red",
-            "Unknown": "lime",
+            "Retrotransposon": "salmon",
+            "Unknown": "olive",
             "Tandem_repeat": "yellow",
-            "Nonrepetitive_fraction": "gray"
+            "Nonrepetitive_fraction": "plum"
         }
 
         return None
@@ -1457,10 +1459,35 @@ class Plotting:
 
         return None
 
+    def col_to_categorical_palette(self, df,
+        colname: "string which names a categorical column",
+        shade: "what kind of shade to be used (red, blue, salmon...)"):
+        """
+        For available shades, take a look at:
+        https://matplotlib.org/stable/gallery/color/named_colors.html
+
+        Returns a new `df` with an added column `colours`
+        """
+        # create a copy; even though df should be a local var,
+        # pandas issues a warning nonetheless
+        df_return = df.loc[:]
+        # init colours column with "k" (black col)
+        df_return["colours"] = "k"
+        unique_categories = df_return[colname].unique()
+        list_cols = sns.color_palette(shade, len(unique_categories))
+        list_cols.reverse()  # send the dark: or light: colours to the end
+        for uniqcell, col in zip(unique_categories, list_cols):
+            mask = df_return[colname] == uniqcell
+            df_return.loc[mask, "colours"] = pd.Series([
+                col for x in range(df_return.loc[mask].shape[0])],
+                index=df_return.loc[mask].index)
+
+        return df_return
+
     def pie_chart(self, df: "unfiltered or filtered `df_complete_summary`",
-                  grouptype: "reptype colname which will groupby() the df",
-                  threshold: "% by which to cut abundant from scarce",
-                  folder: "Folder to save the figure in" =None):
+        grouptype: "reptype colname which will groupby() the df",
+        threshold: "% by which to cut abundant from scarce" =5,
+        folder: "Folder to save the figure in" =None):
         """
         INPUT
         =====
@@ -1473,10 +1500,11 @@ class Plotting:
         Groupby() REs by this categorical level ("class", "subclass", etc.)
 
         + threshold
-        Pool into `Others` the REs below the specified percentage.
+        Pool REs below the specified percentage into unspecified `Others`
 
         + folder
-        Create a folder where the PNGs will be stored.
+        If specified, checks whether a folder with this name exists; if not, it
+        creates it; afterwards, it stores PNGs in that folder.
 
         OUTPUT
         ======
@@ -1484,12 +1512,32 @@ class Plotting:
         PNG plot/figure/piechart on the working directory/in the specified
         folder (new folder would be created if there didnt exist one)
         """
+        # Create the filename where fig will be written to
+        if folder:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            fig_filename = (str(folder) + "/matplotlib_piecharts_by" +
+                            str(grouptype) + ".png")
+        else:
+            fig_filename = "matplotlib_piecharts_by"+str(grouptype)+".png"
         # create a dict to subset df by kinds of chromosome
         rgensub = self.regex_to_genome_subset
+        # create a dict to find following classification item
+        # (e.g. subclass for class, superfam for order, order for subclass)
+        below_type = {"class": "subclass", "subclass": "order",
+                      "order": "superfam"}
+        # `class_col` will be used to colour subclass, order and superfams by
+        # the class colour in `self.colours_by_class`
+        class_col = str(self.colours_by_class[
+            list(df["class"].unique())[0]])
 
         Species = list(df["Species"].unique())
         Gensub  = list(rgensub.keys())
+        list_dfs_to_pie = list()
+        # remove repetitive fraction overall total/sum
+        df = df.loc[df["class"] != "Repetitive_fraction"]
 
+        # create a list with species * gensub dataframes for the pies
         for i in range(0, len(Species)):
             for j in range(0, len(Gensub)):
                 sp = Species[i]
@@ -1501,9 +1549,80 @@ class Plotting:
                 d1 = d1.groupby(grouptype)["algor_bpsum"].agg(["sum", "count"])
                 d1 = d1.sort_values(["sum"], ascending=False).reset_index()
                 # compute relative occupancy of the pie
-                d1["relative_to_Rfrac"] = 
-                # make sure previously computed occupancy is above the
-                # threshold; if it is not, pool into `Others`
+                d1["percent"] = round( (d1["sum"] /d1["sum"].sum()) *100, 1)
+                d1["megabases_span"]=round(d1["sum"]/10**6, 1)
+                subplot_title = str(sp) +"_"+ str(gs_key)
+                list_dfs_to_pie += [[d1, i, j, subplot_title]]
+
+        # checking which types are in all species below threshold of occupancy
+        # first, get genomic dfs for all species with [::3] slice
+        ##print([pie for pie in list_dfs_to_pie[2::3]]) # debug
+        df_check_threshold = pd.concat([pie[0] for pie in list_dfs_to_pie[2::3]])
+        # remove rows above percent (ie occupancy) threshold
+        df_check_threshold = df_check_threshold.loc[
+            df_check_threshold["percent"] < int(threshold)]
+        # make sure each reptype is below threshold in all species
+        for reptype in df_check_threshold[grouptype].unique():
+            df_check = df_check_threshold.loc[
+                df_check_threshold[grouptype] == reptype]
+            # if n_rows != n_species
+            if df_check.shape[0] != len(Species):
+                # remove these rows
+                df_check_threshold = df_check_threshold.loc[
+                    df_check_threshold[grouptype] != reptype]
+
+        # if there is more than 1 reptype that fulfills previous requirements:
+        # group all reptypes into a "bin" ("Group_Others")
+        binning = list(df_check_threshold[grouptype].unique())
+
+        # subsetting dfs by `binning` and plotting them
+        fig, axs = plt.subplots(nrows=3, ncols=len(Species),
+                             figsize=(18,12))
+        for pie in list_dfs_to_pie:
+            # unpack pie list
+            df, i, j, subplot_title = pie
+            df = df.copy() # otherwise warns that it refers to df in the tuple
+            df_below_thresh = df.loc[df[grouptype].isin(binning)]
+            # remove below threshold reptypes from pie df
+            df = df.loc[ (df[grouptype].isin(binning)) == False]
+            # create a palette of colour for REs above threshold;
+            # below threshold will be coloured all grey/white...
+            if grouptype == "class":
+                df["colours"] = "k"
+                for key, val in self.colours_by_class.items():
+                    df.loc[df["class"] == key, "colours"] = val
+            else:
+                # add dark at the beginning so seaborn palette is to dark
+                # could also add light and it will be from white to col
+                c = "light:" + class_col
+                # "colours" column with as many colours as nrows
+                df = self.col_to_categorical_palette(
+                    df, shade=c, colname=grouptype)
+            # add new row summing every RE below threshold
+            new_row = {
+                grouptype: ["Remaining"],
+                "colours": ["lightgrey"],
+                "sum": [df_below_thresh["sum"].sum().round(1)],
+                "count": [df_below_thresh["count"].sum()],
+                "percent": [df_below_thresh["percent"].sum().round(1)],
+                "megabases_span": [df_below_thresh["megabases_span"].sum(
+                    ).round(1)],
+            }
+            df = pd.concat([df, pd.DataFrame(new_row)])
+
+            # append count of types and sum of bps to the label of the pie
+            df["label"] = (
+                df[grouptype].astype(str) +"_"+
+                df["count"].astype(str) +"_"+
+                df["percent"].astype(str) +"_"+
+                df["megabases_span"].astype(str) +"Mb" )
+
+            axs[j, i].pie(df["percent"], labels=df["label"],
+                            colors=df["colours"])
+            axs[j, i].set_title(subplot_title)
+
+        fig.suptitle("By "+str(grouptype))
+        plt.savefig(fig_filename, dpi=300)
 
         return None
 
@@ -1921,6 +2040,18 @@ if __name__ == '__main__':
 #        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
 #        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
         plots.histogram_stacked_absolute()
+
+        # pie charts
+        plots.pie_chart(df=plots.df_complete_summary,
+                        grouptype="class")
+        for reptype in ["subclass", "order", "superfam"]:
+            df = plots.df_complete_summary.copy()
+            df_dna = df.loc[df["class"] == "DNA"]
+            plots.pie_chart(df=df_dna, folder="DNA",
+                            grouptype=reptype)
+            df_retro = df.loc[df["class"] == "Retrotransposon"]
+            plots.pie_chart(df=df_retro, folder="Retrotransposon",
+                            grouptype=reptype)
 
     else:
         print("Send either 'r' or 'p' as first argv "+
