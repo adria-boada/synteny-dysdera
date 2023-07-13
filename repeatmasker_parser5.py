@@ -1468,9 +1468,6 @@ class Plotting:
 
         Returns a new `df` with an added column `colours`
         """
-        # create a copy; even though df should be a local var,
-        # pandas issues a warning nonetheless
-
         # init colours column with "k" (black col)
         df["colours"] = "k"
         unique_categories = df[colname].unique()
@@ -1478,7 +1475,7 @@ class Plotting:
         # if there is a single categorical entry do not
         # return a palette, but a single colour for all rows
         if len(unique_categories) == 1:
-            # split and remove 'dark:' or 'light:' seaborn suffix
+            # split and remove 'dark:' or 'light:' seaborn prefix
             df["colours"] = shade.split(':')[-1]
 
         else:
