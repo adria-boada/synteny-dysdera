@@ -1489,6 +1489,34 @@ class Plotting:
 
         return df
 
+    def col_to_categorical_palette_v2(self, categories: "list of strings",
+        shade: "what kind of shade will be used (red, blue, salmon...)"):
+        """
+        For available shades, take a look at:
+        https://matplotlib.org/stable/gallery/color/named_colors.html
+
+        + categories
+        A list of strings, each string symbolizing a category that
+        will be paired to a colour of the seaborn palette.
+
+        Returns dict with keys being categories and values colours.
+        """
+        # if there is a single categorical entry do not
+        # return a palette, but a single colour for all rows
+        if len(categories) == 1:
+            # split and remove 'dark:' or 'light:' seaborn prefix
+            dict_cols = {categories[0]: shade}
+
+        else:
+            shade = "light:" + shade # use the light shade
+            list_cols = sns.color_palette(shade, len(categories))
+            list_cols.reverse() # send the "dark:" or "light:" colours to the end
+            dict_cols = dict(zip(
+                categories,  # keys
+                list_cols))  # values
+
+        return dict_cols
+
     def pie_chart(self, df: "unfiltered or filtered `df_complete_summary`",
         grouptype: "reptype colname which will groupby() the df",
         threshold: "% by which to cut abundant from scarce" =5,
@@ -1590,6 +1618,11 @@ class Plotting:
             df_below_thresh = df.loc[df[grouptype].isin(binning)]
             # remove below threshold reptypes from pie df
             df = df.loc[ (df[grouptype].isin(binning)) == False]
+            # create the palette on first sweep of the loop
+            if i==0 and j==0:
+                dict_cols = self.col_to_categorical_palette_v2(
+                    categories=list(df[grouptype].unique()),
+                    shade=class_col)
             # create a palette of colour for REs above threshold;
             # below threshold will be coloured all grey/white...
             if grouptype == "class":
@@ -1597,12 +1630,15 @@ class Plotting:
                 for key, val in self.colours_by_class.items():
                     df.loc[df["class"] == key, "colours"] = val
             else:
-                # add dark at the beginning so seaborn palette is to dark
-                # could also add light and it will be from white to col
-                c = "light:" + class_col
-                # "colours" column with as many colours as nrows
-                df = self.col_to_categorical_palette(
-                    df, shade=c, colname=grouptype)
+                for reptype, col in dict_cols.items():
+                    # we cannot use the simpler method `column.replace(dict)`
+                    # because some values within the dictionary are RGB values
+                    # stored in tuples and numpy does not allow {str: tuple}
+                    mask = df[grouptype] == reptype
+                    df.loc[mask, "colours"] = pd.Series([
+                        col for x in range(df.loc[mask].shape[0])],
+                        index=df.loc[mask].index)
+
             # add new row summing every RE below threshold
             new_row = {
                 grouptype: ["Remaining"],
