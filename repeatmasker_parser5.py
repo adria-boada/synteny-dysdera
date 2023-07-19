@@ -2076,10 +2076,10 @@ if __name__ == '__main__':
             seqsizes_dict)
 
         # create plots
-#        plots.boxplots_df_main(folder="Boxplots")
-#        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
-#        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
-#        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
+        plots.boxplots_df_main(folder="Boxplots")
+        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
+        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
+        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
         plots.histogram_stacked_absolute()
 
         # pie charts
