@@ -925,7 +925,7 @@ class Repeat:
         # compute unique repeat types
         unique_class_tuples = list(set(tuple(x[3]) for x in intervals))
         unique_class_tuples.sort()
-        # covert into pd.MultiIndex()
+        # convert into pd.MultiIndex()
         idx = pd.MultiIndex.from_tuples(unique_class_tuples, names=[
                 'class', 'subclass', 'order', 'superfam'])
         # create df
@@ -1071,18 +1071,29 @@ def df_complete_summary_grouping(df):
             ["naive_numele", "naive_bpsum", "tagged_numele",
              "tagged_bpsum", "algor_bpsum"]].agg([
                 "sum"]).reset_index()
+    # remove MultiIndex column names
+    df_groupby_seq_and_species.columns = (
+        df_groupby_seq_and_species.columns.droplevel(1))
 
     # compute groupby 'Species-only' values
     df_groupby_species = df.groupby([
         "Species", "class"])[
-            ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                "count", "sum"]).reset_index()
+            ["naive_numele", "naive_bpsum", "tagged_numele",
+             "tagged_bpsum", "algor_bpsum"]].agg([
+                "sum"]).reset_index()
+    # remove MultiIndex column names
+    df_groupby_species.columns = (
+        df_groupby_species.columns.droplevel(1))
 
     # compute groupby 'repeat-type' and 'species' values
     df_groupby_reptype_and_species = df.groupby([
         "Species", "class", "subclass", "order", "superfam"])[
-            ["naive_bpsum", "tagged_bpsum", "algor_bpsum"]].agg([
-                "count", "sum"]).reset_index()
+            ["naive_numele", "naive_bpsum", "tagged_numele",
+             "tagged_bpsum", "algor_bpsum"]].agg([
+                "sum"]).reset_index()
+    # remove MultiIndex column names
+    df_groupby_reptype_and_species.columns = (
+        df_groupby_reptype_and_species.columns.droplevel(1))
 
     return (df_groupby_seq_and_species,
             df_groupby_species,
@@ -1667,358 +1678,127 @@ class Plotting:
 
         return None
 
-def histogram_stacked_absolute(df):
-    """
-    INPUT
-    =====
-    pandas.DataFrame from the function `compress_super_fams()`
+    def tabulate_divergence(self,
+        unique_reptypes: "list of the allowed combinations of repeat-types"):
+        """
+        Create a table that groups by unique repeat types. Each value in the
+        list is an ordered (from class, subclass, order to superfam) sublist of
+        combinations of repeat types, e.g.
 
-    OUTPUT
-    ======
-    PNG file `filename` with the plotted histogram
+        [["DNA", "1", "TIR", "hAT"], ["DNA", "1", "TIR", "TcMar"], etc.]
 
-    See more:
-    https://www.pythoncharts.com/matplotlib/stacked-bar-charts-labels/
-    """
-    df["xval"] = df["Species"]+"_"+df["genome_subset"]
-    df["reptype"] = df["class"]+"_"+df["superfam"]
-    #first colour for nonrepetitive-fraction should be gray
-    # the other colors we do not care as much
-    needed_colours = len(df["reptype"].unique())
-    colors = sns.color_palette("hls", needed_colours)
-    colors[0] = "dimgrey"
+        For each combination, locate in main dataframe and compute relative (%)
+        genome occupancy and absolute (Mb) genome occupancy. Then, compute mean,
+        median and standard deviation for the column of repeat divergence.
 
-    # remove edgecolor from bars
-    plt.rcParams["patch.edgecolor"] = "none"
-    # set the size of the plot (wider than tall)
-    plt.figure(figsize=(8, 14))
+        Giving a list of unique combinations of repeat types circumvents the
+        problem of duplicated names, i.e. "NA" from both "DNA" and
+        "Retrotransposons" being considered a single group (and pooling values).
+        Instead pass as a variable each type you would like to consider:
 
-    ax = sns.histplot(data=df, x='xval', hue="reptype", weights="sum",
-                multiple="stack", shrink=0.9, palette=colors)
-    plt.grid(axis='y')
-    # move legend outside of the plotting box
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1,1))
-    ax.tick_params(axis='y', labelsize=20, rotation=90)
-    ax.tick_params(axis='x', labelsize=15)
-    plt.title("Distribution of repetitive and nonrepetitive fraction", y=1.02,
-              fontsize=20)
-    # adjust margins of figure, so legend, axis, etc.
-    # has enough space to be drawn
-    plt.subplots_adjust(left=0.3, bottom=0.18, right=0.59, top=0.95)
-    plt.ylabel("Gb", fontsize=18)
-    plt.xticks(rotation=90)
-    plt.xlabel("")
-    plt.savefig('histo_stacked_absolute_matplotlib.png', dpi=300)
-    plt.close('all')
+        [["DNA", "NA"], ["RT", "NA"]]
 
-    return None
+        output df. columns:
 
-def add_categorical_palette(df,
-    colname: "string which names a categorical column"):
-    """
-    """
-    df_return = df.copy()
-    df_return["colours"]="k"
-    unique_categories = df[colname].unique()
-    list_cols = sns.color_palette("hls", len(unique_categories))
-    for uniqcell, col in zip(unique_categories, list_cols):
-        mask = df_return[colname]==uniqcell
-        df_return.loc[mask, "colours"] = pd.Series([
-            col for x in range(df_return.loc[mask].shape[0])],
-            index=df_return.loc[mask].index)
+        Species | reptype | overlap (True, False) | measures (median, %, Mb, etc.)
+        """
+        # unique_reptypes must be sorted as follows:
+        reptype_levels = ["class", "subclass", "order", "superfam"]
+        # shorten call to main df
+        df = self.df_main.copy()
+        df_summ = self.df_complete_summary.copy()
+        # make sure all items on the `unique_reptypes` list are of the same len.
+        # create a list with the len of each unique_reptypes,
+        # then set (remove duplicates) and make sure that its len is 1
+        # (only one unique length value for all sublists)
+        if len(list(set([len(x) for x in unique_reptypes]))) != 1:
+            print("The given unique_reptypes might be of different length")
+            return None
 
-    return df_return
+        # init. dict. where data will be appended
+        # and later on will be the seed for a pd.DataFrame
+        new_df = {"Species": [], "overlap": [], "rel_occupancy": [],
+            "abs_occup_Mb": [], "median_divg": [], "mean_divg": [], "stdev_divg": []}
+        # create a column for each included repeat type (maybe only class, maybe
+        # class and subclass, etc)
+        for i in range(0, len(unique_reptypes[0])):
+            new_df[reptype_levels[i]] = []
+        for reptype in unique_reptypes:
+            # filter df and df_summ with all levels of reptype
+            d1 = df.copy()
+            d1_summ = df_summ.copy()
+            for i in range(0, len(reptype)):
+                mask = d1[reptype_levels[i]] == reptype[i]
+                d1 = d1.loc[mask]
+                mask = d1_summ[reptype_levels[i]] == reptype[i]
+                d1_summ = d1_summ.loc[mask]
+            for species in d1["Species"].unique():
+                for overlap in [True, False]:
+                    # mask df_summ only by species
+                    # (overlapping will be filtered in if-branches,
+                    # either selecting tagged or algor bp)
+                    mask = d1_summ["Species"] == species
+                    d2_summ = d1_summ.loc[mask]
 
-def add_singlecol_palette(df,
-    main_colname: "string which names the main categorical column",
-    sub_colname: "string which names the most inner/subdivided categorical column",):
-    """
-    """
-    df_return = df.copy()
-    df_return["colours"]="k" #"k" is "black" as init. value
-    uniq_main_cat = df[main_colname].unique()
-    uniq_sub_cat  = df[sub_colname].unique()
-
-
-
-    return df_return
-
-def pies_relative(df: "`df_complete` TSV",
-        percent_threshold: "Group rows below this percentage"=5):
-    """
-    """
-
-    # label "autosomes", "allosome" and "genome" via regexes
-    # of the column "sequid_type"
-    regex_to_gensubs = {  # regex to genome subsetting
-        "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
-    # fill NaN values with an interpretable "NA" string
-    df = df.fillna("NA")
-
-    # PIES OF CLASSES #
-    fig, axs = plt.subplots(nrows=3, ncols=len(df["Species"].unique()),
-                             figsize=(18,12))
-    # prepare the same colours for each given class across species
-    # colname: colours; palette from seaborn.colors_palette("hls")
-    d1 = add_categorical_palette(df, "class")
-    # each species is a column, and each subset of genome a row
-    i=0
-    for species in d1["Species"].unique():
-        d = d1.loc[d1["Species"]==species]
-        # remove repetitive fraction sum from rows
-        d = d.loc[(d["class"]=="Repetitive_fraction")==False]
-        print("\n# "+species, "All classes")
-        j=0
-        for key_subset, regex in regex_to_gensubs.items():
-            dd = d.loc[d["sequid_type"].str.contains(regex)]
-            dd = dd.groupby(["class", "colours"])[
-                "algor_bpsum"].agg(["sum", "count"])
-            dd = dd.sort_values(["sum"], ascending=False).reset_index()
-            dd["percent"] = (dd["sum"]/dd["sum"].sum())*100
-            print(dd.to_markdown(index=False))
-            # if there are 2 or more "percent" values
-            # below the threshold, group them:
-            pthresh_mask = dd["percent"] < percent_threshold
-            if dd.loc[pthresh_mask].shape[0]>=2:
-                new_row={
-                    "class": ["Group_Others"],
-                    "colours": ["grey"],
-                    "sum": [dd.loc[pthresh_mask, "sum"].sum()],
-                    "count": [dd.loc[pthresh_mask, "count"].sum()],
-                    "percent": [dd.loc[pthresh_mask, "percent"].sum()],
-                }
-                # remove these rows below threshold
-                dd = dd.loc[pthresh_mask==False]
-                # add the new grouped row
-                dd = pd.concat([dd, pd.DataFrame(new_row)])
-            dd["megabases_span"]=round(dd["sum"]/10**6, 1)
-            # append count of types and sum of bps to the label of the pie
-            dd["class"] = (
-            dd["class"]+"_"+dd["count"].astype(str)+"_"+dd["megabases_span"].astype(str)+"Mb")
-            axs[j, i].pie(dd["percent"], labels=dd["class"],
-                          autopct='%.2f%%', colors=dd["colours"])
-            axs[j, i].set_title(species+"_"+str(key_subset))
-            j+=1
-        i+=1
-    fig.suptitle("By class")
-    plt.savefig('pies_byall_class_matplotlib.png', dpi=300)
-    plt.close('all')
-
-    # PIES OF SUBCLASSES #
-    # do not iterate all unique classes, only ones of interest...
-    for repeat_class in ["DNA", "Retrotransposon"]:
-        fig, axs = plt.subplots(nrows=3, ncols=len(df["Species"].unique()),
-                             figsize=(18,12))
-        # subset df by `repeat_class` and create `colours`
-        # column for each subclass
-        d1 = df.loc[df["class"]==repeat_class]
-        d1 = add_categorical_palette(d1, "subclass")
-        i=0
-        for species in d1["Species"].unique():
-            # remove repetitive fraction sum from rows
-            d2 = d1.loc[((d1["class"]=="Repetitive_fraction")==False) &
-                      (d1["Species"]==species)]
-            j=0
-            print("\n# "+species, repeat_class)
-            for key_subset, regex in regex_to_gensubs.items():
-                d3 = d2.loc[d2["sequid_type"].str.contains(regex)]
-                d3 = d3.groupby(["subclass", "colours"])[
-                    "algor_bpsum"].agg(["sum", "count"])
-                d3 = d3.sort_values(["sum"], ascending=False).reset_index()
-                d3["percent"] = (d3["sum"]/d3["sum"].sum())*100
-                print(d3.to_markdown(index=False))
-                # if there are 2 or more "percent" values
-                # below the threshold, group them:
-                pthresh_mask = d3["percent"] < percent_threshold
-                if d3.loc[pthresh_mask].shape[0]>=2:
-                    new_row={
-                        "subclass": ["Group_Others"],
-                        "colours": ["grey"],
-                        "sum": [d3.loc[pthresh_mask, "sum"].sum()],
-                        "count": [d3.loc[pthresh_mask, "count"].sum()],
-                        "percent": [d3.loc[pthresh_mask, "percent"].sum()],
-                    }
-                    # remove these rows below threshold
-                    d3 = d3.loc[pthresh_mask==False]
-                    # add the new grouped row
-                    d3 = pd.concat([d3, pd.DataFrame(new_row)])
-                d3["megabases_span"]=round(d3["sum"]/10**6, 1)
-                # append count of types and sum of bps to the label of the pie
-                d3["subclass"] = (
-                d3["subclass"]+"_"+d3["count"].astype(str)+"_"+d3["megabases_span"].astype(str)+"Mb")
-                axs[j, i].pie(d3["percent"], labels=d3["subclass"],
-                              autopct='%.2f%%', colors=d3["colours"])
-                axs[j, i].set_title(species+"_"+str(key_subset))
-                j+=1
-            i+=1
-        fig.suptitle("By subclass in "+repeat_class)
-        plt.savefig('pies_by'+repeat_class+'_subclass_matplotlib.png', dpi=300)
-        plt.close('all')
-
-    # PIES OF ORDER #
-    # do not iterate all unique classes, only ones of interest...
-    for repeat_subclass in [("DNA", "1|2|NA"), ("Retrotransposon", ".*")]:
-        fig, axs = plt.subplots(nrows=3, ncols=len(df["Species"].unique()),
-                             figsize=(18,12))
-        # subset df by `repeat_subclass` and create `colours`
-        # column for each order
-        d1 = df.loc[(df["class"].str.contains(repeat_subclass[0])) &
-                    (df["subclass"].str.contains(repeat_subclass[1]))]
-        d1 = add_categorical_palette(d1, "order")
-        i=0
-        for species in d1["Species"].unique():
-            # remove repetitive fraction sum from rows
-            d2 = d1.loc[((d1["class"]=="Repetitive_fraction")==False) &
-                      (d1["Species"]==species)]
-            j=0
-            print("\n# "+species, repeat_subclass)
-            for key_subset, regex in regex_to_gensubs.items():
-                d3 = d2.loc[d2["sequid_type"].str.contains(regex)]
-                d3 = d3.groupby(["order", "colours"])[
-                    "algor_bpsum"].agg(["sum", "count"])
-                d3 = d3.sort_values(["sum"], ascending=False).reset_index()
-                d3["percent"] = (d3["sum"]/d3["sum"].sum())*100
-                print(d3.to_markdown(index=False))
-                # if there are 2 or more "percent" values
-                # below the threshold, group them:
-                pthresh_mask = d3["percent"] < percent_threshold
-                if d3.loc[pthresh_mask].shape[0]>=2:
-                    new_row={
-                        "order": ["Group_Others"],
-                        "colours": ["grey"],
-                        "sum": [d3.loc[pthresh_mask, "sum"].sum()],
-                        "count": [d3.loc[pthresh_mask, "count"].sum()],
-                        "percent": [d3.loc[pthresh_mask, "percent"].sum()],
-                    }
-                    # remove these rows below threshold
-                    d3 = d3.loc[pthresh_mask==False]
-                    # add the new grouped row
-                    d3 = pd.concat([d3, pd.DataFrame(new_row)])
-                d3["megabases_span"]=round(d3["sum"]/10**6, 1)
-                # append count of types and sum of bps to the label of the pie
-                d3["order"] = (
-                d3["order"]+"_"+d3["count"].astype(str)+"_"+d3["megabases_span"].astype(str)+"Mb")
-                axs[j, i].pie(d3["percent"], labels=d3["order"],
-                              autopct='%.2f%%', colors=d3["colours"])
-                axs[j, i].set_title(species+"_"+str(key_subset))
-                j+=1
-            i+=1
-        fig.suptitle("By orders in "+repeat_subclass[0])
-        plt.savefig('pies_by'+repeat_subclass[0]+'_orders_matplotlib.png', dpi=300)
-        plt.close('all')
-
-    # PIES OF SUPERFAMILIES #
-    # do not iterate all unique classes, only ones of interest...
-    for repeat_subclass in [("DNA", ".*", ".*"), ("Retrotransposon", ".*", ".*")]:
-        fig, axs = plt.subplots(nrows=3, ncols=len(df["Species"].unique()),
-                             figsize=(18,12))
-        # subset df by `repeat_subclass` and create `colours`
-        # column for each order
-        d1 = df.loc[(df["class"].str.contains(repeat_subclass[0])) &
-                    (df["subclass"].str.contains(repeat_subclass[1])) &
-                    (df["order"].str.contains(repeat_subclass[2]))]
-        d1 = add_categorical_palette(d1, "superfam")
-        i=0
-        for species in d1["Species"].unique():
-            # remove repetitive fraction sum from rows
-            d2 = d1.loc[((d1["class"]=="Repetitive_fraction")==False) &
-                      (d1["Species"]==species)]
-            j=0
-            print("\n# "+species, repeat_subclass)
-            for key_subset, regex in regex_to_gensubs.items():
-                d3 = d2.loc[d2["sequid_type"].str.contains(regex)]
-                d3 = d3.groupby(["superfam", "colours"])[
-                    "algor_bpsum"].agg(["sum", "count"])
-                d3 = d3.sort_values(["sum"], ascending=False).reset_index()
-                d3["percent"] = (d3["sum"]/d3["sum"].sum())*100
-                print(d3.to_markdown(index=False))
-                # if there are 2 or more "percent" values
-                # below the threshold, group them:
-                pthresh_mask = d3["percent"] < percent_threshold
-                if d3.loc[pthresh_mask].shape[0]>=2:
-                    new_row={
-                        "superfam": ["Group_Others"],
-                        "colours": ["grey"],
-                        "sum": [d3.loc[pthresh_mask, "sum"].sum()],
-                        "count": [d3.loc[pthresh_mask, "count"].sum()],
-                        "percent": [d3.loc[pthresh_mask, "percent"].sum()],
-                    }
-                    # remove these rows below threshold
-                    d3 = d3.loc[pthresh_mask==False]
-                    # add the new grouped row
-                    d3 = pd.concat([d3, pd.DataFrame(new_row)])
-                d3["megabases_span"]=round(d3["sum"]/10**6, 1)
-                # append count of types and sum of bps to the label of the pie
-                d3["superfam"] = (
-                d3["superfam"]+"_"+d3["count"].astype(str)+"_"+d3["megabases_span"].astype(str)+"Mb")
-                axs[j, i].pie(d3["percent"], labels=d3["superfam"],
-                              autopct='%.2f%%', colors=d3["colours"])
-                axs[j, i].set_title(species+"_"+str(key_subset))
-                j+=1
-            i+=1
-        fig.suptitle("By superfams in "+repeat_subclass[0])
-        plt.savefig('pies_by'+repeat_subclass[0]+'_superfams_matplotlib.png', dpi=300)
-        plt.close('all')
-
-    return None
-
-def compress_super_fams(df: "`df_complete` TSV",
-                        minimum_percent: "int [0-100]" =5):
-    """
-    Compress superfamilies that are smaller than 5%
-    of the repetitive fraction (group as "ClassX - Other"
-    whilst keeping tack of grouped superfamilies)
-
-    Moreover, group by "Autosomes", "Allosome" and "Genome"
-
-    minimum_percent: group superfamilies to class_Other which occupy less than
-    this value of the sequid length.
-    """
-    pre_df_return = {
-        "Species": [], "genome_subset": [], "class": [],
-        "superfam": [], "algor_bpsum": []}
-    regex_to_gensubs = {
-        "Autosomes": r"chr\d", "Allosome": r"chrX", "Genome": r".*"}
-    df["tupled_repclass"] = tuple(zip(
-                    list(df["class"]),
-                    list(df["subclass"]),
-                    list(df["order"]),
-                    list(df["superfam"]) ))
-
-    for species in df["Species"].unique():
-        d1 = df.loc[df["Species"]==species]
-        for genome_subset, regex in regex_to_gensubs.items():
-            d2 = d1.loc[d1["sequid_type"].str.contains(regex, regex=True)]
-            df_fraction_sum = d2.loc[d2["class"].str.contains("_fraction"),
-                                 "algor_bpsum"].sum()
-            for repclass in d2["tupled_repclass"].unique():
-                d3 = d2.loc[d2["tupled_repclass"]==repclass]
-                pre_df_return["Species"].append(species)
-                pre_df_return["genome_subset"].append(genome_subset)
-                pre_df_return["algor_bpsum"].append(d3["algor_bpsum"].sum())
-                # check whether this superfamily is greater than 5% of the
-                # repetitive fraction and is not NaN value...
-                pre_df_return["class"].append(repclass[0])
-                if d3["algor_bpsum"].sum() > (df_fraction_sum*minimum_percent)/100:
-                    if pd.isna(repclass[3])==False:
-                        pre_df_return["superfam"].append(repclass[3])
-                    elif pd.isna(repclass[2])==False:
-                        pre_df_return["superfam"].append(repclass[2])
-                    elif pd.isna(repclass[1])==False:
-                        pre_df_return["superfam"].append(repclass[1])
+                    # compute a few last variables before creating rows
+                    if overlap:
+                        # because here we remove overlapping, use
+                        # the basepairs from "tagged" column
+                        repeat_bp = d2_summ["tagged_bpsum"].sum()
+                        # mask df by species and overlapping
+                        mask = (d1["Species"] == species) & (
+                            d1["overlapping"] == False)
+                        d2 = d1.loc[mask]
+                        overlap = "Excluded"
                     else:
-                        pre_df_return["superfam"].append("NA")
-                else:
-                    pre_df_return["superfam"].append("Other")
+                        # because here we dont remove overlap,
+                        # use basepairs from "algor" column
+                        repeat_bp = d2_summ["algor_bpsum"].sum()
+                        # mask df only by species (include
+                        # both overlapping True and False)
+                        mask = (d1["Species"] == species)
+                        d2 = d1.loc[mask]
+                        overlap = "Included"
+                    # compute relative occupancy, in %
+                    gensize = self.gensizes_dict[species]
+                    repeat_perc = round((repeat_bp /gensize)*100, 2)
+                    # `repeat_bp` from basepairs to Mbps (division by 10**6)
+                    repeat_bp = round(repeat_bp/(10**6), 1)
 
-    r = pd.DataFrame(pre_df_return)
-    r = r.groupby(["Species", "genome_subset", "class",
-                "superfam"])["algor_bpsum"].agg(["sum", "count"])
-    r = r.sort_values(["sum"], ascending=False).sort_values(
-        ["Species", "genome_subset"]).reset_index()
-    r = r.loc[(r["class"]=="Repetitive_fraction")==False]
+                    # store values `reptype`, `species` and `overlap`
+                    # in a new row
+                    new_df["Species"].append(species)
+                    # pair first value in list with "class", etc.
+                    for i in range(0, len(reptype)):
+                        new_df[reptype_levels[i]].append(reptype[i])
+                    new_df["overlap"].append(overlap)
+                    new_df["abs_occup_Mb"].append(repeat_bp)
+                    new_df["rel_occupancy"].append(repeat_perc)
+                    new_df["median_divg"].append(
+                                d2["perc_divg"].median())
+                    new_df["mean_divg"].append(
+                                d2["perc_divg"].mean())
+                    new_df["stdev_divg"].append(
+                                d2["perc_divg"].std())
 
-    return r
+        new_df = pd.DataFrame(new_df)
+        # sort `new_df` so the same reptype is paired across species
+        # (to facilitate comparisons across species)
+        sorting_list = []
+        for i in range(0, len(unique_reptypes[0])):
+            sorting_list.append(reptype_levels[i])
+        sorting_list.append("Species")
+        sorting_list.append("overlap")
+        new_df = new_df.sort_values(sorting_list
+                            ).reset_index(drop=True)
+        # rearrange cols (send repeat type columns to beginning)
+        cols = new_df.columns.tolist()
+        # send the first seven columns behind the last column
+        send_to_end = [cols.pop(i) for i in [0]*7]
+        cols = cols + send_to_end
+        new_df = new_df[cols]
+
+        return new_df.round(2)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2075,14 +1855,36 @@ if __name__ == '__main__':
             tsv_complete_summary_path,
             seqsizes_dict)
 
-        # create plots
+        # tabulate main df divergence values by repeat type levels
+        df = plots.df_main.copy()
+        unique_reptypes = list(set(list(zip(list(df["class"])))))
+        print(unique_reptypes) # debug
+        plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
+            "divg_table_byclass.tsv", sep="\t", na_rep="NA", index=False)
+        unique_reptypes = list(set(list(zip(
+            list(df["class"]), list(df["subclass"])))))
+        print(unique_reptypes) # debug
+        plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
+            "divg_table_bysubclass.tsv", sep="\t", na_rep="NA", index=False)
+        unique_reptypes = list(set(list(zip(
+            list(df["class"]), list(df["subclass"]), list(df["order"])))))
+        print(unique_reptypes) # debug
+        plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
+            "divg_table_byorder.tsv", sep="\t", na_rep="NA", index=False)
+        unique_reptypes = list(set(list(zip(list(df["class"]),
+            list(df["subclass"]), list(df["order"]), list(df["superfam"])))))
+        print(unique_reptypes) # debug
+        plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
+            "divg_table_bysuperfam.tsv", sep="\t", na_rep="NA", index=False)
+
+        # plots from main df
         plots.boxplots_df_main(folder="Boxplots")
         plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
         plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
         plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
-        plots.histogram_stacked_absolute()
 
-        # pie charts
+        # plots from summary df
+        plots.histogram_stacked_absolute()
         plots.pie_chart(df=plots.df_complete_summary,
                         grouptype="class")
         for reptype in ["subclass", "order", "superfam"]:
