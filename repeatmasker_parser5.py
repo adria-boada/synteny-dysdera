@@ -1134,7 +1134,14 @@ class Plotting:
 
         # read provided TSVs
         self.df_main = pd.read_table(tsv_main).fillna("NA")
-        self.df_complete_summary = pd.read_table(tsv_complete_summary).fillna("NA")
+        df = pd.read_table(tsv_complete_summary)
+
+        # fill NaN with either zeroes or "NA" depending on column
+        df.loc[:, "Species":"superfam"] = (
+            df.loc[:, "Species":"superfam"].fillna("NA") )
+        df.loc[:, "naive_numele":"algor_bpsum"] = (
+            df.loc[:, "naive_numele":"algor_bpsum"].fillna(0) )
+        self.df_complete_summary = df.copy()
 
         # create a dict to subset df by kinds of chromosome
         self.regex_to_genome_subset = {  # pair regex with the name of the genome subset
