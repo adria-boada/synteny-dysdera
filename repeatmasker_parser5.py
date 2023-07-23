@@ -1809,7 +1809,7 @@ class Plotting:
         # rearrange cols (send repeat type columns to beginning)
         cols = new_df.columns.tolist()
         # send the first seven columns behind the last column
-        send_to_end = [cols.pop(i) for i in [0]*7]
+        send_to_end = [cols.pop(i) for i in [0]*8]
         cols = cols + send_to_end
         new_df = new_df[cols]
 
