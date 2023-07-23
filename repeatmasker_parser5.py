@@ -44,6 +44,7 @@ solution could be to employ the `dask` module for `pandas`.
 """
 
 import sys
+import math
 
 # data (frames) handling
 import pandas as pd, numpy as np
@@ -51,7 +52,6 @@ import os # compute file-size
 
 # plotting
 import seaborn as sns, matplotlib.pyplot as plt
-import matplotlib as mpl
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1172,9 +1172,13 @@ class Plotting:
         df colname with colours for each bin: 'colours_class'
         `write_to_filepath`: save PNG figure to this path
         """
+        # specify amount of bins (as many as max value?)
+        amount_bins = math.floor(df["perc_divg"].max()) + 1
+        print(amount_bins) # debug
         if hue:
             ax = sns.histplot(data=df, x='perc_divg',
                               hue=hue, multiple="dodge",
+                              bins=int(amount_bins),
                         palette={"Dcat": "#eb8f46",
                                  "Dtil": "#30acac"})
             plt.title(title, fontsize=12)
@@ -1183,7 +1187,8 @@ class Plotting:
             plt.close('all')
 
         else:
-            ax = sns.histplot(data=df, x='perc_divg')
+            ax = sns.histplot(data=df, x='perc_divg',
+                              bins=int(amount_bins))
             plt.title(title, fontsize=12)
             plt.xlabel("% divergence")
             plt.savefig(write_to_filepath, dpi=300)
@@ -1724,8 +1729,9 @@ class Plotting:
 
         # init. dict. where data will be appended
         # and later on will be the seed for a pd.DataFrame
-        new_df = {"Species": [], "overlap": [], "rel_occupancy": [],
-            "abs_occup_Mb": [], "median_divg": [], "mean_divg": [], "stdev_divg": []}
+        new_df = {"Species": [], "overlap": [], "rel_genom_occup": [],
+            "abs_occup_Mb": [], "median_divg": [], "mean_divg": [],
+                  "stdev_divg": [], "max_divg": []}
         # create a column for each included repeat type (maybe only class, maybe
         # class and subclass, etc)
         for i in range(0, len(unique_reptypes[0])):
@@ -1780,13 +1786,15 @@ class Plotting:
                         new_df[reptype_levels[i]].append(reptype[i])
                     new_df["overlap"].append(overlap)
                     new_df["abs_occup_Mb"].append(repeat_bp)
-                    new_df["rel_occupancy"].append(repeat_perc)
+                    new_df["rel_genom_occup"].append(repeat_perc)
                     new_df["median_divg"].append(
                                 d2["perc_divg"].median())
                     new_df["mean_divg"].append(
                                 d2["perc_divg"].mean())
                     new_df["stdev_divg"].append(
                                 d2["perc_divg"].std())
+                    new_df["max_divg"].append(
+                                d2["perc_divg"].max())
 
         new_df = pd.DataFrame(new_df)
         # sort `new_df` so the same reptype is paired across species
