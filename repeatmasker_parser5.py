@@ -45,11 +45,11 @@ solution could be to employ the `dask` module for `pandas`.
 
 import sys
 import math
+# to read input's file size and creating folders
+import os
 
 # data (frames) handling
 import pandas as pd, numpy as np
-import os # compute file-size
-
 # plotting
 import seaborn as sns, matplotlib.pyplot as plt
 
@@ -1176,23 +1176,24 @@ class Plotting:
         amount_bins = math.floor(df["perc_divg"].max()) + 1
         print(amount_bins) # debug
         if hue:
-            ax = sns.histplot(data=df, x='perc_divg',
-                              hue=hue, multiple="dodge",
-                              bins=int(amount_bins),
-                        palette={"Dcat": "#eb8f46",
-                                 "Dtil": "#30acac"})
-            plt.title(title, fontsize=12)
-            plt.xlabel("% divergence")
-            plt.savefig(write_to_filepath, dpi=300)
-            plt.close('all')
-
+            sns.histplot(data=df, x='perc_divg',
+                         # relative percentage normalized by "Species"
+                         # instead of the whole dataset.
+                         common_norm=False, stat="percent",
+                         # amount of bins and draw KDE
+                         bins=int(amount_bins), kde=True,
+                         # dodge bars of multiple species
+                         multiple="dodge", hue=hue,
+                         palette={"Dcat": "#eb8f46",
+                                  "Dtil": "#30acac"} )
         else:
             ax = sns.histplot(data=df, x='perc_divg',
                               bins=int(amount_bins))
-            plt.title(title, fontsize=12)
-            plt.xlabel("% divergence")
-            plt.savefig(write_to_filepath, dpi=300)
-            plt.close('all')
+
+        plt.title(title, fontsize=12)
+        plt.xlabel("% divergence")
+        plt.savefig(write_to_filepath, dpi=300)
+        plt.close('all')
 
         return None
 
@@ -1202,7 +1203,8 @@ class Plotting:
         """
         d1 = self.df_main
         if filter_overlap_label:
-            d1 = d1.loc[d1["overlapping"]]
+            # remove overlapping repeats from dataframe
+            d1 = d1.loc[d1["overlapping"] == False]
 
         for rep_class in d1["class"].unique():
             d2 = d1.loc[d1["class"] == rep_class]
@@ -1893,10 +1895,10 @@ if __name__ == '__main__':
             "divg_table_bysuperfam.tsv", sep="\t", na_rep="NA", index=False)
 
         # plots from main df
-        plots.boxplots_df_main(folder="Boxplots")
+        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
         plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
         plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
-        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
+        plots.boxplots_df_main(folder="Boxplots")
 
         # plots from summary df
         plots.histogram_stacked_absolute()
