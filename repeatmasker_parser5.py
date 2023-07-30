@@ -1159,14 +1159,22 @@ class Plotting:
             "Tandem_repeat": "yellow",
             "Nonrepetitive_fraction": "plum"
         }
+        self.species_palette = {
+            "Dcat": "#eb8f46",
+            "Dtil": "#30acac",
+            "Dsil": "mediumseagreen",
+        }
 
         return None
 
-    def histogram_divergence(self, df, write_to_filepath,
-                             title="Divergence from consensus sequence",
-                             hue: "colname to hue by (e.g. Species)" =False):
+    def histogram_divergence(
+        self, df, write_to_filepath, title,
+        density: bool,
+        hue: "colname to hue by (e.g. Species)" =False):
         """
         Draw a distribution of divergence from main df or a subset of main df
+
+        density: Density distribution (True) or absolute distribution (False)
 
         df colname with divergence values: 'perc_divg'
         df colname with colours for each bin: 'colours_class'
@@ -1174,8 +1182,7 @@ class Plotting:
         """
         # specify amount of bins (as many as max value?)
         amount_bins = math.floor(df["perc_divg"].max()) + 1
-        print(amount_bins) # debug
-        if hue:
+        if hue and density:
             sns.histplot(data=df, x='perc_divg',
                          # relative percentage normalized by "Species"
                          # instead of the whole dataset.
@@ -1184,171 +1191,108 @@ class Plotting:
                          bins=int(amount_bins), kde=True,
                          # dodge bars of multiple species
                          multiple="dodge", hue=hue,
-                         palette={"Dcat": "#eb8f46",
-                                  "Dtil": "#30acac"} )
+                         palette=self.species_palette )
+            plt.ylabel("Density")
+        elif hue:
+            sns.histplot(data=df, x='perc_divg',
+                         # amount of bins and draw KDE
+                         bins=int(amount_bins), kde=True,
+                         # dodge bars of multiple species
+                         multiple="dodge", hue=hue,
+                         palette=self.species_palette )
+            plt.ylabel("Count")
         else:
             ax = sns.histplot(data=df, x='perc_divg',
                               bins=int(amount_bins))
 
         plt.title(title, fontsize=12)
-        plt.xlabel("% divergence")
+        plt.suptitle("Divergence from consensus sequence", fontsize=12)
+        plt.xlabel("% Divergence")
         plt.savefig(write_to_filepath, dpi=300)
         plt.close('all')
 
         return None
 
-    def histogram_both_species_and_reptype_pairs(self, folder=None,
-                                            filter_overlap_label=False):
+    def histogram_both_species_and_reptype_pairs(
+        self, folder=None, relative=True,
+        filter_overlap_label=False,
+        all_species=True):
         """
+        Create histograms overlapping on the same plot/axis.
+
+        If relative, compare the shape of divergence distributions between species.
+        Else not relative, compare absolute counts in divergence bins.
+
+        folder: String with folder name. By default does not create a folder.
+
+        filter_overlap_label: Filter repeats labelled as overlapping. Remove
+            them from the analysis.
+
+        relative: Whether the plot should have a relative or absolute axis per
+            species. Relative axis are "density-like" (density of each
+            divergence bin per species) while absolute axis display the count of
+            REs per bin. Relative axis allows comparison of distribution shapes,
+            while absolute allows the accumulation and excesses of REs.
         """
-        d1 = self.df_main
+        d1 = self.df_main.copy()
+        unique_class = list(set(list(zip(list(d1["class"])))))
+        # unique subclasses, orders and superfams from DNA and RT only, please
+        d2 = d1.loc[d1["class"].isin(["DNA", "Retrotransposon"])]
+        unique_subclass = list(set(list(zip(
+            list(d2["class"]), list(d2["subclass"])))))
+        unique_order = list(set(list(zip(
+            list(d2["class"]), list(d2["subclass"]), list(d2["order"])))))
+        unique_superfam = list(set(list(zip(list(d2["class"]),
+            list(d2["subclass"]), list(d2["order"]), list(d2["superfam"])))))
+
+        reptype_levels = ["class", "subclass", "order", "superfam"]
+
         if filter_overlap_label:
             # remove overlapping repeats from dataframe
             d1 = d1.loc[d1["overlapping"] == False]
 
-        for rep_class in d1["class"].unique():
-            d2 = d1.loc[d1["class"] == rep_class]
-            if folder:
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
-                write_to_filepath = (folder+"/matplotlib_divhist_"+
-                    str(rep_class)+'.png')
-            else:
-                write_to_filepath = ('matplotlib_divhist_'+
-                    str(rep_class)+'.png')
-            self.histogram_divergence(
-                d2, write_to_filepath,
-                title=str(rep_class)+" divergence from consensus sequence",
-                hue="Species")
-
-            # compute subclass, order and superfam, but only
-            # for both 'DNA' and 'Retrotransposon' classes
-            if rep_class in ["DNA", "Retrotransposon"]:
-                # by subclass
-                for rep_type in d2["subclass"].unique():
-                    d3 = d2.loc[d2["subclass"] == rep_type]
-                    if folder:
-                        if not os.path.exists(folder):
-                            os.makedirs(folder)
-                        write_to_filepath = (folder+'/matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    else:
-                        write_to_filepath = ('matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    self.histogram_divergence(
-                        d3, write_to_filepath,
-                        title=str(rep_class)+"-"+str(rep_type)+
-                            " divergence from consensus sequence",
-                        hue="Species")
-
-                # by order
-                for rep_type in d2["order"].unique():
-                    d3 = d2.loc[d2["order"] == rep_type]
-                    if folder:
-                        if not os.path.exists(folder):
-                            os.makedirs(folder)
-                        write_to_filepath = (folder+'/matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    else:
-                        write_to_filepath = ('matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    self.histogram_divergence(
-                        d3, write_to_filepath,
-                        title=str(rep_class)+"-"+str(rep_type)+
-                            " divergence from consensus sequence",
-                        hue="Species")
-
-                # by superfam
-                for rep_type in d2["superfam"].unique():
-                    d3 = d2.loc[d2["superfam"] == rep_type]
-                    if folder:
-                        if not os.path.exists(folder):
-                            os.makedirs(folder)
-                        write_to_filepath = (folder+'/matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    else:
-                        write_to_filepath = ('matplotlib_divhist_'+
-                            str(rep_class)+"_"+str(rep_type)+".png")
-                    self.histogram_divergence(
-                        d3, write_to_filepath,
-                        title=str(rep_class)+"-"+str(rep_type)+
-                            " divergence from consensus sequence",
-                        hue="Species")
-
-        return None
-
-    def histogram_for_species_and_reptype_pairs(self, folder=None):
-        """
-        """
-        df = self.df_main
-
-        for species in df["Species"].unique():
-            # subset by species
-            d1 = df.loc[df["Species"] == species]
-            for rep_class in d1["class"].unique():
-                d2 = d1.loc[d1["class"] == rep_class]
+        # for each reptype in the concatenated list with all different levels...
+        for reptype in unique_class+unique_subclass+unique_order+unique_superfam:
+            # filter dataframe and create histogram from it
+            for i in range(0, len(reptype)):
+                mask = d1[reptype_levels[i]] == reptype[i]
+                d2 = d1.loc[mask]
+            if all_species:
                 if folder:
                     if not os.path.exists(folder):
                         os.makedirs(folder)
-                    write_to_filepath = (folder+'/matplotlib_divhist_'+
-                        str(species)+'_'+str(rep_class)+'.png')
+                    write_to_filepath = (folder+"/divhist_AllSp_"+
+                        "_".join(reptype)+'.png')
                 else:
-                    write_to_filepath = ('matplotlib_divhist_'+
-                        str(species)+'_'+str(rep_class)+'.png')
+                    write_to_filepath = ("divhist_AllSp_"+
+                        "_".join(reptype)+'.png')
+
                 self.histogram_divergence(
                     d2, write_to_filepath,
-                    title=str(rep_class)+" divergence from consensus sequence")
+                    title="; ".join(reptype) + "; [filter "+
+                        str(filter_overlap_label)+"]",
+                    hue="Species",
+                    density=relative)  # default True
 
-                # compute subclass, order and superfam, but only
-                # for both 'DNA' and 'Retrotransposon' classes
-                if rep_class in ["DNA", "Retrotransposon"]:
-                    # by subclass
-                    for rep_type in d2["subclass"].unique():
-                        d3 = d2.loc[d2["subclass"] == rep_type]
-                        if folder:
-                            if not os.path.exists(folder):
-                                os.makedirs(folder)
-                            write_to_filepath = (folder+'/matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        else:
-                            write_to_filepath = ('matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        self.histogram_divergence(
-                            d3, write_to_filepath,
-                            title=str(rep_class)+"-"+str(rep_type)+
-                                " divergence from consensus sequence")
+            else: # not all species (every species individually)
+                for species in d2["Species"].unique():
+                    mask = d2["Species"] == species
+                    d3 = d2.loc[mask]
+                    if folder:
+                        if not os.path.exists(folder):
+                            os.makedirs(folder)
+                        write_to_filepath = (folder+"/divhist_"+
+                            species+"_"+"_".join(reptype)+'.png')
+                    else:
+                        write_to_filepath = ("divhist_"+
+                            species+"_"+"_".join(reptype)+'.png')
 
-                    # by order
-                    for rep_type in d2["order"].unique():
-                        d3 = d2.loc[d2["order"] == rep_type]
-                        if folder:
-                            if not os.path.exists(folder):
-                                os.makedirs(folder)
-                            write_to_filepath = (folder+'/matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        else:
-                            write_to_filepath = ('matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        self.histogram_divergence(
-                            d3, write_to_filepath,
-                            title=str(rep_class)+"-"+str(rep_type)+
-                                " divergence from consensus sequence")
-
-                    # by superfam
-                    for rep_type in d2["superfam"].unique():
-                        d3 = d2.loc[d2["superfam"] == rep_type]
-                        if folder:
-                            if not os.path.exists(folder):
-                                os.makedirs(folder)
-                            write_to_filepath = (folder+'/matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        else:
-                            write_to_filepath = ('matplotlib_divhist_'+
-                                str(species)+"_"+str(rep_class)+"_"+str(rep_type)+".png")
-                        self.histogram_divergence(
-                            d3, write_to_filepath,
-                            title=str(rep_class)+"-"+str(rep_type)+
-                                " divergence from consensus sequence")
+                    self.histogram_divergence(
+                        d3, write_to_filepath,
+                        title="; ".join(reptype) + "; [filter "+
+                            str(filter_overlap_label)+"]",
+                        hue=False,
+                        density=False)  # default True
 
         return None
 
@@ -1379,8 +1323,7 @@ class Plotting:
             sns.boxplot(data=df, x=xvar, y='class',
                         hue='Species', showmeans='True',
                         # determine species hue
-                        palette={"Dcat": "#eb8f46",
-                                 "Dtil": "#30acac"},
+                        palette=self.species_palette,
                         meanprops=dict(color='green',
                                        marker='*',
                                        markeredgecolor='black',
@@ -1731,7 +1674,7 @@ class Plotting:
 
         # init. dict. where data will be appended
         # and later on will be the seed for a pd.DataFrame
-        new_df = {"Species": [], "overlap": [], "rel_genom_occup": [],
+        new_df = {"Species": [], "overlap": [], "perc_genom": [],
             "abs_occup_Mb": [], "median_divg": [], "mean_divg": [],
                   "stdev_divg": [], "max_divg": []}
         # create a column for each included repeat type (maybe only class, maybe
@@ -1788,7 +1731,7 @@ class Plotting:
                         new_df[reptype_levels[i]].append(reptype[i])
                     new_df["overlap"].append(overlap)
                     new_df["abs_occup_Mb"].append(repeat_bp)
-                    new_df["rel_genom_occup"].append(repeat_perc)
+                    new_df["perc_genom"].append(repeat_perc)
                     new_df["median_divg"].append(
                                 d2["perc_divg"].median())
                     new_df["mean_divg"].append(
@@ -1875,29 +1818,34 @@ if __name__ == '__main__':
         # tabulate main df divergence values by repeat type levels
         df = plots.df_main.copy()
         unique_reptypes = list(set(list(zip(list(df["class"])))))
-        print(unique_reptypes) # debug
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
             "divg_table_byclass.tsv", sep="\t", na_rep="NA", index=False)
         unique_reptypes = list(set(list(zip(
             list(df["class"]), list(df["subclass"])))))
-        print(unique_reptypes) # debug
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
             "divg_table_bysubclass.tsv", sep="\t", na_rep="NA", index=False)
         unique_reptypes = list(set(list(zip(
             list(df["class"]), list(df["subclass"]), list(df["order"])))))
-        print(unique_reptypes) # debug
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
             "divg_table_byorder.tsv", sep="\t", na_rep="NA", index=False)
         unique_reptypes = list(set(list(zip(list(df["class"]),
             list(df["subclass"]), list(df["order"]), list(df["superfam"])))))
-        print(unique_reptypes) # debug
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
             "divg_table_bysuperfam.tsv", sep="\t", na_rep="NA", index=False)
 
         # plots from main df
-        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_both_species")
-        plots.histogram_for_species_and_reptype_pairs(folder="Divg_hist")
-        plots.histogram_both_species_and_reptype_pairs(folder="Divg_hist_remove_overlap", filter_overlap_label=True)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_relative_density_comparison", relative=True,
+            all_species=True, filter_overlap_label=False)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_relative_density_comparison_remove_overlap",
+            relative=True, all_species=True, filter_overlap_label=True)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_absolute_counts_perSp", relative=False,
+            all_species=True, filter_overlap_label=False)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_individual_species",
+            all_species=False, filter_overlap_label=False)
         plots.boxplots_df_main(folder="Boxplots")
 
         # plots from summary df
