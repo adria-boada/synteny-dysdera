@@ -1254,9 +1254,10 @@ class Plotting:
         # for each reptype in the concatenated list with all different levels...
         for reptype in unique_class+unique_subclass+unique_order+unique_superfam:
             # filter dataframe and create histogram from it
+            d2 = d1.copy()
             for i in range(0, len(reptype)):
-                mask = d1[reptype_levels[i]] == reptype[i]
-                d2 = d1.loc[mask]
+                mask = d2[reptype_levels[i]] == reptype[i]
+                d2 = d2.loc[mask]
             if all_species:
                 if folder:
                     if not os.path.exists(folder):
