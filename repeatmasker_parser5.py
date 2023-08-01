@@ -19,6 +19,10 @@ Make sure all rows are of the same length (16 fields for all)
 
 Moreover, make sure to correctly label minor scaffolds from chromosomes in column 5
 
+Lastly, there can be few asterisks '*' in `position (left)`. These obstruct the
+loading/reading of the file because that column is otherwise an integer.
+Substitute them by zeroes.
+
  ## Index file/Sequid lengths
 
 TSV file with pairs of "sequid" and "sequid_length"
@@ -463,6 +467,12 @@ class Repeat:
         """
         Long function of many paragraphs, each reclassifying the default repeat
         type into four new columns, easily read and employed.
+
+        Attention!
+
+        Some classes are reclassified with 'Y==X' (the field Y exactly matches
+        X) but others are reclassified with 'Y.str.contains(X)' (the field Y
+        contains X string)
         """
 
         # UNKNOWN
@@ -501,7 +511,7 @@ class Repeat:
         df.loc[
             df["default_repclass"]=='Simple_repeat',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Tandem_repeat', 'Simple_repeat', 'NA', 'NA')
+        ] = ('Other', 'Simple_repeat', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='Satellite',
@@ -1428,37 +1438,7 @@ class Plotting:
 
         return None
 
-    def col_to_categorical_palette(self, df,
-        colname: "string which names a categorical column",
-        shade: "what kind of shade to be used (red, blue, salmon...)"):
-        """
-        For available shades, take a look at:
-        https://matplotlib.org/stable/gallery/color/named_colors.html
-
-        Returns a new `df` with an added column `colours`
-        """
-        # init colours column with "k" (black col)
-        df["colours"] = "k"
-        unique_categories = df[colname].unique()
-
-        # if there is a single categorical entry do not
-        # return a palette, but a single colour for all rows
-        if len(unique_categories) == 1:
-            # split and remove 'dark:' or 'light:' seaborn prefix
-            df["colours"] = shade.split(':')[-1]
-
-        else:
-            list_cols = sns.color_palette(shade, len(unique_categories))
-            list_cols.reverse()  # send the dark: or light: colours to the end
-            for uniqcell, col in zip(unique_categories, list_cols):
-                mask = df[colname] == uniqcell
-                df.loc[mask, "colours"] = pd.Series([
-                    col for x in range(df.loc[mask].shape[0])],
-                    index=df.loc[mask].index)
-
-        return df
-
-    def col_to_categorical_palette_v2(self, categories: "list of strings",
+    def col_to_categorical_palette(self, categories: "list of strings",
         shade: "what kind of shade will be used (red, blue, salmon...)"):
         """
         For available shades, take a look at:
@@ -1589,7 +1569,7 @@ class Plotting:
             df = df.loc[ (df[grouptype].isin(binning)) == False]
             # create the palette on first sweep of the loop
             if i==0 and j==0:
-                dict_cols = self.col_to_categorical_palette_v2(
+                dict_cols = self.col_to_categorical_palette(
                     categories=list(df[grouptype].unique()),
                     shade=class_col)
             # create a palette of colour for REs above threshold;
