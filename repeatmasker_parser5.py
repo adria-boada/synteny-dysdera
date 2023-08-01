@@ -511,7 +511,7 @@ class Repeat:
         df.loc[
             df["default_repclass"]=='Simple_repeat',
             ['class', 'subclass', 'order', 'superfam']
-        ] = ('Other', 'Simple_repeat', 'NA', 'NA')
+        ] = ('Tandem_repeat', 'Simple_repeat', 'NA', 'NA')
 
         df.loc[
             df["default_repclass"]=='Satellite',
