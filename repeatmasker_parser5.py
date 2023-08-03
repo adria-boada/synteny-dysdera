@@ -1857,11 +1857,14 @@ class Plotting:
         fig.suptitle("Window size: " + str(window_size))
         # create the folder if it is requested and doesnt exist.
         if folder:
-            if (os.path.exists(folder)):
+            if not os.path.exists(folder):
                 os.makedirs(folder)
             plt.savefig(folder+"/sliding_"+sequid_name+".png", dpi=300)
         else:
             plt.savefig("sliding_"+sequid_name+".png", dpi=300)
+        # Figures are retained unless explicitly closed and may consume too much
+        # memory. Close them after being written to disk.
+        plt.close()
 
         return None
 
@@ -1924,10 +1927,24 @@ if __name__ == '__main__':
         for species in plots.seqsizes_dict.keys():
             for sequid in plots.seqsizes_dict[species].keys():
                 sl = plots.seqsizes_dict[species][sequid]
+                df = plots.df_main.copy()
                 plots.sliding_windows(sequid_name=sequid,
                                       sequid_len=sl,
                                       species=species,
-                                      df=plots.df_main.copy())
+                                      df=df,
+                                      folder="SW_All_Repeats")
+                d1 = df.loc[df["class"] == "DNA"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1,
+                                      folder="SW_class_DNA")
+                d1 = df.loc[df["class"] == "Retrotransposon"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1,
+                                      folder="SW_class_RT")
         plots.histogram_both_species_and_reptype_pairs(
             folder="Divg_relative_density_comparison", relative=True,
             all_species=True, filter_overlap_label=False)
