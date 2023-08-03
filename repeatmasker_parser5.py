@@ -1113,10 +1113,10 @@ def df_complete_summary_grouping(df):
 
 class Plotting:
 
-    def __init__(self,
-                 tsv_main,
-                 tsv_complete_summary,
-                 seqsizes_dict,):
+    def __init__(
+          self, tsv_main,
+          tsv_complete_summary,
+          seqsizes_dict):
         """
         Read TSVs from `Repeat` class
         """
@@ -1741,6 +1741,130 @@ class Plotting:
 
         return new_df.round(2)
 
+    def sliding_windows(
+          self,
+          # input these from 'self.seqsizes_dict'
+          # (single entry or looping all entries)
+          sequid_name: str, sequid_len: int, species: str,
+          # title and file-name that will be written?
+          # it is possible to input a pre-filtered dataframe by reptypes
+          df: "main dataframe, filtered or unfiltered",
+          folder: str = None,
+          window_size: int = 100000, jump_size: int = 0,):
+        """
+        INPUT
+        ========
+
+        `sequid_name`, `sequid_len` and `species` are obtained from
+        `seqsizes_dict`. Input a single entry or loop over all dict. values.
+
+        Does not accept scaffold amalgams.
+
+        + sequid_name: Name of the sequid to label the plot.
+        + sequid_len: Length (in basepairs)  of the sequid.
+        + species: Name of the species, to label the plot.
+        + df: Main dataframe from the __init__ function. Can be filtered by repeat
+            types (class == DNA, superfam == hAT, etc) to compute sliding
+            windows for a subset of repeat groups.
+        + folder: In which folder should the plot be written in.
+        + window_size: Size of the sliding windows. Defaults to 100 kbps.
+        + jump_size: Gap between windows that will be skipped. Defaults to zero.
+
+        OUTPUT
+        =========
+
+        Creates a figure and writes it to a PNG.
+        """
+        # filter main dataframe by sequid
+        mask = (df["Species"] == species) & (df["sequid"] == sequid_name)
+        df = df.loc[mask]
+        # init loop variables
+        window_begin = 0
+        genome_values = {
+            # window coordinates and RE count
+            "window": [], "ele_count": [],
+            # median and st. dev. repeat length
+            "replen_med": [], "replen_std": [], "replen_mean": [],
+            # median and st. dev. divergence from consensus sequence
+            "divg_med": [], "divg_std": [], "divg_mean": []}
+
+        # slide and compute windows across the genome
+        while window_begin < sequid_len:
+            window_end = window_begin + window_size
+            # find all REs that start inside the interval
+            # (value of "begin" column is inside [begin, end] interval)
+            mask = (window_begin < df["begin"]) & (df["begin"] < window_end)
+            # filter out from dataframe
+            d1 = df.loc[mask]
+            # compute the center coordinate of the window
+            window_center = (window_end + window_begin) / 2
+            # store window values per loop cycle
+            genome_values["window"].append(window_center)
+            # shape[0] returns the number of rows in df
+            genome_values["ele_count"].append(d1.shape[0])
+            if d1.empty:
+                genome_values["replen_med"].append(0)
+                genome_values["replen_mean"].append(0)
+                genome_values["replen_std"].append(0)
+                genome_values["divg_med"].append(0)
+                genome_values["divg_mean"].append(0)
+                genome_values["divg_std"].append(0)
+            else:
+                genome_values["replen_med"].append(d1["replen"].median())
+                genome_values["replen_mean"].append(d1["replen"].mean())
+                genome_values["divg_med"].append(d1["perc_divg"].median())
+                genome_values["divg_mean"].append(d1["perc_divg"].mean())
+                # windows with only one repeat cannot have std()
+                if d1.shape[0] == 1:
+                    genome_values["divg_std"].append(0)
+                    genome_values["replen_std"].append(0)
+                else:
+                    genome_values["divg_std"].append(d1["perc_divg"].std())
+                    genome_values["replen_std"].append(d1["replen"].std())
+            # slide the window forward for the next cycle
+            window_begin += window_size + jump_size
+
+        # create 3x1 subplots that share X (window coordinates)
+        fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
+        # plot() method creates the center line (median)
+        # while fill_between() method fills in the range of deviation
+        # "ele_count" does not have deviation
+        ax1.plot(genome_values["window"], genome_values["ele_count"],
+                 label="Count of elements", lw=1, color="C0")
+        ax1.set_title("Count of elements")
+
+        ax2.plot(genome_values["window"], genome_values["replen_med"],
+                 label="Median element length", lw=1, color="C1")
+        zip_mean_and_std = list(zip(genome_values["replen_mean"],
+                                    genome_values["replen_std"]))
+        lower = [t[0] - t[1] for t in zip_mean_and_std]
+        upper = [t[0] + t[1] for t in zip_mean_and_std]
+        ax2.fill_between(genome_values["window"], lower, upper, facecolor="C1",
+                         alpha=0.5, label="1 sigma range")
+        ax2.set_title("Median element length")
+
+        ax3.plot(genome_values["window"], genome_values["divg_med"],
+                 label="Median divergence", lw=1, color="C2")
+        zip_mean_and_std = list(zip(genome_values["divg_mean"],
+                                    genome_values["divg_std"]))
+        lower = [t[0] - t[1] for t in zip_mean_and_std]
+        upper = [t[0] + t[1] for t in zip_mean_and_std]
+        ax3.fill_between(genome_values["window"], lower, upper, facecolor="C2",
+                         alpha=0.5, label="1 sigma range")
+        ax3.set_title("Median divergence")
+
+        plt.xlabel("Chromosome coordinates of " + sequid_name)
+        fig.suptitle("Window size: " + str(window_size))
+        # create the folder if it is requested and doesnt exist.
+        if folder:
+            if (os.path.exists(folder)):
+                os.makedirs(folder)
+            plt.savefig(folder+"/sliding_"+sequid_name+".png", dpi=300)
+        else:
+            plt.savefig("sliding_"+sequid_name+".png", dpi=300)
+
+        return None
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1796,7 +1920,30 @@ if __name__ == '__main__':
             tsv_complete_summary_path,
             seqsizes_dict)
 
+        # plots from main df (highly computationally consuming)
+        for species in plots.seqsizes_dict.keys():
+            for sequid in plots.seqsizes_dict[species].keys():
+                sl = plots.seqsizes_dict[species][sequid]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=plots.df_main.copy())
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_relative_density_comparison", relative=True,
+            all_species=True, filter_overlap_label=False)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_relative_density_comparison_remove_overlap",
+            relative=True, all_species=True, filter_overlap_label=True)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_absolute_counts_perSp", relative=False,
+            all_species=True, filter_overlap_label=False)
+        plots.histogram_both_species_and_reptype_pairs(
+            folder="Divg_individual_species",
+            all_species=False, filter_overlap_label=False)
+        plots.boxplots_df_main(folder="Boxplots")
+
         # tabulate main df divergence values by repeat type levels
+        # (highly computationally consuming)
         df = plots.df_main.copy()
         unique_reptypes = list(set(list(zip(list(df["class"])))))
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
@@ -1813,21 +1960,6 @@ if __name__ == '__main__':
             list(df["subclass"]), list(df["order"]), list(df["superfam"])))))
         plots.tabulate_divergence(unique_reptypes=unique_reptypes).to_csv(
             "divg_table_bysuperfam.tsv", sep="\t", na_rep="NA", index=False)
-
-        # plots from main df
-        plots.histogram_both_species_and_reptype_pairs(
-            folder="Divg_relative_density_comparison", relative=True,
-            all_species=True, filter_overlap_label=False)
-        plots.histogram_both_species_and_reptype_pairs(
-            folder="Divg_relative_density_comparison_remove_overlap",
-            relative=True, all_species=True, filter_overlap_label=True)
-        plots.histogram_both_species_and_reptype_pairs(
-            folder="Divg_absolute_counts_perSp", relative=False,
-            all_species=True, filter_overlap_label=False)
-        plots.histogram_both_species_and_reptype_pairs(
-            folder="Divg_individual_species",
-            all_species=False, filter_overlap_label=False)
-        plots.boxplots_df_main(folder="Boxplots")
 
         # plots from summary df
         plots.histogram_stacked_absolute()
