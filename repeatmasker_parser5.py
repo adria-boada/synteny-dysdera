@@ -1786,7 +1786,10 @@ class Plotting:
             # median and st. dev. repeat length
             "replen_med": [], "replen_std": [], "replen_mean": [],
             # median and st. dev. divergence from consensus sequence
-            "divg_med": [], "divg_std": [], "divg_mean": []}
+            "divg_med": [], "divg_std": [], "divg_mean": [],
+            # median and st. dev. insertions and deletions from consensus
+            "ins_med": [], "ins_std": [], "ins_mean": [],
+            "del_med": [], "del_std": [], "del_mean": []}
 
         # slide and compute windows across the genome
         while window_begin < sequid_len:
@@ -1803,29 +1806,38 @@ class Plotting:
             # shape[0] returns the number of rows in df
             genome_values["ele_count"].append(d1.shape[0])
             if d1.empty:
-                genome_values["replen_med"].append(0)
-                genome_values["replen_mean"].append(0)
-                genome_values["replen_std"].append(0)
-                genome_values["divg_med"].append(0)
-                genome_values["divg_mean"].append(0)
-                genome_values["divg_std"].append(0)
+                # if the window is empty of repeats,
+                # append a zero to all "measures"
+                # but dont append to "window" nor "ele_count"
+                for key in genome_values.keys():
+                    if key not in ["window", "ele_count"]:
+                        genome_values[key].append(0)
             else:
                 genome_values["replen_med"].append(d1["replen"].median())
                 genome_values["replen_mean"].append(d1["replen"].mean())
                 genome_values["divg_med"].append(d1["perc_divg"].median())
                 genome_values["divg_mean"].append(d1["perc_divg"].mean())
+                genome_values["ins_med"].append(d1["perc_ins"].median())
+                genome_values["ins_mean"].append(d1["perc_ins"].mean())
+                genome_values["del_med"].append(d1["perc_del"].median())
+                genome_values["del_mean"].append(d1["perc_del"].mean())
                 # windows with only one repeat cannot have std()
                 if d1.shape[0] == 1:
                     genome_values["divg_std"].append(0)
                     genome_values["replen_std"].append(0)
+                    genome_values["ins_std"].append(0)
+                    genome_values["del_std"].append(0)
                 else:
                     genome_values["divg_std"].append(d1["perc_divg"].std())
                     genome_values["replen_std"].append(d1["replen"].std())
+                    genome_values["ins_std"].append(d1["perc_ins"].std())
+                    genome_values["del_std"].append(d1["perc_del"].std())
             # slide the window forward for the next cycle
             window_begin += window_size + jump_size
 
         # create 3x1 subplots that share X (window coordinates)
-        fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
+        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(
+                nrows=5, ncols=1, sharex=True, figsize=(6, 10))
         # plot() method creates the center line (median)
         # while fill_between() method fills in the range of deviation
         # "ele_count" does not have deviation
@@ -1833,25 +1845,49 @@ class Plotting:
                  label="Count of elements", lw=1, color="C0")
         ax1.set_title("Count of elements")
 
+        def stdev_ranges(mean_list, std_list):
+            zip_mean_and_std = list(zip(mean_list, std_list))
+            # upper = mean + stdev for values in zipped list
+            upper = [t[0] + t[1] for t in zip_mean_and_std]
+            # if stdev lower than zero, return zero instead of negative lower values
+            lower = [t[0] - t[1] if t[0]-t[1]>0 else 0 for t in zip_mean_and_std]
+            return {"lower": lower, "upper": upper}
+
         ax2.plot(genome_values["window"], genome_values["replen_med"],
                  label="Median element length", lw=1, color="C1")
-        zip_mean_and_std = list(zip(genome_values["replen_mean"],
-                                    genome_values["replen_std"]))
-        lower = [t[0] - t[1] for t in zip_mean_and_std]
-        upper = [t[0] + t[1] for t in zip_mean_and_std]
-        ax2.fill_between(genome_values["window"], lower, upper, facecolor="C1",
+        ranges = stdev_ranges(genome_values["replen_mean"],
+                              genome_values["replen_std"])
+        ax2.fill_between(genome_values["window"], ranges["lower"],
+                         ranges["upper"], facecolor="C1",
                          alpha=0.5, label="1 sigma range")
         ax2.set_title("Median element length")
 
         ax3.plot(genome_values["window"], genome_values["divg_med"],
                  label="Median divergence", lw=1, color="C2")
-        zip_mean_and_std = list(zip(genome_values["divg_mean"],
-                                    genome_values["divg_std"]))
-        lower = [t[0] - t[1] for t in zip_mean_and_std]
-        upper = [t[0] + t[1] for t in zip_mean_and_std]
-        ax3.fill_between(genome_values["window"], lower, upper, facecolor="C2",
+        ranges = stdev_ranges(genome_values["divg_mean"],
+                              genome_values["divg_std"])
+        ax3.fill_between(genome_values["window"], ranges["lower"],
+                         ranges["upper"], facecolor="C2",
                          alpha=0.5, label="1 sigma range")
         ax3.set_title("Median divergence")
+
+        ax4.plot(genome_values["window"], genome_values["ins_med"],
+                 label="Median % insertions", lw=1, color="C3")
+        ranges = stdev_ranges(genome_values["ins_mean"],
+                              genome_values["ins_std"])
+        ax4.fill_between(genome_values["window"], ranges["lower"],
+                         ranges["upper"], facecolor="C3",
+                         alpha=0.5, label="1 sigma range")
+        ax4.set_title("Median % insertions")
+
+        ax5.plot(genome_values["window"], genome_values["del_med"],
+                 label="Median % deletions", lw=1, color="C4")
+        ranges = stdev_ranges(genome_values["del_mean"],
+                              genome_values["del_std"])
+        ax5.fill_between(genome_values["window"], ranges["lower"],
+                         ranges["upper"], facecolor="C4",
+                         alpha=0.5, label="1 sigma range")
+        ax5.set_title("Median % deletions")
 
         plt.xlabel("Chromosome coordinates of " + sequid_name)
         fig.suptitle("Window size: " + str(window_size))
@@ -1860,8 +1896,12 @@ class Plotting:
             if not os.path.exists(folder):
                 os.makedirs(folder)
             plt.savefig(folder+"/sliding_"+sequid_name+".png", dpi=300)
+            print("Finished creating",
+                  folder+"/sliding_"+sequid_name+".png")
         else:
             plt.savefig("sliding_"+sequid_name+".png", dpi=300)
+            print("Finished creating",
+                  "sliding_"+sequid_name+".png")
         # Figures are retained unless explicitly closed and may consume too much
         # memory. Close them after being written to disk.
         plt.close()
@@ -1922,6 +1962,9 @@ if __name__ == '__main__':
             tsv_main_path,
             tsv_complete_summary_path,
             seqsizes_dict)
+
+        # set styles for matplotlib
+        plt.style.use(["science", "nature"])
 
         # plots from main df (highly computationally consuming)
         for species in plots.seqsizes_dict.keys():
