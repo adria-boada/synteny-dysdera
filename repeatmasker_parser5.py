@@ -1746,7 +1746,7 @@ class Plotting:
           # input these from 'self.seqsizes_dict'
           # (single entry or looping all entries)
           sequid_name: str, sequid_len: int, species: str,
-          # title and file-name that will be written?
+          fig_title: str,
           # it is possible to input a pre-filtered dataframe by reptypes
           df: "main dataframe, filtered or unfiltered",
           folder: str = None,
@@ -1890,7 +1890,7 @@ class Plotting:
         ax5.set_title("Median % deletions")
 
         plt.xlabel("Chromosome coordinates of " + sequid_name)
-        fig.suptitle("Window size: " + str(window_size))
+        fig.suptitle(fig_title + "; W.size=" + str(window_size), fontsize="medium")
         # create the folder if it is requested and doesnt exist.
         if folder:
             if not os.path.exists(folder):
@@ -1974,20 +1974,47 @@ if __name__ == '__main__':
                 plots.sliding_windows(sequid_name=sequid,
                                       sequid_len=sl,
                                       species=species,
-                                      df=df,
+                                      df=df, fig_title="All repeats",
                                       folder="SW_All_Repeats")
+
+                # Repeat above sliding windows but for specific RE types
                 d1 = df.loc[df["class"] == "DNA"]
                 plots.sliding_windows(sequid_name=sequid,
                                       sequid_len=sl,
                                       species=species,
-                                      df=d1,
+                                      df=d1, fig_title="Filtered by DNA",
                                       folder="SW_class_DNA")
                 d1 = df.loc[df["class"] == "Retrotransposon"]
                 plots.sliding_windows(sequid_name=sequid,
                                       sequid_len=sl,
                                       species=species,
-                                      df=d1,
+                                      df=d1, fig_title="Filtered by RT",
                                       folder="SW_class_RT")
+                d1 = df.loc[df["superfam"] == "hAT"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1, fig_title="Filtered by DNA-hAT",
+                                      folder="SW_class_DNA_superfam_hAT")
+                d1 = df.loc[df["superfam"] == "TcMar"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1, fig_title="Filtered by DNA-TcMar",
+                                      folder="SW_class_DNA_superfam_TcMar")
+                d1 = df.loc[df["superfam"] == "Gypsy"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1, fig_title="Filtered by RT-Gypsy",
+                                      folder="SW_class_RT_superfam_Gypsy")
+                d1 = df.loc[df["order"] == "LINE"]
+                plots.sliding_windows(sequid_name=sequid,
+                                      sequid_len=sl,
+                                      species=species,
+                                      df=d1, fig_title="Filtered by RT-LINE",
+                                      folder="SW_class_RT_order_LINE")
+
         plots.histogram_both_species_and_reptype_pairs(
             folder="Divg_relative_density_comparison", relative=True,
             all_species=True, filter_overlap_label=False)
