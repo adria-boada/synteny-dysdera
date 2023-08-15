@@ -25,7 +25,7 @@ cells. Each dictionary in the list is a row.
   Def function_parser(): open the file. for each line, create a Mapping() obj.
 Append these obj to a list. From it, create a dataframe. Now: which columns am
 I interested in? Two chromosome tags, query and target. Ali. length in query and
-target (end - start). BLAST-id and compressed-id. Number of bases hit (col11).
+target (end - start). BLAST-id and compressed-id Number of bases hit (col11).
 Matches (col10). Mismatches (NM tag). Add CIGAR matches, so you can compare
 between them and see if there is any errors. Deletion should mean gap in the
 target sequence. Insertion should mean gap in the query sequence. Map quality.
@@ -222,21 +222,22 @@ class Mapping(object):
                    'Tstart': self.tstart,
                    'Tend': self.tend,
                    'Tlen': (self.tend - self.tstart),
-                   'Alig. len.': self.ali_len,
-                   'BLAST-id.': (self.matches/self.ali_len),
-                   'Compressed-id.': (self.matches /
+                   'Align_len': self.ali_len,
+                   'BLAST-id': (self.matches/self.ali_len),
+                   'Compressed-id': (self.matches /
                                       (self.cig_summary['M']+self.cig_summary['compressed'])),
-                   'MapQ.': self.mapQ,
+                   'MapQ': self.mapQ,
                    'Matches': self.matches,
-                   'No-matches': self.no_match,
+                   'No_matches': self.no_match,
                    # misses = NoMatch - gaps
                    'Mismatches': (self.no_match -
                                   (self.cig_summary['D']+self.cig_summary['I'])),
                    'Deletions': self.cig_summary['D'],
                    'Insertions': self.cig_summary['I'],
-                   'cig.Matches': self.cig_summary['M'],
+                   'cig_Matches': self.cig_summary['M'],
                    'Ambiguous': self.ambiguous,
                    'Strand': self.strand,
+                   'TypeAl': self.typeA,
                    }
 
 def parse_paf_alignment_db (filename: "Path to PAF formatted file"):
@@ -303,6 +304,14 @@ if __name__ == "__main__":
     print("----------")
     print(df.head(5), end='\n\n')
 
+    print("# Printing information about the PAF file...")
+    print("----------")
+    print("Number of rows in file (num. mappings):", df.shape[0])
+    for type_alignment in df["TypeAl"].unique():
+        val = df.loc[df["TypeAl"] == type_alignment].shape[0]
+        print(f"Number of rows with {type_alignment} type:", val)
+        print()
+
     # Descripció d'estadístiques bàsiques.
     print("# Printing a description of the 'dataset' (PAF file).")
     print("----------")
@@ -317,10 +326,10 @@ if __name__ == "__main__":
 
     # Create a concatenate of query and target values
     # (mapqual, ali-len, etc.)
-    query = df.loc[:, ['Qname', 'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']]
+    query = df.loc[:, ['Qname', 'Align_len', 'BLAST-id', 'Compressed-id', 'MapQ']]
     query['Indel'] = df['Deletions'] + df['Insertions']
     query.rename(columns={'Qname': 'Sequid'}, inplace=True)
-    target = df.loc[:, ['Tname', 'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']]
+    target = df.loc[:, ['Tname', 'Align_len', 'BLAST-id', 'Compressed-id', 'MapQ']]
     target['Indel'] = df['Deletions'] + df['Insertions']
     target.rename(columns={'Tname': 'Sequid'}, inplace=True)
     df_concat = pd.concat([query, target])
@@ -336,20 +345,20 @@ if __name__ == "__main__":
 
     fig_titles = {
         # 'df_colname': 'Fig. title',
-        'Alig. len.': 'Length of sequences alignment (xlim cut)',
-        'BLAST-id.': 'Standard/BLAST sequences identity',
-        'Compressed-id.': 'Gap-compressed sequences identity',
+        'Align_len': 'Length of sequences alignment (xlim cut)',
+        'BLAST-id': 'Standard/BLAST sequences identity',
+        'Compressed-id': 'Gap-compressed sequences identity',
         'Indel': 'Indels/gaps in sequences (xlim cut)',
-        'MapQ.': 'Mapping quality'}
+        'MapQ': 'Mapping quality'}
     fig_xlabel = {
         # 'df_colname': 'Fig. xlabel',
-        'Alig. len.': 'Basepairs',
-        'BLAST-id.': 'Percent identity',
-        'Compressed-id.': 'Percent identity',
+        'Align_len': 'Basepairs',
+        'BLAST-id': 'Percent identity',
+        'Compressed-id': 'Percent identity',
         'Indel': 'Basepairs',
-        'MapQ.': 'Mapping quality'}
+        'MapQ': 'Mapping quality'}
     for xvar in ['Indel',
-            'Alig. len.', 'BLAST-id.', 'Compressed-id.', 'MapQ.']:
+            'Align_len', 'BLAST-id', 'Compressed-id', 'MapQ']:
         sns.boxplot(data=df_concat, x=xvar, y='Sequid',
                     showmeans=True,
                     meanprops=dict(color='green',
@@ -357,7 +366,7 @@ if __name__ == "__main__":
                                    markeredgecolor='black',
                                    markersize='15'))
         # Els rangs de l'eix X en alguns casos és massa ample
-        if xvar == 'Alig. len.':
+        if xvar == 'Align_len':
             plt.xlim(0, 10000) # Restringeix xlim
         elif xvar == 'Indel':
             plt.xlim(0, 2000) # Restringeix xlim
