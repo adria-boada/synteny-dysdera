@@ -931,7 +931,7 @@ class Repeat:
         overlapping segments (counts each nucleotide a single time).
         """
 
-        # Init dataframe which will be returned
+        # Init variables
         # compute unique repeat types
         unique_class_tuples = list(set(tuple(x[3]) for x in intervals))
         unique_class_tuples.sort()
