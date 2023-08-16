@@ -278,6 +278,78 @@ def parse_paf_alignment_db (filename: "Path to PAF formatted file"):
 
     return paf, unique_scaff
 
+def chromosomal_coverage(
+        intervals):
+    """
+    INPUT
+
+    * intervals
+    A list of sublists where each sublist is composed of two coordinates (begin
+    and end) and the chromosome of the mapping. Eg:
+    [ [begin1, end1, seq1], [begin2, end2, seq2], ..., [bN, eN, sN] ]
+
+    Submit a single sequid (not multiple sequids) !!!
+
+    OUTPUT
+
+    Sum of non-overlapping mapping lengths. Removes all mapping subsegments
+    which are in overlapping and would be counted twice toward the sum.
+    """
+    # Create a point list from an interval list
+    points = []
+    for i in range(0, len(intervals)):
+        # Left/starting points labeled "0"
+        points += [[intervals[i][0], 0, i]]
+        # Right/ending points labeled "1"
+        points += [[intervals[i][1], 1, i]]
+    # Sort points by position (by first value in sublists)
+    points.sort()
+
+    # Init variables
+    # there should be only one sequid in the whole intervals list
+    sequid = intervals[0][2]
+    d_return = {sequid: 0}
+    # keep track of open and closed intervals
+    currentOpen = -1
+    open_intervals = []
+
+    # for each point in the list
+    for i in range(0, len(points)):
+
+        # If the loop landed on a left point (0)
+        # which opens an interval:
+        if points[i][1] == 0:
+            # if there is no other interval opened:
+            if currentOpen == -1:
+                # enters interval "i"
+                currentOpen = points[i][2]
+                currentBegin = int(points[i][0])
+                # print("enters", currentOpen) # debug
+            # else, there already was an open interval:
+            else:
+                # from the two mappings that are open, find which has the higher
+                # end coordinate and make it the currentOpen interval.
+                currentEnd = intervals[currentOpen][1]
+                nextEnd = intervals[points[i][2]][1]
+                if nextEnd > currentEnd:
+                    currentOpen = points[i][2]
+
+        # If the loop landed on a right point (1)
+        # which closes an interval:
+        else:
+            # And it is the right point of the "currentOpen" interval...
+            if points[i][2] == currentOpen:
+                # compute between begin and end
+                end = points[i][0]
+                mapping_bps = end - currentBegin
+                d_return[sequid] += int(mapping_bps)
+                # print("adds", mapping_bps) # debug
+                # close currentOpen interval
+                currentOpen = -1
+
+    return d_return
+
+
 if __name__ == "__main__":
 
     # Instruccions respecte els arguments necessaris per cridar l'script:
@@ -299,7 +371,28 @@ if __name__ == "__main__":
     # Options to fully view and print tables:
     pd.set_option('display.max_columns', None)
 
-    # Veure la capçalera.
+    # Revisa coverage de cada cromosoma (com de ben coberts es troben els chrs.)
+    print("# Printing basepairs mapped at least once from chromosomes")
+    for sequid in df["Qname"].unique():
+        if 'chr' in sequid.casefold():
+            dfsel = df.loc[df["Qname"] == sequid]
+            begins = list(dfsel["Qstart"])
+            ends = list(dfsel["Qend"])
+            seqs = [sequid] * len(begins)
+            intervals = list(zip(begins, ends, seqs))
+            result = chromosomal_coverage(intervals)[sequid]
+            print("*", sequid+":", result)
+    for sequid in df["Tname"].unique():
+        if 'chr' in sequid.casefold():
+            dfsel = df.loc[df["Tname"] == sequid]
+            begins = list(dfsel["Tstart"])
+            ends = list(dfsel["Tend"])
+            seqs = [sequid] * len(begins)
+            intervals = list(zip(begins, ends, seqs))
+            result = chromosomal_coverage(intervals)[sequid]
+            print("*", sequid+":", result)
+    print()
+
     print("# Printing first five rows of the PAF file...")
     print("----------")
     print(df.head(5), end='\n\n')
@@ -310,7 +403,7 @@ if __name__ == "__main__":
     for type_alignment in df["TypeAl"].unique():
         val = df.loc[df["TypeAl"] == type_alignment].shape[0]
         print(f"Number of rows with {type_alignment} type:", val)
-        print()
+    print()
 
     # Descripció d'estadístiques bàsiques.
     print("# Printing a description of the 'dataset' (PAF file).")

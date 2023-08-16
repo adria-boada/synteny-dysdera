@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 #
-# overlap_paf_parse.py 
+# overlap_paf_parse.py
 #
 # 2022-03-18  <adria@molevol-OptiPlex-9020>
 
@@ -19,10 +19,10 @@ import sys
 
  # Funció per extreure parelles de solapats que es poden concatenar.
 def couples_overlapping (interval_list: "A list of sorted points from *point_list*"):
-	
-    """ Acquire and return indices of overlapping intervals from 
-	*point_list*. Returns couples of overlapping intervals in the form 
-	of sublists. Only does one sweep to find pairs; to find multiple 
+
+    """ Acquire and return indices of overlapping intervals from
+	*point_list*. Returns couples of overlapping intervals in the form
+	of sublists. Only does one sweep to find pairs; to find multiple
 	overlaps an iterative approach is required. """
 
     # Create point_list from interval_list:
@@ -33,7 +33,7 @@ def couples_overlapping (interval_list: "A list of sorted points from *point_lis
         point_list += [ [interval_list[i][0], 0, i] ]
         # Right point == 1.
         point_list += [ [interval_list[i][1], 1, i] ]
-	
+
     # Sort the list by position (first val in sublists):
     point_list.sort()
 
@@ -41,18 +41,18 @@ def couples_overlapping (interval_list: "A list of sorted points from *point_lis
     # State variables for algorithm:
     currentOpen = -1
     answer = []
-	
+
     # for each point in the point_list:
     for i in range(0, len(point_list)):
-	
+
         # Si el punt actual és 'Left; opens an interval'
         if point_list[i][1] == 0:
-			
+
             # Si no hi ha cap interval actualment obert:
             if currentOpen == -1:
                 # 'Entra' a l'interval 'i'.
                 currentOpen = point_list[i][2]
-		
+
             # Si es trobava dins un interval anterior:
             else:
                 # Index del nou interval:
@@ -157,6 +157,6 @@ def thorough_indices (interval_list: "A list of sublists with paired points, whi
 
 
 if __name__ == '__main__':
-    print (cig_analysis(toy_examples()[3]))
+    print ((toy_examples()[3]))
 
 
