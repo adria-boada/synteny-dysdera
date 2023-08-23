@@ -344,6 +344,7 @@ if __name__ == '__main__':
 
 ###    # let us filter the input dataframe by OGs present in both Dcat and Dtil:
 ###    # (remove present only in one of these two species)
+    df_dcat_dtil = broc.df_input_table
 ###    OGid_interested_list = broc.df_dups().query(
 ###        'Dcat > 0 & Dtil > 0').index.to_list()
 ###    df_dcat_dtil = broc.df_input_table.query(f'OGid in {OGid_interested_list}')
@@ -352,20 +353,20 @@ if __name__ == '__main__':
 ###    # create a new column, OGtype per species
 ###    # instead of 1.2.3.4.5.6 etc. Dcat
 ###    # only '1'
-###    df_dcat_dtil['OGtype_perspecies']=0
-###    for row in broc.df_dups().loc[:, ['Dcat', 'Dtil']].iterrows():
-###        og = row[0]
-###        row = row[1]
-###        for species in row.index:
-###            df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
-###                             (df_dcat_dtil['OGid'] == og),
-###                             'OGtype_perspecies'] = row[species]
-###    pd.set_option('display.min_rows', 10)
-###    pd.set_option('display.max_columns', 100)
-###    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
-###                               'OGtype_perspecies']].drop_duplicates())#DEBUG
-###    # write df to tsv
-###    df_dcat_dtil.to_csv('broquil_og_inboth_dcat_dtil.tsv', sep='\t',
-###        na_rep='NA') # don't remove missing values (GO_OGstatus)
+    df_dcat_dtil['OGtype_perspecies']=0
+    for row in broc.df_dups().loc[:, ['Dcat', 'Dtil']].iterrows():
+        og = row[0]
+        row = row[1]
+        for species in row.index:
+            df_dcat_dtil.loc[(df_dcat_dtil['Species'] == species) &
+                             (df_dcat_dtil['OGid'] == og),
+                             'OGtype_perspecies'] = row[species]
+    pd.set_option('display.min_rows', 10)
+    pd.set_option('display.max_columns', 100)
+    print(df_dcat_dtil.loc[:, ['OGtype', 'Species',
+                               'OGtype_perspecies']].drop_duplicates())#DEBUG
+    # write df to tsv
+    df_dcat_dtil.to_csv('broquil_special.tsv', sep='\t',
+        na_rep='NA') # don't remove missing values (GO_OGstatus)
 
 
