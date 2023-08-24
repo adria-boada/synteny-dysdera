@@ -1215,8 +1215,8 @@ class Plotting:
             ax = sns.histplot(data=df, x='perc_divg',
                               bins=int(amount_bins))
 
-        plt.title(title, fontsize=12)
-        plt.suptitle("Divergence from consensus sequence", fontsize=12)
+        # plt.title(title, fontsize=12)
+        # plt.suptitle("Divergence from consensus sequence", fontsize=12)
         plt.xlabel("% Divergence")
         plt.savefig(write_to_filepath, dpi=300)
         plt.close('all')

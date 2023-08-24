@@ -10,9 +10,9 @@ if (length(args) < 3) {
              "circos_parsegm.R `broquil_orthologs.tsv` `sp1_chr.idx` `sp2_chr.idx`",
              "",
              "`sp1_chr.idx` must have the following format:    ",
-             "Species-Legend  sp-brocc.tsv  colours  2ndary-col",
-             "Scaffold_1      100           #FFFFFF  #DDDDDD   ",
-             "Scaffold_2      50            #EEEEEE  #CCCCCC   ",
+             "Species-Legend  Spec-Brocc    colours  2ndary-col",
+             "chr1            100           #FFFFFF  #DDDDDD   ",
+             "chrX            50            #EEEEEE  #CCCCCC   ",
              "etc.",
              "`sp2_chr.idx` follows the same format but does not require colours",
              sep='\n'),
@@ -25,19 +25,19 @@ index_file_color = args[2]
 index_file_cless = args[3]
 # adjust window size for counting multigenic families per window
 window_size = 5e6 # base-pairs
-# si la distància entre paràlegs dels 1:2 és inferior a distancia_12...
+# si la distància entre paràlegs dels 1:2 és inferior a dist_entre_paraleg...
 # considera'ls "propers"
-distancia_12 = 1e6
-# remove as many as `remove_top` outliers values
-# for amount_g so it is easier to see differences
-remove_top=1
+dist_entre_paraleg = 1e6
 
 library(circlize)      # circular plots
 library(colourvalues)  # colouring links depending on variable
 
 # pairs and multigenic families of orthologs
 df_input_table = read.table(orthologs_file,
-  sep='\t', header=TRUE, row.names=1)
+  sep='\t', header=TRUE,
+  # row.names=1  # <- activar si es llegeix output de pandas (python)
+                 #    llegeix la primera columna com a index
+  )
 # index of sequids in the previous file, length-sorted
 idx_col = read.table(index_file_color,
   sep='\t', header=FALSE)[, c(1:4)]
@@ -49,13 +49,14 @@ names(idx_lss) = c('crm', 'end')
 # read both species complete names ('first' field in tsv header)
 # moreover, read shortened names found in tsv ('second' field in tsv header
 sp_names = c(leg_col=idx_col[1,1], leg_lss=idx_lss[1,1],
-             df_col=idx_col[1,2], df_lss=idx_lss[1,2])
+             df_col=idx_col[1,2],  df_lss=idx_lss[1,2])
 # check that species in idx[1,2] for both files are found in df$Species
 if (!all(sp_names[c(3,4)] %in% unique(df_input_table$Species))) {
   stop('ERROR: The species defined in idx[1,2] do not match unique(df$Species)', call.=FALSE)
 }
 # subset species /Dcat/ and /Dtil/
-df_input_table['Species' %in% sp_names[c(3,4)]]
+# however, it isnt necessary as long as idx files are presented
+### df_input_table['Species' %in% sp_names[c(3,4)], ]
 # add a "starting" position for all chr
 idx_col$start = 0
 idx_lss$start = 0
@@ -106,8 +107,11 @@ df_paranomelike_n0 = df_input_table[grepl("^..0", df_input_table$OGtype) | grepl
 # ortolegs 2:1 inclosos com links intraespecífics (entre els 2 però no 1)
 df_paranomelike_12 = df_input_table[grepl("^1.2", df_input_table$OGtype) | grepl("^2.1", df_input_table$OGtype), ]
 
+print('Printing the head() of the "OGtype" column for the 1:0 dataframe')
 print(head(df_paranomelike_10['OGtype']))#DEBUG
-print(head(df_paranomelike_12['OGtype']))#DEBUG
+print('Printing the head() of the 1:2 dataframe')
+print(head(df_paranomelike_12))#DEBUG
+print('Printing the head() of the "OGtype" column for the n:0 dataframe')
 print(head(df_paranomelike_n0['OGtype'], n=30))#DEBUG
 
 
@@ -140,7 +144,7 @@ for (og in unique(df_paranomelike_12$OGid)) {
   if (new_rows$sequid_doub[1] != new_rows$sequid_doub[2]) {
     # la parella de paràlegs no es troba al mateix chr
     PGtype = 4 #='interchromosomal'
-  } else if (abs(new_rows$start_doub[1] - new_rows$start_doub[2]) < distancia_12) {
+  } else if (abs(new_rows$start_doub[1] - new_rows$start_doub[2]) < dist_entre_paraleg) {
     # els paràlegs es troben propers
     PGtype = 1 #='propers'
   } else {
@@ -198,7 +202,7 @@ for (c in idx$crm) {
 # add colour codes to amount_10 and more than 10 (amount_n0)
 window_colours = data.frame(
   var = c('amount_10', 'amount_n0'),
-  col = c('blue', 'green'))
+  col = c('blue', 'orange'))
 
 print(head(df_windows_n0[df_windows_n0$amount_n0!=0|df_windows_n0$amount_10!=0,]))#DEBUG
 print(head(df_links_12))#DEBUG
@@ -246,9 +250,9 @@ reverse_coord_windows <- function(dfw, inverted_sequids) {
     dfw[mbool, 'end'] = xrange[2] - dfw[mbool, 'start'] + xrange[1]
 }}
 
-inverted_crms = c('Dtil@Scaffold_1_X',
-              'Dtil@Scaffold_3',
-              'Dcat@Scaffold_1_Vmt')
+inverted_crms = c('Dtil@DtilchrX',
+              'Dtil@Dtilchr1',
+              'Dcat@Dcatchr2')
 reverse_coord = function(x, xrange) {
   # xrange: starting and end for crm
   # x: coordinate which will be reversed
@@ -315,7 +319,7 @@ circos.track(idx$crm, ylim=c(0, track_ylim),
       d[, 'amount_10'],
       col=window_colours[window_colours$var=='amount_10', 'col'])
     circos.text(mean(xlim), mean(ylim)+mm_y(9), # add Y space (chr.name above track)
-      gsub(".*d_", "", cllcrm),  # crm name that will be displayed
+      gsub(".*chr", "", cllcrm),  # crm name that will be displayed
       # the global substitution (gsub) can trim the sp identifier or 'Scaffold' entirely
       cex=1.2, col='black', facing='inside', niceFacing=TRUE)
   }
@@ -347,8 +351,8 @@ legend('bottomleft', bty='n', cex=.7,
        legend = c(
           paste0('Outer windows of 1:0 (', sum(df_windows_n0$amount_10),' genes)'),
           paste0('Outer windows of >1:0 (', sum(df_windows_n0$amount_n0),' genes)'),
-          paste0('Closeby 2:1 paralogs (dist<', distancia_12,') (amount=', nrow(x[x$PGtype==1,]),')' ),
-          paste0('Distant 2:1 paralogs (dist>=', distancia_12,') (amount=', nrow(x[x$PGtype==2,]), ')' ),
+          paste0('Closeby 2:1 paralogs (dist<', dist_entre_paraleg,') (amount=', nrow(x[x$PGtype==1,]),')' ),
+          paste0('Distant 2:1 paralogs (dist>=', dist_entre_paraleg,') (amount=', nrow(x[x$PGtype==2,]), ')' ),
           paste0('Interchromosomal 2:1 paralogs (amount=', nrow(x[x$PGtype==4,]), ')')
         ),
        fill = c(
