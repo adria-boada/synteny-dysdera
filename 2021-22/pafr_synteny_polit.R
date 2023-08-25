@@ -19,9 +19,9 @@ if (length(args) != 1) {
   path_to_paf = args[1]
   
 # Variables per a filtrar el PAF i reduir-ne la mida:
-  min_map_qual = 30  # No es mira per sota d'aquesta qualitat de mapatge.
+  min_map_qual = 60  # Descarta mapatges per sota d'aquesta qualitat de mapatge.
   # El rang de qualitats de mapatge vira entre zero i seixanta. 
-  min_align_len = 6e3  # No es mira alineaments que siguin més petits de 6 kb.
+  min_align_len = 5e3  # Descarta mapatges per sota d'aquesta llargada (en bp)
   
 ## PALETA DE COLORS ESCUER--SILVATICA ##
 
