@@ -321,19 +321,19 @@ if __name__ == '__main__':
     df_total = broc.df_input_table.query('Method == "BROC"')
     print("Counts for the complete dataframe")
     df_count_total = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
-                                            up_to=6, df=df_total)
+                                            up_to=4, df=df_total)
     print(df_count_total)
     print("Counts for major scaffolds only")
     df_count_major = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
-                                            up_to=6, df=df_major)
+                                            up_to=4, df=df_major)
     print(df_count_major)
     print("Counts for minor scaffolds only")
     df_count_minor = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
-                                            up_to=6, df=df_minor)
+                                            up_to=4, df=df_minor)
     print(df_count_minor)
     print("Counts for OGs mixed between minor/major scaffolds")
     df_count_mix = broc.count_minor_major_scaffold_occupancy(['Dcat', 'Dtil'],
-                                            up_to=6, df=df_mix)
+                                            up_to=4, df=df_mix)
     print(df_count_mix)
     # s'haurien de passar el dtype de cada cel·la a integer pq numpy pugui
     # interpretar-ho i fer-ne els heatmaps... df = df.astype(int)
