@@ -1781,8 +1781,8 @@ class Plotting:
         # init loop variables
         window_begin = 0
         genome_values = {
-            # window coordinates and RE count
-            "window": [], "ele_count": [],
+            # window coordinates and RE count, RE bp
+            "window": [], "ele_count": [], "naive_bpsum": [],
             # median and st. dev. repeat length
             "replen_med": [], "replen_std": [], "replen_mean": [],
             # median and st. dev. divergence from consensus sequence
@@ -1805,6 +1805,7 @@ class Plotting:
             genome_values["window"].append(window_center)
             # shape[0] returns the number of rows in df
             genome_values["ele_count"].append(d1.shape[0])
+            genome_values["naive_bpsum"].append(d1["replen"].sum())
             if d1.empty:
                 # if the window is empty of repeats,
                 # append a zero to all "measures"
@@ -1842,8 +1843,8 @@ class Plotting:
         # while fill_between() method fills in the range of deviation
         # "ele_count" does not have deviation
         ax1.plot(genome_values["window"], genome_values["ele_count"],
-                 label="Count of elements", lw=1, color="C0")
-        ax1.set_title("Count of elements")
+                 label="Number of elements", lw=1, color="C0")
+        ax1.set_title("Number of elements")
 
         def stdev_ranges(mean_list, std_list):
             zip_mean_and_std = list(zip(mean_list, std_list))
@@ -1853,14 +1854,18 @@ class Plotting:
             lower = [t[0] - t[1] if t[0]-t[1]>0 else 0 for t in zip_mean_and_std]
             return {"lower": lower, "upper": upper}
 
-        ax2.plot(genome_values["window"], genome_values["replen_med"],
-                 label="Median element length", lw=1, color="C1")
-        ranges = stdev_ranges(genome_values["replen_mean"],
-                              genome_values["replen_std"])
-        ax2.fill_between(genome_values["window"], ranges["lower"],
-                         ranges["upper"], facecolor="C1",
-                         alpha=0.5, label="1 sigma range")
-        ax2.set_title("Median element length")
+        # The second plot can either be average RE length or sum of naive bp.
+        ax2.plot(genome_values["window"], genome_values["naive_bpsum"],
+                 label="Sum of 'naive' base pairs", lw=1, color="C1")
+        ax2.set_title("Sum of 'naive' base pairs")
+###        ax2.plot(genome_values["window"], genome_values["replen_med"],
+###                 label="Median element length", lw=1, color="C1")
+###        ranges = stdev_ranges(genome_values["replen_mean"],
+###                              genome_values["replen_std"])
+###        ax2.fill_between(genome_values["window"], ranges["lower"],
+###                         ranges["upper"], facecolor="C1",
+###                         alpha=0.5, label="1 sigma range")
+###        ax2.set_title("Median element length")
 
         ax3.plot(genome_values["window"], genome_values["divg_med"],
                  label="Median divergence", lw=1, color="C2")
