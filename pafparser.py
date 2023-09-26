@@ -376,6 +376,65 @@ def chromosomal_coverage(
 
     return d_return, size_distrib
 
+def genome_coverage(df):
+    """
+    Revisa el coverage de cada cromosoma; com de ben coberts es troben els crms.
+    També avalua la freqüència de blocs sintènics agrupats dins una certa llargada.
+
+    No és una vertadera funció, és un monstre lleig.
+    """
+    print("# Printing the size distribution of syntenic blocks")
+    print("# The two values in dict lists are num of mappings and bps mapped",
+          "in each range\n")
+    distrib_list = []
+    size_distrib = {"0-9 bp": [0,0], "10-99 bp": [0,0], "100-999 bp": [0,0],
+                    "1-9,999 kb": [0,0], "10-99,999 kb": [0,0],
+                    "100-999,999 kb": [0,0], "1-10 Mb": [0,0], "higher": [0,0]}
+    for sequid in df["Qname"].unique():
+        if 'chr' in sequid.casefold():
+            dfsel = df.loc[df["Qname"] == sequid]
+            begins = list(dfsel["Qstart"])
+            ends = list(dfsel["Qend"])
+            seqs = [sequid] * len(begins)
+            intervals = list(zip(begins, ends, seqs))
+            result = chromosomal_coverage(intervals)
+            coverage = result[0][sequid]
+            distrib_synteny_blocks = result[1]
+            distrib_list.append(distrib_synteny_blocks)
+            print("*", sequid+": covered as much as", coverage, "unique bp in "+
+                  "the chr.")
+            print("    ", distrib_synteny_blocks)
+    for i in distrib_list:
+        for key in i.keys():
+            size_distrib[key][0] += i[key][0]
+            size_distrib[key][1] += i[key][1]
+    print(" ** Sum size distrib. for query:", size_distrib)
+    print()
+    distrib_list = []
+    size_distrib = {"0-9 bp": [0,0], "10-99 bp": [0,0], "100-999 bp": [0,0],
+                    "1-9,999 kb": [0,0], "10-99,999 kb": [0,0],
+                    "100-999,999 kb": [0,0], "1-10 Mb": [0,0], "higher": [0,0]}
+    for sequid in df["Tname"].unique():
+        if 'chr' in sequid.casefold():
+            dfsel = df.loc[df["Tname"] == sequid]
+            begins = list(dfsel["Tstart"])
+            ends = list(dfsel["Tend"])
+            seqs = [sequid] * len(begins)
+            intervals = list(zip(begins, ends, seqs))
+            result = chromosomal_coverage(intervals)
+            coverage = result[0][sequid]
+            distrib_synteny_blocks = result[1]
+            distrib_list.append(distrib_synteny_blocks)
+            print("*", sequid+": covered as much as", coverage, "unique bp in "+
+                  "the chr.")
+            print("    ", distrib_synteny_blocks)
+    for i in distrib_list:
+        for key in i.keys():
+            size_distrib[key][0] += i[key][0]
+            size_distrib[key][1] += i[key][1]
+    print(" ** Sum size distrib. for target:", size_distrib)
+    print()
+
 
 if __name__ == "__main__":
 
@@ -398,56 +457,8 @@ if __name__ == "__main__":
     # Options to fully view and print tables:
     pd.set_option('display.max_columns', None)
 
-    # Revisa coverage de cada cromosoma (com de ben coberts es troben els chrs.)
-    print("# Printing the size distribution of syntenic blocks")
-    print("# The two values in dict lists are num of mappings and bps mapped",
-          "in each range\n")
-    distrib_list = []
-    size_distrib = {"0-9 bp": [0,0], "10-99 bp": [0,0], "100-999 bp": [0,0],
-                    "1-9,999 kb": [0,0], "10-99,999 kb": [0,0],
-                    "100-999,999 kb": [0,0], "1-10 Mb": [0,0], "higher": [0,0]}
-    for sequid in df["Qname"].unique():
-        if 'chr' in sequid.casefold():
-            dfsel = df.loc[df["Qname"] == sequid]
-            begins = list(dfsel["Qstart"])
-            ends = list(dfsel["Qend"])
-            seqs = [sequid] * len(begins)
-            intervals = list(zip(begins, ends, seqs))
-            result = chromosomal_coverage(intervals)
-            coverage = result[0][sequid]
-            distrib_synteny_blocks = result[1]
-            distrib_list.append(distrib_synteny_blocks)
-            print("*", sequid+":", coverage)
-            print("    ", distrib_synteny_blocks)
-    for i in distrib_list:
-        for key in i.keys():
-            size_distrib[key][0] += i[key][0]
-            size_distrib[key][1] += i[key][1]
-    print(" ** Sum for query:", size_distrib)
-    print()
-    distrib_list = []
-    size_distrib = {"0-9 bp": [0,0], "10-99 bp": [0,0], "100-999 bp": [0,0],
-                    "1-9,999 kb": [0,0], "10-99,999 kb": [0,0],
-                    "100-999,999 kb": [0,0], "1-10 Mb": [0,0], "higher": [0,0]}
-    for sequid in df["Tname"].unique():
-        if 'chr' in sequid.casefold():
-            dfsel = df.loc[df["Tname"] == sequid]
-            begins = list(dfsel["Tstart"])
-            ends = list(dfsel["Tend"])
-            seqs = [sequid] * len(begins)
-            intervals = list(zip(begins, ends, seqs))
-            result = chromosomal_coverage(intervals)
-            coverage = result[0][sequid]
-            distrib_synteny_blocks = result[1]
-            distrib_list.append(distrib_synteny_blocks)
-            print("*", sequid+":", coverage)
-            print("    ", distrib_synteny_blocks)
-    for i in distrib_list:
-        for key in i.keys():
-            size_distrib[key][0] += i[key][0]
-            size_distrib[key][1] += i[key][1]
-    print(" ** Sum for target:", size_distrib)
-    print()
+    # Revisa coverage del genoma:
+    genome_coverage(df)
 
     print("# Printing first five rows of the PAF file...")
     print("----------")
