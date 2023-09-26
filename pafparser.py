@@ -435,6 +435,68 @@ def genome_coverage(df):
     print(" ** Sum size distrib. for target:", size_distrib)
     print()
 
+def histogram_indels(
+    df, write_to_filepath, title,
+    ):
+    """
+    Draw a distribution of indel sizes from a mapping dataset.
+
+    * df: DataFrame of mapping data.
+    colname with insertion values: 'Insertions'
+    colname with deletion values: 'Deletions'
+
+    * write_to_filepath: save PNG figure to this path
+
+    * title: the title of the plot.
+    """
+    # specify amount of bins (as many as max value?)
+    #~ amount_bins = math.floor(df["perc_divg"].max()) + 1
+    # Create the matplotlib axes (a row of three consecutive plots)
+    fig, (ax1, ax2, ax3,) = plt.subplots(
+            nrows=1, ncols=3, figsize=(6, 10))
+    # The first two axes are absolute Ins and Del; the third is a relative
+    # comparison of the preceding data (stat='percent', with a kde)
+    ax1.set_title('Deletions')
+    ax2.set_title('Insertions')
+    ax3.set_title('Rel. comparison')
+    # Iterate through multiple seaborn axes and give to each of them the
+    # adequate ax=axN number.
+    sns.histplot(data=df, x='Deletions', ax=ax1)
+    sns.histplot(data=df, x='Insertions', ax=ax2)
+    # Prepara dades pel tercer plot relatiu/comparatiu...
+    df_del = df['Deletions']
+    df_ins = df['Insertions']
+    # Etiqueta cada valor per aplicar 'hue'.
+    df_ins['hue'] = 'Ins'
+    df_del['hue'] = 'Del'
+    # Per a que pd.concat funcioni, anomena igual les columnes dels dataframes
+    # df_ins i df_del (e.g. basepairs).
+
+    # Empra 'pd.concat()' per a concatenar les dues sèries anteriors (una sola
+    # columna amb totes les dades).
+
+    # Crea el tercer histograma, aquesta vegada relatiu amb totes les dades.
+    sns.histplot(data=df, x='', ax=ax3, common_norm=False, stat='percent',
+                 kde=True, multiple='dodge', hue='COLUMNA',
+                 palette=['C1', 'C2'])
+
+    # plt.title(title, fontsize=12)
+    # plt.suptitle("Divergence from consensus sequence", fontsize=12)
+    plt.xlabel("Categories, in basepairs")
+    plt.ylabel("Frequency/Density")
+    plt.savefig(write_to_filepath, dpi=300)
+    plt.close('all')
+
+    return None
+
+# folder setting    if folder:
+# folder setting        if not os.path.exists(folder):
+# folder setting            os.makedirs(folder)
+# folder setting        write_to_filepath = (folder+"/divhist_"+
+# folder setting            species+"_"+"_".join(reptype)+'.png')
+# folder setting    else:
+# folder setting        write_to_filepath = ("divhist_"+
+# folder setting            species+"_"+"_".join(reptype)+'.png')
 
 if __name__ == "__main__":
 
