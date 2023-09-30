@@ -437,6 +437,7 @@ def genome_coverage(df):
 
 def histogram_indels(
     df, write_to_filepath, title,
+    logscale="False",
     ):
     """
     Draw a distribution of indel sizes from a mapping dataset.
@@ -448,38 +449,49 @@ def histogram_indels(
     * write_to_filepath: save PNG figure to this path
 
     * title: the title of the plot.
+
+    * logscale: change X axis to logarithmic scale.
     """
     # specify amount of bins (as many as max value?)
     #~ amount_bins = math.floor(df["perc_divg"].max()) + 1
     # Create the matplotlib axes (a row of three consecutive plots)
     fig, (ax1, ax2, ax3,) = plt.subplots(
-            nrows=1, ncols=3, figsize=(6, 10))
+            nrows=1, ncols=3, figsize=(18, 6))
     # The first two axes are absolute Ins and Del; the third is a relative
-    # comparison of the preceding data (stat='percent', with a kde)
+    # comparison of the preceding data (stat='percent')
     ax1.set_title('Deletions')
     ax2.set_title('Insertions')
     ax3.set_title('Rel. comparison')
     # Iterate through multiple seaborn axes and give to each of them the
     # adequate ax=axN number.
-    sns.histplot(data=df, x='Deletions', ax=ax1)
-    sns.histplot(data=df, x='Insertions', ax=ax2)
+    # Element "poly" changes the style of the plot (see seaborn doc).
+    sns.histplot(data=df, x='Deletions', ax=ax1, element="poly")
+    sns.histplot(data=df, x='Insertions', ax=ax2, element="poly")
     # Prepara dades pel tercer plot relatiu/comparatiu...
-    df_del = df['Deletions']
-    df_ins = df['Insertions']
+    # Per a que pd.concat funcioni, anomena igual les columnes dels dataframes
+    # df_ins i df_del (e.g. anomena les dues sèries "size").
+    df_del = df['Deletions'].rename("size").to_frame()
+    df_ins = df['Insertions'].rename("size").to_frame()
+    ## print(df_del) ## DEBUG
+    ## print(df_ins) ## DEBUG
     # Etiqueta cada valor per aplicar 'hue'.
     df_ins['hue'] = 'Ins'
     df_del['hue'] = 'Del'
-    # Per a que pd.concat funcioni, anomena igual les columnes dels dataframes
-    # df_ins i df_del (e.g. basepairs).
-
+    ## print(df_del) ## DEBUG
+    ## print(df_ins) ## DEBUG
     # Empra 'pd.concat()' per a concatenar les dues sèries anteriors (una sola
     # columna amb totes les dades).
-
+    df_concat = pd.concat([df_ins, df_del])
     # Crea el tercer histograma, aquesta vegada relatiu amb totes les dades.
-    sns.histplot(data=df, x='', ax=ax3, common_norm=False, stat='percent',
-                 kde=True, multiple='dodge', hue='COLUMNA',
-                 palette=['C1', 'C2'])
+    ## print(df_concat) ## DEBUG
+    sns.histplot(data=df_concat, x='size', ax=ax3, common_norm=False,
+                 stat='percent', multiple='dodge',
+                 hue='hue', palette=['C1', 'C2'], element="poly")
 
+    if logscale:
+        ax1.set_xscale("log")
+        ax2.set_xscale("log")
+        ax3.set_xscale("log")
     # plt.title(title, fontsize=12)
     # plt.suptitle("Divergence from consensus sequence", fontsize=12)
     plt.xlabel("Categories, in basepairs")
@@ -544,6 +556,10 @@ if __name__ == "__main__":
     print(df['Qname'].value_counts(normalize=True), end='\n\n')
     print(df['Tname'].value_counts(normalize=True), end='\n\n')
 
+    ## Intent histograma ##
+
+    histogram_indels(df, "histogram_indels_logscale.png", "Title", logscale=True)
+
     ## BoxPlotting section ##
 
     # Create a concatenate of query and target values
@@ -599,4 +615,5 @@ if __name__ == "__main__":
         print("----------")
         plt.savefig(str(xvar)+'_matplotlib.png', dpi=300)
         plt.close('all')
+
 
