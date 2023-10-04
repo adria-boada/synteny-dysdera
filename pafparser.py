@@ -558,7 +558,8 @@ if __name__ == "__main__":
 
     ## Intent histograma ##
 
-    histogram_indels(df, "histogram_indels_logscale.png", "Title", logscale=True)
+    histogram_indels(df, "histogram_indels_linearscale.png", "Standard", logscale=False)
+    histogram_indels(df, "histogram_indels_logscale.png", "Logscale")
 
     ## BoxPlotting section ##
 
