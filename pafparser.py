@@ -465,8 +465,8 @@ def histogram_indels(
     # Iterate through multiple seaborn axes and give to each of them the
     # adequate ax=axN number.
     # Element "poly" changes the style of the plot (see seaborn doc).
-    sns.histplot(data=df, x='Deletions', ax=ax1, element="poly")
-    sns.histplot(data=df, x='Insertions', ax=ax2, element="poly")
+    sns.histplot(data=df, x='Deletions', ax=ax1, element="step")
+    sns.histplot(data=df, x='Insertions', ax=ax2, element="step")
     # Prepara dades pel tercer plot relatiu/comparatiu...
     # Per a que pd.concat funcioni, anomena igual les columnes dels dataframes
     # df_ins i df_del (e.g. anomena les dues sèries "size").
@@ -484,15 +484,15 @@ def histogram_indels(
     df_concat = pd.concat([df_ins, df_del])
     # Crea el tercer histograma, aquesta vegada relatiu amb totes les dades.
     ## print(df_concat) ## DEBUG
-    sns.histplot(data=df_concat, x='size', ax=ax3, common_norm=False,
-                 stat='percent', multiple='dodge',
-                 hue='hue', palette=['C1', 'C2'], element="poly")
+    sns.histplot(data=df_concat, x='size', ax=ax3,
+                 multiple='fill',
+                 hue='hue', palette=['C1', 'C2'])
 
     if logscale:
         ax1.set_xscale("log")
         ax2.set_xscale("log")
         ax3.set_xscale("log")
-    # plt.title(title, fontsize=12)
+    plt.title(title, fontsize=10)
     # plt.suptitle("Divergence from consensus sequence", fontsize=12)
     plt.xlabel("Categories, in basepairs")
     plt.ylabel("Frequency/Density")
