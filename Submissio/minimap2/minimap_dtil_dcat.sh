@@ -40,6 +40,10 @@ elif [ "$coma1" != "," ] || [ "$coma2" != "," ] ; then
   echo "ERROR: One of the two input expressions (LABEL,FASTA) did not contain a comma"
   exit 1
 fi
+# If the --threads lever has not been given, set $THREADS to the default of 23
+if [ -z "$THREADS" ]; then
+  THREADS=23
+fi
 
 # source PATH to minimap2
 source /users-d3/adria.boada/.bashrc
