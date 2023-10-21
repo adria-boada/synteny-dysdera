@@ -39,11 +39,11 @@ import sys
 # Dataframes manipulation, akin to the R project
 import pandas as pd
 import numpy as np
+# Sorting strings "humanely"
 from natsort import index_natsorted
-import seaborn as sns
-
-# Plotting data into barplots, histograms, etc.
+# Creating plots from `pandas` dataframes.
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
