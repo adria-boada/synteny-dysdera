@@ -129,11 +129,12 @@ class Mapping:
         # Create lists with the optional fields (which may not be included in
         # all rows). See minimap2 reference manual for an explanation of each
         # "tag"/column:  <https://lh3.github.io/minimap2/minimap2.html#10>
-        tag_to_columns = {"tp": [], "cm": [], "s1": [], "s2": [],
-                          "NM": [], "MD": [], "AS": [], "SA": [],
-                          "ms": [], "nn": [], "ts": [], "cg": [],
-                          "cs": [], "dv": [], "de": [], "rl": [],
-                          "zd": [], }
+        # Keep in mind that the keys or "tags" have been manually sorted by
+        # importance (so in the dataframe, important columns appear first).
+        tag_to_columns = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
+                          "cg": [], "cs": [], "SA": [], "ts": [],
+                          "cm": [], "s1": [], "s2": [], "MD": [], "AS": [],
+                          "ms": [], "rl": [], "zd": [], }
         # Scroll through the lines in the file and populate this list:
         print("STATUS: Reading the optional columns (further than 12th)")
         with open(path_to_paf) as file:
@@ -162,6 +163,18 @@ class Mapping:
                           "zd": "zd_unknown",}
         for tag, values_list in tag_to_columns.items():
             df[tag_to_colnames[tag]] = values_list
+        # Change these optional columns to numerical type, if it is pertinent:
+        df["num_minimizers"] = pd.to_numeric(df["num_minimizers"])
+        df["chaining_score"] = pd.to_numeric(df["chaining_score"])
+        df["second_chain_score"] = pd.to_numeric(df["second_chain_score"])
+        df["mismatches_and_gaps"] = pd.to_numeric(df["mismatches_and_gaps"])
+        df["DP_ali_score"] = pd.to_numeric(df["DP_ali_score"])
+        df["DP_max_score"] = pd.to_numeric(df["DP_max_score"])
+        df["ambiguous_bases"] = pd.to_numeric(df["ambiguous_bases"])
+        df["divergence"] = pd.to_numeric(df["divergence"])
+        df["gap_compr_diverg"] = pd.to_numeric(df["gap_compr_diverg"])
+        df["length_repetitive_seeds"] = pd.to_numeric(df["length_repetitive_seeds"])
+        df["zd_unknown"] = pd.to_numeric(df["zd_unknown"])
         # Drop columns with zero non-null entries (empty columns)
         df.dropna(axis="columns", how="all", inplace=True)
 
@@ -180,10 +193,9 @@ class Mapping:
 ##        for tag in fieldnames:
 ##            df[tag_to_colnames[tag]] = df[tag_to_colnames[tag]][5:]
 
-        # Are dtypes correctly specified? (integers, strings, etc.)
-        # Added values in list might need a correction / nudge
-
         # Use an index file to adequately name the scaffolds? And their size?
+        # Size is already given by the PAF file; but patterns of chr / scaff
+        # might be important.
 
         # Detect groups of scaffolds / chromosomes with pattern matching.
 
