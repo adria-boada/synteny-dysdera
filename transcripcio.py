@@ -23,7 +23,7 @@ import random
 import pandas as pd
 import numpy as np
 # Sorting strings "humanely"
-from natsort import index_natsorted
+from natsort import index_natsorted, humansorted
 # Creating plots from `pandas` dataframes.
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -244,8 +244,9 @@ class Mapping:
             print("Rows not matching any pattern:", df_copy.shape[0])
         # Save these types (sequences are either a minor scaffold or a
         # chromosome)
-        ###### Maybe not needed because you can call them at any moment
-        ###### onwards... save these patterns in a variable?
+        ###### Maybe storing sequence type in a column is not needed because
+        ###### you can call filter the dataframe at any moment
+        ###### So, save these patterns in a variable?
         self.pattern_chr = pattern_chr
         self.pattern_scaff = pattern_scaff
 
@@ -285,24 +286,47 @@ class Mapping:
         """
         Prints a list with all the chromosomes for the query and for the target.
         """
+        for col in (("Qname", "query"), ("Tname", "target")):
+            Printing(f"Printing the chromosome IDs for the {col[1]} ("+
+                     f"{col[0]} column)").status()
+            df = self.df.loc[self.df[col[0]].str.contains(self.pattern_chr,
+                                                         case=False)]
+            for sequid in humansorted(df[col[0]].unique()):
+                print(f"+ {sequid}")
+
+        return None
+
+    def list_sequences(self,):
+        """
+        Prints a list with all the sequences for the query and for the target
+        (i.e., all chromosomes and minor scaffolds).
+        """
+        for col in (("Qname", "query"), ("Tname", "target")):
+            Printing(f"Printing the sequence IDs for the {col[1]} ("+
+                     f"{col[0]} column)").status()
+            df = self.df
+            for sequid in humansorted(df[col[0]].unique()):
+                print(f"+ {sequid}")
+
+        return None
 
     def chromosome_coverage(self,):
         """
         Computes the mapping coverage of a given chromosome. The mapping
-        coverage consists in the sum of queried/targeted bases divided by the
-        total amount of bases in the chromosome. It takes overlapping mappings
-        into account, counting these bases only once.
+        coverage consists of the sum of unique queried/targeted bases divided by
+        the total length (in bases) of the chromosome. It takes overlapping
+        mappings into account, counting them only once.
 
         Input
         =====
 
-        The query / target sequid. From it, a list of begin and end intervals
-        are inferred. The total length / size of the sequence is also inferred.
+        ## The query / target sequid. From it, a list of begin and end intervals
+        ## are inferred. The total length / size of the sequence is also inferred.
 
         Output
         ======
 
-        Returns the mapping coverage of the selected chromosome.
+        ## Returns the mapping coverage of the selected chromosome.
         """
 
 
