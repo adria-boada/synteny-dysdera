@@ -27,6 +27,10 @@ from natsort import index_natsorted
 # Creating plots from `pandas` dataframes.
 import matplotlib.pyplot as plt
 import seaborn as sns
+# Measure the time it takes to run this script
+from datetime import datetime
+import locale
+locale.setlocale(locale.LC_TIME, '') # sets locale to the one used by user
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -75,6 +79,44 @@ def shuffle_big_into_small_file(path, outpath, nlines=2500):
 
     return outpath
 
+class Printing:
+    """
+    Print a given message with a formatting of interest (eg. as a warning,
+    status, error...)
+
+    Use like so:
+
+    Printing("I love fries").status()
+    Printing("Don't eat too many fries").warning()
+    """
+
+    def __init__(self, message):
+        """
+        Add the date and time of day to the message.
+        """
+        d = datetime.now().strftime("%d %b, %H:%M")
+        self.m = f"{d}: {message}"
+
+    def status(self):
+        """
+        Print in green and with preceding "STATUS" string
+        """
+        message = f"STATUS:{self.m}"
+        # Change the colour to green (through ANSI colours in the terminal)
+        message = "\033[0;32m" + str(message) + "\033[0;0m"
+        print(message)
+        return message
+
+    def warning(self):
+        """
+        Print in yellow and with preceding "WARNING" string
+        """
+        message = f"WARNING:{self.m}"
+        # Change the colour to green (through ANSI colours in the terminal)
+        message = "\033[0;33m" + str(message) + "\033[0;0m"
+        print(message)
+        return message
+
 class Mapping:
     """
     Create a Python object from a PAF file.
@@ -94,9 +136,11 @@ class Mapping:
     <https://lh3.github.io/minimap2/minimap2.html#10>
 
     In summary:
-    "no_match" + "match" == "ali_len" == "cigM" + "cigI" + "cigD"
+    "matches" + "mismatches_and_gaps" == "ali_len" == "cigM" + "cigI" + "cigD"
+        or
+    "mismatches" + "matches" == "cigM"
     """
-    def __init__(self, path_to_paf):
+    def __init__(self, path_to_paf, pattern_scaff="scaff", pattern_chr="chr"):
         """
         """
         # Make sure that the provided path points to an existing file
@@ -117,7 +161,7 @@ class Mapping:
                    "ali_len",  # Sum of matches, mismatches and gaps
                    "mapQ"]     # Mapping quality
         # Create pandas DataFrame reading PAF file in `path_to_paf`
-        print("STATUS: Reading the 12 first standard columns")
+        Printing("Reading the 12 first standard columns").status()
         df = pd.read_table(path_to_paf, header=None,
             # The regex "\s+" stands for "one or more blank spaces" (includes "\t")
             sep="\s+",
@@ -128,29 +172,30 @@ class Mapping:
 
         # Create lists with the optional fields (which may not be included in
         # all rows). See minimap2 reference manual for an explanation of each
-        # "tag"/column:  <https://lh3.github.io/minimap2/minimap2.html#10>
+        # label/column/"tag":  <https://lh3.github.io/minimap2/minimap2.html#10>
         # Keep in mind that the keys or "tags" have been manually sorted by
         # importance (so in the dataframe, important columns appear first).
         tag_to_columns = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
                           "cg": [], "cs": [], "SA": [], "ts": [],
                           "cm": [], "s1": [], "s2": [], "MD": [], "AS": [],
                           "ms": [], "rl": [], "zd": [], }
-        # Scroll through the lines in the file and populate this list:
-        print("STATUS: Reading the optional columns (further than 12th)")
+        # Scroll through the lines in the file and populate these lists:
+        Printing("Reading the optional columns (further than 12th)").status()
         with open(path_to_paf) as file:
             for count, line in enumerate(file):
-                # Get a list with all the fields.
+                # Get a list with all the fields as items.
                 line = line.strip("\n").split("\t")[12:]
                 while line:
                     field = line.pop(0)
-                    tag = field.split(":")[0]
-                    value = field[5:]
+                    tag = field[0:2]  # "tags" are the first two characters
+                    value = field[5:] # values are from the fifth to the end
                     tag_to_columns[tag] += [value]
-                # Fill with "None" fields that were not found in this line:
+                # Fill with "None" the fields that were not found in this line:
                 for key, val in tag_to_columns.items():
                     if len(val) < count+1:
                         tag_to_columns[key] += [None]
-        # Add the additional/optional columns to the dataframe:
+
+        # Translate these small tags into more descriptive column names:
         tag_to_colnames= {"tp": "type_aln", "cm": "num_minimizers",
                           "s1": "chaining_score", "s2": "second_chain_score",
                           "NM": "mismatches_and_gaps",
@@ -161,8 +206,10 @@ class Mapping:
                           "dv": "divergence", "de": "gap_compr_diverg",
                           "rl": "length_repetitive_seeds",
                           "zd": "zd_unknown",}
+        # Finally, add optional fields to the dataframe.
         for tag, values_list in tag_to_columns.items():
             df[tag_to_colnames[tag]] = values_list
+
         # Change these optional columns to numerical type, if it is pertinent:
         df["num_minimizers"] = pd.to_numeric(df["num_minimizers"])
         df["chaining_score"] = pd.to_numeric(df["chaining_score"])
@@ -175,11 +222,46 @@ class Mapping:
         df["gap_compr_diverg"] = pd.to_numeric(df["gap_compr_diverg"])
         df["length_repetitive_seeds"] = pd.to_numeric(df["length_repetitive_seeds"])
         df["zd_unknown"] = pd.to_numeric(df["zd_unknown"])
-        # Drop columns with zero non-null entries (empty columns)
+        # Drop columns with zero non-null entries (drop empty columns)
         df.dropna(axis="columns", how="all", inplace=True)
 
-        print(df) # debug
+        # Identify chromosomes and minor scaffolds.
+        Printing("Identifying sequence IDs belonging to scaffolds and "+
+                     "chromosomes").status()
+        nrows_total = df.shape[0]
+        for i in ("Qname", "Tname"):
+            print(" -- Matches in the", i, "column --")
+            # Start by finding rows not matching (tilde is not) the "chr" pattern
+            df_copy = df.loc[~ df[i].str.contains(pattern_chr, case=False)]
+            nrows_matching_chr = nrows_total - df_copy.shape[0]
+            print("Rows matching the chr pattern:", nrows_matching_chr,
+                  f"[{round((nrows_matching_chr/nrows_total)*100)} %]")
+            df_copy = df_copy.loc[~ df[i].str.contains(pattern_scaff, case=False)]
+            nrows_matching_scaff = (nrows_total - df_copy.shape[0] -
+                nrows_matching_chr)
+            print("Rows matching the scaffold pattern:", nrows_matching_scaff,
+                  f"[{round((nrows_matching_scaff/nrows_total)*100)} %]")
+            print("Rows not matching any pattern:", df_copy.shape[0])
+        # Save these types (sequences are either a minor scaffold or a
+        # chromosome)
+        ###### Maybe not needed because you can call them at any moment
+        ###### onwards... save these patterns in a variable?
+        self.pattern_chr = pattern_chr
+        self.pattern_scaff = pattern_scaff
+
+        # Add "Q." and "T." labels to the beginning of Qname and Tname columns
+        df["Qname"] = pd.Series(["Q"]*df.shape[0]).str.cat(df["Qname"], sep=".")
+        df["Tname"] = pd.Series(["T"]*df.shape[0]).str.cat(df["Tname"], sep=".")
+
+        # Storing modified pandas dataframe in a class variable:
+        Printing("The dataframe that has been read has the following "+
+                     "columns...").status()
         print(df.info())
+        Printing("Printing the first five rows of the dataframe...").status()
+        print(df.head(5))
+        Printing("Storing modified pandas dataframe in a variable "+
+                     "(self.df)").status()
+        self.df = df
 
 ##        # Read the first line of the PAF file
 ##        with open(path_to_paf) as file:
@@ -198,6 +280,30 @@ class Mapping:
         # might be important.
 
         # Detect groups of scaffolds / chromosomes with pattern matching.
+
+    def list_chromosomes(self,):
+        """
+        Prints a list with all the chromosomes for the query and for the target.
+        """
+
+    def chromosome_coverage(self,):
+        """
+        Computes the mapping coverage of a given chromosome. The mapping
+        coverage consists in the sum of queried/targeted bases divided by the
+        total amount of bases in the chromosome. It takes overlapping mappings
+        into account, counting these bases only once.
+
+        Input
+        =====
+
+        The query / target sequid. From it, a list of begin and end intervals
+        are inferred. The total length / size of the sequence is also inferred.
+
+        Output
+        ======
+
+        Returns the mapping coverage of the selected chromosome.
+        """
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
