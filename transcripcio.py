@@ -112,8 +112,18 @@ class Printing:
         Print in yellow and with preceding "WARNING" string
         """
         message = f"WARNING:{self.m}"
-        # Change the colour to green (through ANSI colours in the terminal)
+        # Change the colour to yellow (through ANSI colours in the terminal)
         message = "\033[0;33m" + str(message) + "\033[0;0m"
+        print(message)
+        return message
+
+    def error(self):
+        """
+        Print in red and with preceding "ERROR" string
+        """
+        message = f"ERROR:{self.m}"
+        # Change the colour to red (through ANSI colours in the terminal)
+        message = "\033[0;31m" + str(message) + "\033[0;0m"
         print(message)
         return message
 
@@ -257,7 +267,7 @@ class Mapping:
         # Storing modified pandas dataframe in a class variable:
         Printing("The dataframe that has been read has the following "+
                      "columns...").status()
-        print(df.info())
+        df.info()  # Print information about the columns that have been read.
         Printing("Printing the first five rows of the dataframe...").status()
         print(df.head(5))
         Printing("Storing modified pandas dataframe in a variable "+
@@ -285,49 +295,220 @@ class Mapping:
     def list_chromosomes(self,):
         """
         Prints a list with all the chromosomes for the query and for the target.
+
+        Output
+        ======
+
+        Returns a dictionary with two keys: "query" and "target". Their values
+        are two lists with their corresponding unique chromosomes.
         """
+        results = {}
         for col in (("Qname", "query"), ("Tname", "target")):
             Printing(f"Printing the chromosome IDs for the {col[1]} ("+
                      f"{col[0]} column)").status()
             df = self.df.loc[self.df[col[0]].str.contains(self.pattern_chr,
                                                          case=False)]
-            for sequid in humansorted(df[col[0]].unique()):
+            sequences = humansorted(df[col[0]].unique())
+            results[col[1]] = sequences
+
+            for sequid in sequences:
                 print(f"+ {sequid}")
 
-        return None
+        return results
 
     def list_sequences(self,):
         """
         Prints a list with all the sequences for the query and for the target
         (i.e., all chromosomes and minor scaffolds).
-        """
-        for col in (("Qname", "query"), ("Tname", "target")):
-            Printing(f"Printing the sequence IDs for the {col[1]} ("+
-                     f"{col[0]} column)").status()
-            df = self.df
-            for sequid in humansorted(df[col[0]].unique()):
-                print(f"+ {sequid}")
-
-        return None
-
-    def chromosome_coverage(self,):
-        """
-        Computes the mapping coverage of a given chromosome. The mapping
-        coverage consists of the sum of unique queried/targeted bases divided by
-        the total length (in bases) of the chromosome. It takes overlapping
-        mappings into account, counting them only once.
-
-        Input
-        =====
-
-        ## The query / target sequid. From it, a list of begin and end intervals
-        ## are inferred. The total length / size of the sequence is also inferred.
 
         Output
         ======
 
-        ## Returns the mapping coverage of the selected chromosome.
+        Returns a dictionary with two keys: "query" and "target". Their values
+        are two lists with their corresponding unique sequences.
         """
+        results = {}
+        for col in (("Qname", "query"), ("Tname", "target")):
+            Printing(f"Printing the sequence IDs for the {col[1]} ("+
+                     f"{col[0]} column)").status()
+            df = self.df
+            sequences = humansorted(df[col[0]].unique())
+            results[col[1]] = sequences
+
+            for sequid in sequences:
+                print(f"+ {sequid}")
+
+        return results
+
+    def chromosome_coverage(self, sequid):
+        """
+        Computes the mapping coverage of a single chromosome.
+
+        The mapping coverage consists of the sum of unique queried/targeted
+        bases divided by the total length (in bases) of the chromosome. It takes
+        overlapping mappings into account, counting them only once.
+
+        Input
+        =====
+
+        + sequid: A string pointing to a sequence ID (either query or target).
+          Make sure to include the initial "Q." or "T.". The list of beginning
+          and ending coordinates of each mapping will be inferred. The total
+          length of the sequence is also inferred from the sequid.
+
+        Output
+        ======
+
+        Returns the mapping coverage of the selected chromosome.
+        """
+        # Find out whether the sequence is from the query, target or mispelled.
+        if sequid[0] == "Q":
+            columns = ("Qname", "Qstart", "Qend", "Qlen")
+        elif sequid[0] == "T":
+            columns = ("Tname", "Tstart", "Tend", "Tlen")
+        else:
+            Printing("The given sequence ID does not start with neither 'Q' "+
+                     "nor 'T'").error()
+            return None
+
+        # Infer the interval list from the given sequid.
+        df = self.df.loc[self.df[columns[0]] == sequid]
+        if df.empty:
+            Printing("No sequence exists with the given ID within "+
+                     f"the column '{columns[0]}'").error()
+            return None
+        # Create two lists from beginning and ending coordinates. Items will be
+        # paired by index (first in beg. corresponds to first in end).
+        begin_list = list(df[columns[1]])
+        end_list = list(df[columns[2]])
+        intervals = list(zip(begin_list, end_list))
+        # Get the sequid's length
+        sequid_length = int(df[columns[3]].iloc[0])
+
+        # Create a "point list" from an "intervals list"
+        points = []
+        for i in range(0, len(intervals)):
+            # Left/starting points labeled "0"
+            points += [[intervals[i][0], 0, i]]
+            # Right/ending points labeled "1"
+            points += [[intervals[i][1], 1, i]]
+        # Sort points by position (by first value in sublists)
+        points.sort()
+
+        # Init variables
+        # Keep track of open and closed intervals
+        currentOpen = -1
+        total_mapped_basepairs = 0
+
+        # For each point in the list
+        for i in range(0, len(points)):
+
+            # If the loop landed on a left point (0) which opens an interval:
+            if points[i][1] == 0:
+                # And there is no other interval opened:
+                if currentOpen == -1:
+                    # Enter interval "i"
+                    currentOpen = points[i][2]
+                    currentBegin = int(points[i][0])
+                    # print("enters", currentOpen) # debug
+                # Otherwise, an open interval already exists:
+                else:
+                    # From the two mappings that are open, find which has the higher
+                    # end coordinate and make it the currentOpen interval.
+                    currentEnd = intervals[currentOpen][1]
+                    nextEnd = intervals[points[i][2]][1]
+                    if nextEnd > currentEnd:
+                        currentOpen = points[i][2]
+
+            # If the loop landed on a right point (1)
+            # which closes an interval:
+            else:
+                # And it is the right point of the "currentOpen" interval...
+                if points[i][2] == currentOpen:
+                    # Compute between begin and end
+                    end = points[i][0]
+                    mapping_length = end - currentBegin
+                    total_mapped_basepairs += int(mapping_length)
+                    # Close currentOpen interval
+                    currentOpen = -1
+
+        # Compute the mapping coverage (percent of bases covered by at least one
+        # mapping)
+        percent_mapped = round((total_mapped_basepairs/sequid_length)*100,2)
+
+        Printing(f"The total amount of mapped basepairs for {sequid} was "+
+                 f"{total_mapped_basepairs} basepairs [{percent_mapped} "+
+                 "% of chr. length]").status()
+        return {"mapped_bp": total_mapped_basepairs,
+                "mapped_perc": percent_mapped}
+
+    def genome_coverage(self,):
+        """
+        Computes the mapping coverage of a all the chromosomes in both query and
+        target genomes.
+
+        The mapping coverage consists of the sum of unique queried/targeted
+        bases divided by the total length (in bases) of the chromosome. It takes
+        overlapping mappings into account, counting them only once.
+
+        Input
+        =====
+
+        Nothing, reads from `self.df`.
+
+        Output
+        ======
+
+        Returns the mapping coverage of both genomes.
+        """
+        # Iterate through ALL the chromosomes, in an orderly manner.
+        # Exclude minor scaffolds and use `humansorted`.
+        sequences = []
+        for columns in ["Qname", "Tname"]:
+            sequences += list(self.df.loc[self.df[columns].str.contains(
+                self.pattern_chr, case=False), columns].unique())
+        sequences = humansorted(sequences)
+
+        results = {}
+        for seq in sequences:
+            results[seq] = self.chromosome_coverage(seq)
+
+        return results
+
+    def type_alignments(self,):
+        """
+        Prints the number of rows of each mapping type.
+
+        Input
+        =====
+
+        Nothing, reads from `self.df`
+
+        Output
+        ======
+
+        Returns the number of rows of each mapping type.
+        """
+        Printing("Searching for the amount of rows with each type of "+
+                 "mapping...").status()
+        df = self.df  # shorten variable
+        # Find the total amount of rows in the DataFrame
+        n_rows = int(df.shape[0])
+        Printing("The total amount of rows in the DataFrame is "+
+                 str(n_rows)).status()
+        ## I am unsure these are all of the possibilities... Better read the
+        ## unique values of the `type_aln` column.
+        ## possible_types = {"P": "primary", "S": "secondary", "I": "inversion",
+        ##                   "i": "inversion"}
+        results = {}
+        for value in df["type_aln"].unique():
+            number = int(df.loc[df["type_aln"] == value].shape[0])
+            percent = round((number/n_rows)*100, 2)
+            results[value] = [number, percent]
+            Printing("The amount of rows for alignment type '"+
+                     f"{value}' is {number} [{percent} %]").status()
+
+        return results
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
