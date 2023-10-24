@@ -273,6 +273,18 @@ class Mapping:
         Printing("Storing modified pandas dataframe in a variable "+
                      "(self.df)").status()
         self.df = df
+        # Create an instance of the previous dataframe which only stores
+        # mappings including at least one chromosome in columns "Qname" or
+        # "Tname"...
+        Printing("Storing modified pandas dataframe filtered by chromosome "+
+                 "pattern in a variable (self.df_chromosomes and "+
+                 "self.df_both_chromosomes)").status()
+        self.df_chromosomes = df.loc[
+            df["Qname"].str.contains(self.pattern_chr, case=False) |
+            df["Tname"].str.contains(self.pattern_chr, case=False)]
+        self.df_both_chromosomes = df.loc[
+            df["Qname"].str.contains(self.pattern_chr, case=False) &
+            df["Tname"].str.contains(self.pattern_chr, case=False)]
 
 ##        # Read the first line of the PAF file
 ##        with open(path_to_paf) as file:
