@@ -359,7 +359,8 @@ class Mapping:
         Output
         ======
 
-        Returns the mapping coverage of the selected chromosome.
+        Returns a dictionary with the mapping coverage of the selected
+        chromosome (in basepairs and relative to the chromosome's total length.
         """
         # Find out whether the sequence is from the query, target or mispelled.
         if sequid[0] == "Q":
@@ -459,7 +460,9 @@ class Mapping:
         Output
         ======
 
-        Returns the mapping coverage of both genomes.
+        Returns a dictionary. Its keys are the IDs of all chromosomes. Their
+        values are nested dictionaries with the total amount of covered
+        basepairs and the relative percentage of covered chromosome.
         """
         # Iterate through ALL the chromosomes, in an orderly manner.
         # Exclude minor scaffolds and use `humansorted`.
@@ -477,7 +480,7 @@ class Mapping:
 
     def type_alignments(self,):
         """
-        Prints the number of rows of each mapping type.
+        Prints the number of rows of each alignment type in the PAF file.
 
         Input
         =====
@@ -487,10 +490,12 @@ class Mapping:
         Output
         ======
 
-        Returns the number of rows of each mapping type.
+        Returns a dictionary. Its keys are alignment types. Values are tuples
+        containing a pair of items: number (0) and decimal percentage (1) of
+        rows of each alignment type.
         """
         Printing("Searching for the amount of rows with each type of "+
-                 "mapping...").status()
+                 "alignment / mapping...").status()
         df = self.df  # shorten variable
         # Find the total amount of rows in the DataFrame
         n_rows = int(df.shape[0])
