@@ -527,6 +527,66 @@ class Mapping:
 
         return results
 
+    def boxplots(self, numerical_column, xlabel, out_img_path=None,
+                 figure_size=(10, 6), df=pd.DataFrame()):
+        """
+        Input
+        =====
+
+        + numerical_column: A numerical column (float or int) of the dataframe.
+
+        + xlabel: Label of the X-axis (units, eg. "basepairs" for alignment
+          length).
+
+        + out_img_path [optional]: Path where the figure/image/boxplot will be
+          written to. If left unspecified it will show the figure through
+          `plt.show()`.
+
+        + figure_size [optional]: A tuple of length two (two numbers), width
+          and height (in inches). By default is (10, 6).
+
+        + df [optional]: A filtered dataframe generated from the original; eg.
+          with only scaffolds or only chromosomes.
+
+        Output
+        ======
+
+        Writes to `out_img_path` a PNG boxplot.
+        """
+        # Create one axis for "Tname" column and another axis for "Qname"
+        fig, (ax1, ax2) = plt.subplots(
+            nrows=1, ncols=2, figsize=figure_size)
+        # If df is empty (default option) use the full dataframe stored in
+        # self.df (make sure it is a copy of the original dataframe).
+        if df.empty:
+            df = self.df.copy()
+        else:
+            df = df.copy()
+        # Generate plots with seaborn. Write to the previously created axes.
+        for i in (
+                ("Qname", ax1, "Q."),
+                ("Tname", ax2, "T.")):
+            # Change sequence name column to distinguish minor scaffolds and
+            # chromosomes. Group all minor scaffold names within "Scaffolds".
+            df.loc[df[i[0]].str.contains(self.pattern_scaff, case=False),
+                   i[0]] = str(i[2]) + "Scaffolds"
+            df = df.sort_values(by=i[0],
+                                key=lambda x: np.argsort(index_natsorted(
+                                    df[i[0]].str[2:])))
+            sns.boxplot(ax=i[1], data=df, x=numerical_column, y=i[0],
+                    #showmeans=True, meanprops=dict(color="green", marker="*",
+                    #                               markeredgecolor="black",
+                    #                               markersize="15")
+                    )
+            # Set xlabel to both axes
+            i[1].set_xlabel(xlabel)
+
+        # Finally, show/save figure in a tight layout.
+        plt.tight_layout()
+        if out_img_path:
+            plt.savefig(out_img_path, dpi=300)
+        else:
+            plt.show()
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
