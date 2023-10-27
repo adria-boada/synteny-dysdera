@@ -79,6 +79,49 @@ def shuffle_big_into_small_file(path, outpath, nlines=2500):
 
     return outpath
 
+def cigar_analysis(cigar_string):
+    """
+    Analyse a CIGAR string and compute its total amount of "M" (matches), "I"
+    (insertions to query) and "D" (deletions to query).
+
+    Input
+    =====
+
+    + cigar_string: A string of letters and numbers symbolizing the gap
+      composition of an alignment/mapping. Accepts a string with "M", "I" and
+      "D". Each letter must be preceded by a number (which is the length of the
+      fragment). Take a look at the specifications of the "SAM" format for a
+      more in-depth explanation:
+
+      <https://samtools.github.io/hts-specs/SAMv1.pdf>
+
+    Output
+    ======
+
+    Returns a dictionary with the sum of "M", "I" and "D". Moreover, it returns
+    the amount of insertions and deletions instead of their lengths in
+    basepairs. It is useful to compute "compressed gap identity/divergence".
+    """
+    # Split string by separating all letters with a space:
+    for i in "MID":
+        cigar_string = cigar_string.replace(i, i+" ")
+    cigar_list = cigar_string.strip("\n").split(" ")
+    # Initialise the return dictionary:
+    answer = {"M": 0, "I": 0, "D": 0}
+    # Count and store results inside `answer`
+    for i in cigar_list:
+        if "M" in i:
+            answer["M"] += int(i[:-1])
+        elif "D" in i:
+            answer["D"] += int(i[:-1])
+        elif "I" in i:
+            answer["I"] += int(i[:-1])
+    # Take into account the amount of gaps instead of the length of gaps (i.e.
+    # compress gaps into a length of one).
+    answer["compressed"] = cigar_string.count("D") + cigar_string.count("I")
+
+    return answer
+
 class Printing:
     """
     Print a given message with a formatting of interest (eg. as a warning,
@@ -189,6 +232,9 @@ class Mapping:
                           "cg": [], "cs": [], "SA": [], "ts": [],
                           "cm": [], "s1": [], "s2": [], "MD": [], "AS": [],
                           "ms": [], "rl": [], "zd": [], }
+        # Furthermore, analyse the CIGAR string (if any)
+        cigar = {"cig_deletions": [], "cig_insertions": [], "cig_matches": [],
+                 "cig_compressed": []}
         # Scroll through the lines in the file and populate these lists:
         Printing("Reading the optional columns (further than 12th)").status()
         with open(path_to_paf) as file:
@@ -199,11 +245,23 @@ class Mapping:
                     field = line.pop(0)
                     tag = field[0:2]  # "tags" are the first two characters
                     value = field[5:] # values are from the fifth to the end
-                    tag_to_columns[tag] += [value]
+                    tag_to_columns[tag].append(value)
                 # Fill with "None" the fields that were not found in this line:
                 for key, val in tag_to_columns.items():
                     if len(val) < count+1:
-                        tag_to_columns[key] += [None]
+                        tag_to_columns[key].append(None)
+                # If this line contained a CIGAR string, do its analysis:
+                if tag_to_columns["cg"][-1] != None:
+                    cigar_summary = cigar_analysis(tag_to_columns["cg"][-1])
+                    cigar["cig_deletions"].append(cigar_summary["D"])
+                    cigar["cig_insertions"].append(cigar_summary["I"])
+                    cigar["cig_matches"].append(cigar_summary["M"])
+                    cigar["cig_compressed"].append(cigar_summary["compressed"])
+                else:
+                    cigar["cig_deletions"].append(None)
+                    cigar["cig_insertions"].append(None)
+                    cigar["cig_matches"].append(None)
+                    cigar["cig_compressed"].append(None)
 
         # Translate these small tags into more descriptive column names:
         tag_to_colnames= {"tp": "type_aln", "cm": "num_minimizers",
@@ -219,21 +277,29 @@ class Mapping:
         # Finally, add optional fields to the dataframe.
         for tag, values_list in tag_to_columns.items():
             df[tag_to_colnames[tag]] = values_list
+        # Add the sum of lengths of the CIGAR string:
+        for colname, values_list in cigar.items():
+            df[colname] = values_list
 
         # Change these optional columns to numerical type, if it is pertinent:
-        df["num_minimizers"] = pd.to_numeric(df["num_minimizers"])
-        df["chaining_score"] = pd.to_numeric(df["chaining_score"])
-        df["second_chain_score"] = pd.to_numeric(df["second_chain_score"])
-        df["mismatches_and_gaps"] = pd.to_numeric(df["mismatches_and_gaps"])
-        df["DP_ali_score"] = pd.to_numeric(df["DP_ali_score"])
-        df["DP_max_score"] = pd.to_numeric(df["DP_max_score"])
-        df["ambiguous_bases"] = pd.to_numeric(df["ambiguous_bases"])
-        df["divergence"] = pd.to_numeric(df["divergence"])
-        df["gap_compr_diverg"] = pd.to_numeric(df["gap_compr_diverg"])
-        df["length_repetitive_seeds"] = pd.to_numeric(df["length_repetitive_seeds"])
-        df["zd_unknown"] = pd.to_numeric(df["zd_unknown"])
+        to_numerical = ["num_minimizers", "chaining_score",
+                        "second_chain_score", "mismatches_and_gaps",
+                        "DP_ali_score", "DP_max_score", "ambiguous_bases",
+                        "divergence", "gap_compr_diverg",
+                        "length_repetitive_seeds", "zd_unknown",
+                        "cig_deletions", "cig_insertions", "cig_matches"]
+        for column in to_numerical:
+            df[column] = pd.to_numeric(df[column])
         # Drop columns with zero non-null entries (drop empty columns)
         df.dropna(axis="columns", how="all", inplace=True)
+
+        # Now that the columns have been defined as integer/floats, compute some
+        # more parameters and add them to the dataframe:
+        df["blast_identity"] = df["matches"] / df["ali_len"]
+        df["gap_compr_identity"] = (
+            df["matches"] / (df["cig_matches"] + df["cig_compressed"]))
+        df["mismatches"] = (
+            df["mismatches_and_gaps"] - (df["cig_insertions"]+df["cig_deletions"]))
 
         # Identify chromosomes and minor scaffolds.
         Printing("Identifying sequence IDs belonging to scaffolds and "+
@@ -530,6 +596,8 @@ class Mapping:
     def boxplots(self, numerical_column, xlabel, out_img_path=None,
                  figure_size=(10, 6), df=pd.DataFrame()):
         """
+        Create a boxplot from a numerical column. Uses matplotlib and seaborn.
+
         Input
         =====
 
@@ -551,7 +619,7 @@ class Mapping:
         Output
         ======
 
-        Writes to `out_img_path` a PNG boxplot.
+        Can write to `out_img_path` a PNG figure.
         """
         # Create one axis for "Tname" column and another axis for "Qname"
         fig, (ax1, ax2) = plt.subplots(
@@ -587,6 +655,81 @@ class Mapping:
             plt.savefig(out_img_path, dpi=300)
         else:
             plt.show()
+
+    def histogram(self, column, xlabel, out_img_path=None,
+                 figure_size=(10, 6), df=pd.DataFrame(), xlogscale=False,
+                  ylogscale=False):
+        """
+        Creates an histogram from almost all columns. Uses matplotlib and seaborn.
+
+        Input
+        =====
+
+        + column: A column (float, int or even string) of the
+          dataframe. This parameter accepts columns of strings, eg. "Qname",
+          "strand", etc. Do not mix a string column with xlogscale parameter
+          (logarithmic scale of the X axis).
+
+        + xlabel: Label of the X-axis (units, eg. "basepairs" for alignment
+          length).
+
+        + out_img_path [optional]: Path where the figure/image/boxplot will be
+          written to. If left unspecified it will show the figure through
+          `plt.show()`.
+
+        + figure_size [optional]: A tuple of length two (two numbers), width
+          and height (in inches). By default is (10, 6).
+
+        + df [optional]: A filtered dataframe generated from the original; eg.
+          with only scaffolds or only chromosomes.
+
+        + xlogscale [optional]: By default, "False". If "True", changes the X
+          axis to a logarithmic scale.
+
+        + ylogscale [optional]: By default, "False". If "True", changes the Y
+          axis to a logarithmic scale.
+
+        Output
+        ======
+
+        Can write to `out_img_path` a PNG figure.
+        """
+        # If df is empty (default option) use the full dataframe stored in
+        # self.df (make sure it is a copy of the original dataframe).
+        if df.empty:
+            df = self.df.copy()
+        else:
+            df = df.copy()
+        # Agglutinate Qname and Tname: change all scaffolds to the same sequid.
+        # This paragraph is useful if the columns "Qname" and "Tname" are given
+        # instead of a numerical column.......
+        for i in (
+                ("Qname", "Q."),
+                ("Tname", "T.")):
+            # Change sequence name column to distinguish minor scaffolds and
+            # chromosomes. Group all minor scaffold names within "Scaffolds".
+            df.loc[df[i[0]].str.contains(self.pattern_scaff, case=False),
+                   i[0]] = str(i[1]) + "Scaffolds"
+            df = df.sort_values(by=i[0],
+                                key=lambda x: np.argsort(index_natsorted(
+                                    df[i[0]].str[2:])))
+        # Create figure
+        fig, ax = plt.subplots(figsize=figure_size)
+        sns.histplot(data=df, ax=ax, x=column, element="step")
+        # Set logscale
+        if xlogscale:
+            ax.set_xscale("log")
+        if ylogscale:
+            ax.set_yscale("log")
+        # Set the label of the X axis.
+        ax.set_xlabel(xlabel)
+        # Finally, show/save figure in a tight layout.
+        plt.tight_layout()
+        if out_img_path:
+            plt.savefig(out_img_path, dpi=300)
+        else:
+            plt.show()
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
