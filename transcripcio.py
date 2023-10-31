@@ -125,7 +125,7 @@ def cigar_analysis(cigar_string):
 class Printing:
     """
     Print a given message with a formatting of interest (eg. as a warning,
-    status, error...)
+    status, error...). Includes date and time of printing.
 
     Use like so:
 
@@ -135,7 +135,7 @@ class Printing:
 
     def __init__(self, message):
         """
-        Add the date and time of day to the message.
+        Add the date and time of day to all the messages.
         """
         d = datetime.now().strftime("%d %b, %H:%M")
         self.m = f"{d}: {message}"
@@ -200,9 +200,10 @@ class Mapping:
         try:
             with open(path_to_paf):
                 pass
+            Printing("Opening the file "+str(path_to_paf)).status()
         except:
-            print("WARNING: The provided path does not point to an existing",
-                  "file.")
+            Printing("The provided path does not point to an existing "+
+                     "file").error()
             return None
         # As stated in the manual page, "PAF may optionally have additional
         # fields ...", i.e. an irregular number of columns (ragged TSV).
@@ -596,6 +597,11 @@ class Mapping:
     def boxplots(self, numerical_column, xlabel, out_img_path=None,
                  figure_size=(10, 6), df=pd.DataFrame()):
         """
+        IMPROVEMENTS:
+        X-axis logarithmic for deletion and insertion sizes. Many outliers make
+        it difficult to read the boxplot; a logarithmic transformation would be
+        better than cutting off these outliers.
+
         Create a boxplot from a numerical column. Uses matplotlib and seaborn.
 
         Input
@@ -754,5 +760,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
+
+    # IMPROVEMENTS
+    # Read an array of files. Create <Mapping> instances for each given file in
+    # the argument list. Export figures and tables for the suite of PAF
+    # mappings, making comparisons between themselves.
 
 
