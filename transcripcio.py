@@ -736,6 +736,120 @@ class Mapping:
         else:
             plt.show()
 
+    def small_indels_histogram(self, stop:int=16, step:int=5, out_img_path=None,
+                               df=pd.DataFrame(), ylogscale:bool=False):
+        """
+        Create a histogram counting the amount of events per indel category,
+        resembling the histogram of Petrov 2002 (Mutational Equilibrium Model of
+        Genome Size Evolution).
+
+        Indel categories start from one and increase by `step` between them
+        (e.g. with step=5, categories are 1-5, 6-10, 11-15, etc.). For
+        categories bigger than `stop` in size, they are all included in a single
+        bin for indels beyond this specific size (i.e. bigger than `stop` size).
+
+        Input
+        =====
+
+        + stop [optional]: Integer. Compute indel categories up to this length, in
+          basepairs. If there are indels larger than this integer, all of them
+          will be binned in "equal or higher than this integer".
+
+        + step [optional]: Integer. Width of categories or bins, in basepairs.
+
+        + out_img_path [optional]: Path where the figure will be written to. If
+          left unspecified it will show the figure through `plt.show()`.
+
+        + df [optional]: A filtered dataframe generated from the original; eg.
+          with only scaffolds or only chromosomes.
+
+        + ylogscale [optional]: By default, "False". If "True", changes the Y
+          axis to a logarithmic scale.
+
+        Output
+        ======
+
+        An indel histogram figure, resembling the previously cited publication
+        of Petrov 2002.
+        """
+        # If df is empty (default option) use the full dataframe stored in
+        # self.df (make sure it is a copy of the original dataframe).
+        if df.empty:
+            df = self.df.copy()
+            Printing("Using the main dataframe (default)").status()
+        else:
+            df = df.copy()
+            Printing("Using the given, manually filtered dataframe").status()
+        # Start by creating a dataframe with all gaps in the alignment:
+        # Initialise "answer" dictionary (afterwards will generate a df)
+        answer = {"Qname": [], "Tname": [],
+                  "gap_type": [], "gap_size": []}
+        # Iterate across `df` rows and analyse CIGAR strings.
+        for index, cigar_string in df["cigar_string"].items():
+            # Split string into a list by separating letters with a space:
+            for i in "MID":
+                cigar_string = cigar_string.replace(i, i+" ")
+            cigar_list = cigar_string.strip("\n").split(" ")
+            # Remove matches from the list (we're interested in indels).
+            # Furthermore, remove the ending "D" or "I" and `intize`.
+            deletions = (
+                [int(indel[:-1]) for indel in cigar_list if "D" in indel])
+            insertions = (
+                [int(indel[:-1]) for indel in cigar_list if "I" in indel])
+            qname, tname = df.loc[index, ["Qname", "Tname"]]
+            answer["Qname"].extend([qname]*len(insertions + deletions))
+            answer["Tname"].extend([tname]*len(insertions + deletions))
+            answer["gap_type"].extend(["Del"]*len(deletions))
+            answer["gap_size"].extend(deletions)
+            answer["gap_type"].extend(["Ins"]*len(insertions))
+            answer["gap_size"].extend(insertions)
+
+        # Translate the dictionary into a pandas DataFrame.
+        answer = pd.DataFrame(answer)
+        self.df_small_indels = answer
+        Printing("Creating a seaborn histogram from the following "+
+                 "DataFrame (which has been stored in the variable "+
+                 "`self.df_indels`):").status()
+        # IMPROVEMENTS:
+        # Sum from `stop` to end of dataframe and create a bin for them... maybe
+        # there are options in seaborn already coded? =)
+        print(answer)
+
+        # Create one axis for a relative plot and another for an absolute count.
+        # Moreover, include weighted and non-weighted plots (x and x^2 plots).
+        ## cm = 1/2.54 # centimeters to inches conversion factor
+        fig, axes = plt.subplots(
+            nrows=2, ncols=2, figsize=(10,6))
+        # Absolute count, non-weighted...
+        sns.histplot(ax=axes[0,0], data=answer, x="gap_size", hue="gap_type",
+                     multiple="dodge", binwidth=step, binrange=(1,stop),
+                     stat="count", common_norm=False, )
+        # Relative without common normalisation of "Del" and "Ins",
+        # non-weighted...
+        sns.histplot(ax=axes[0,1], data=answer, x="gap_size", hue="gap_type",
+                     multiple="dodge", binwidth=step, binrange=(1,stop),
+                     stat="proportion", common_norm=False, )
+        # Absolute count, weighted...
+        sns.histplot(ax=axes[1,0], data=answer, x="gap_size", hue="gap_type",
+                     weights="gap_size", multiple="dodge", binwidth=step,
+                     binrange=(1,stop), stat="count", common_norm=False, )
+        # Relative without common normalisation of "Del" and "Ins", weighted...
+        sns.histplot(ax=axes[1,1], data=answer, x="gap_size", weights="gap_size",
+                     hue="gap_type", multiple="dodge", binwidth=step,
+                     binrange=(1,stop), stat="proportion", common_norm=False, )
+        if ylogscale:
+            [ax.set_yscale("log") for row in axes for ax in row]
+        axes[0,0].set_title("Abs. and non-weighted")
+        axes[0,1].set_title("Rel. and non-weighted")
+        axes[1,0].set_title("Abs. and weighted")
+        axes[1,1].set_title("Rel. and weighted")
+        plt.tight_layout()
+        # Plot the figure.
+        if out_img_path:
+            plt.savefig(out_img_path, dpi=300, bbox_inches="tight")
+        else:
+            plt.show()
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
