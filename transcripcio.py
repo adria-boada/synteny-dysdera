@@ -352,8 +352,8 @@ class Mapping:
         # mappings including at least one chromosome in columns "Qname" or
         # "Tname"...
         Printing("Storing modified pandas dataframe filtered by chromosome "+
-                 "pattern in a variable (self.df_chromosomes and "+
-                 "self.df_both_chromosomes)").status()
+                 "pattern in a pair of variables: `self.df_chromosomes` and "+
+                 "`self.df_both_chromosomes`").status()
         self.df_chromosomes = df.loc[
             df["Qname"].str.contains(self.pattern_chr, case=False) |
             df["Tname"].str.contains(self.pattern_chr, case=False)]
@@ -361,23 +361,96 @@ class Mapping:
             df["Qname"].str.contains(self.pattern_chr, case=False) &
             df["Tname"].str.contains(self.pattern_chr, case=False)]
 
-##        # Read the first line of the PAF file
-##        with open(path_to_paf) as file:
-##            line = file.readline().split("\t")
-##        # The 12 first fields are always present; start after the 12th field
-##        fieldnames = [field.split(':')[0] for field in line[12:]]
-##        # Add remaining additional colnames to be included in header
-##        for tag in fieldnames:
-##            colnames += [tag_to_colnames[tag]]
-##        # Remove the tag (first five characters in columns from 12th to last).
-##        for tag in fieldnames:
-##            df[tag_to_colnames[tag]] = df[tag_to_colnames[tag]][5:]
+        # Create a dictionary where sequence sizes are stored...
+        Printing("Creating a dictionary to store sequence sizes: "+
+                 "`self.sequence_sizes`").status()
+        queries, targets = (df["Qname"].unique(), df["Tname"].unique())
+        self.sequence_sizes = dict()
+        for seq in queries:
+            size = df.loc[df["Qname"]==seq, "Qlen"].head(1)
+            self.sequence_sizes[seq] = size
+        for seq in targets:
+            size = df.loc[df["Tname"]==seq, "Tlen"].head(1)
+            self.sequence_sizes[seq] = size
 
-        # Use an index file to adequately name the scaffolds? And their size?
-        # Size is already given by the PAF file; but patterns of chr / scaff
-        # might be important.
+        # From the following lists we can obtain means, medians and st. devs.
+        Printing("Creating multiple lists of coordinates, distances between "+
+                 "mappings and mapping lengths: `self.coordinates``").status()
+        self.coordinates = self._list_coordinates()
 
-        # Detect groups of scaffolds / chromosomes with pattern matching.
+    def _list_coordinates(self, df=pd.DataFrame()):
+        """
+        Hidden function that produces an intermediate list in order to compute
+        mean interdistances (ie. mean distance between individual mappings) and
+        mean alignment length.
+
+        Input
+        =====
+
+        + df [optional]: A filtered dataframe. By default reads from the
+          dataframe which contains only chromosomes (removes all minor scaffolds),
+          ie. `self.df_both_chromosomes`.
+
+        Output
+        ======
+
+        A dictionary where keys are sequence IDs and values are lists of begin
+        and end pairs of coordinates.
+        """
+        if df.empty:
+            df = self.df_both_chromosomes
+        else:
+            df = df.copy()
+        answer = dict()
+        # Create a list of sorted coordinates indicating regions that are included
+        # in the mapping. Get one list per chromosome.
+        # Eg. dict[sequence] = ((begin1, end1), (b2, e2), ..., (bN, eN))
+        coordinate_dict = dict()
+        queries, targets = (df["Qname"].unique(), df["Tname"].unique())
+        for seq in queries:
+            d = self.df.loc[self.df["Qname"] == seq]
+            l = list(zip(list(d["Qstart"]), list(d["Qend"])))
+            l.sort(key=lambda x: x[0])
+            coordinate_dict[seq] = l
+        for seq in targets:
+            d = self.df.loc[self.df["Tname"] == seq]
+            l = list(zip(list(d["Tstart"]), list(d["Tend"])))
+            l.sort(key=lambda x: x[0])
+            coordinate_dict[seq] = l
+        answer["coordinates_dict"] = coordinate_dict
+
+        # Compute the distances between begin and end of the previous
+        # coordinates list, per chromosome...
+        answer["alig_lengths"], answer["interdistances"] = (dict(), dict())
+        answer["Q.alig_lengths"], answer["T.alig_lengths"] = (list(), list())
+        answer["Q.interdist"], answer["T.interdist"] = (list(), list())
+
+        for seq, values in coordinate_dict.items():
+            # Get the first pair before starting the loop.
+            last_start, last_end = values.pop(0)
+            interdistances = []
+            alig_lengths = []
+            for coords in values:
+                # Last end precedes current begin; ie. mappings are not
+                # overlapping.
+                if coords[0] - last_end > 0:
+                    # Distance between mappings.
+                    interdistances.append(coords[0] - last_end)
+                    # Alignment length of current mapping (end minus begin).
+                    alig_lengths.append(coords[1] - coords[0])
+                    last_start = coords[0]
+                last_end = coords[1]
+            if seq[0] == "Q":
+                answer["Q.alig_lengths"].extend(alig_lengths)
+                answer["Q.interdist"].extend(interdistances)
+            else:
+                answer["T.alig_lengths"].extend(alig_lengths)
+                answer["T.interdist"].extend(interdistances)
+            # Finally, add per sequence lists...
+            answer["alig_lengths"][seq] = alig_lengths
+            answer["interdistances"][seq] = interdistances
+
+        return answer
 
     def list_chromosomes(self,):
         """
@@ -471,7 +544,7 @@ class Mapping:
         end_list = list(df[columns[2]])
         intervals = list(zip(begin_list, end_list))
         # Get the sequid's length
-        sequid_length = int(df[columns[3]].iloc[0])
+        sequid_length = int(self.sequence_sizes[sequid])
 
         # Create a "point list" from an "intervals list"
         points = []
@@ -916,6 +989,39 @@ class Mapping:
         else:
             plt.show()
 
+def table_coordinates(mapping_list: list):
+    """
+    Input
+    =====
+
+    + mapping_list: A list of `Mapping` objects from multiple, differents files.
+
+    Output
+    ======
+
+    A table with interesting values computed from individual mapping
+    coordinates.
+    """
+    ## debug
+    ## file | as Q or T | median interdist pm std | median alilen pm std |
+    ## proveta.filename, "Query",
+    ## pd.Series(proveta.coordinates["Q.interdist"]).median() $\pm$ s.std()
+    print(" | filename | map as... | interdistances | alignment len. | ")
+    for mapping in mapping_list:
+        Qseries_interdist = pd.Series(mapping.coordinates["Q.interdist"])
+        Tseries_interdist = pd.Series(mapping.coordinates["T.interdist"])
+        # Compute the values to print inside the table cells:
+        Qrow_interdist = (str(int(Qseries_interdist.median()))+
+            "$\pm$"+str(int(Qseries_interdist.std())))
+        Trow_interdist = (str(int(Tseries_interdist.median()))+
+            "$\pm$"+str(int(Tseries_interdist.std())))
+        row_alilen = (str(int(mapping.df["ali_len"].median()))+
+            "$\pm$"+str(int(mapping.df["ali_len"].std())))
+        # Print the row for the query:
+        print(" |", mapping.filename, "| Query |", Qrow_interdist, "|",
+              row_alilen, "|")
+        print(" |", mapping.filename, "| Target |", Trow_interdist, "|",
+              row_alilen, "|")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
