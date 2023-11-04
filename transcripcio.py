@@ -205,6 +205,14 @@ class Mapping:
             Printing("The provided path does not point to an existing "+
                      "file").error()
             return None
+        # Store the file name for later use in tables and figures. Remove the
+        # path to the file (remove directories between '/').
+        self.filename = path_to_paf.strip("\n").split("/")[-1]
+        # Remove the extension (.paf). Lower() returns lowercased string.
+        l = self.filename.split(".")
+        if l[-1].lower() == "paf":
+            self.filename = ''.join(l[:-1])
+
         # As stated in the manual page, "PAF may optionally have additional
         # fields ...", i.e. an irregular number of columns (ragged TSV).
         # Try to deduce columns.
@@ -419,7 +427,7 @@ class Mapping:
 
         return results
 
-    def chromosome_coverage(self, sequid):
+    def coverage_sequid(self, sequid):
         """
         Computes the mapping coverage of a single chromosome.
 
@@ -520,9 +528,10 @@ class Mapping:
                  f"{total_mapped_basepairs} basepairs [{percent_mapped} "+
                  "% of chr. length]").status()
         return {"mapped_bp": total_mapped_basepairs,
-                "mapped_perc": percent_mapped}
+                "mapped_perc": percent_mapped,
+                "sequid_length_bp": sequid_length}
 
-    def genome_coverage(self,):
+    def coverage_all_chromosomes(self,):
         """
         Computes the mapping coverage of a all the chromosomes in both query and
         target genomes.
@@ -553,9 +562,66 @@ class Mapping:
 
         results = {}
         for seq in sequences:
-            results[seq] = self.chromosome_coverage(seq)
+            results[seq] = self.coverage_sequid(seq)
 
         return results
+
+    def coverage_genome(self, df=pd.DataFrame()):
+        """
+        Computes the mapping coverage of both query's and target's genomes.
+        Instead of giving the coverage per chromosome, gives the coverage for
+        the whole genome, calculated by the sum of basepairs of all sequids.
+
+        To acquire the genome coverage discounting the minor scaffolds, filter
+        them out from the dataframe and input it as the variable `df` (see
+        pandas `loc` method to filter a dataframe).
+
+        Input
+        =====
+
+        + df [optional]: A filtered dataframe. By default reads from the main
+          dataframe, ie. `self.df`.
+
+        Output
+        ======
+
+        A dictionary with the following values: (1) the sum of uniquely covered
+        base pairs in both query and target sequids, (2) the sum of base pairs
+        in the whole genome of query and target sequids, (3) and the genome
+        coverage for both query and target species.
+
+        For instance:
+        + returned_dict["query"]["genome_coverage"]
+        + returned_dict["query"]["covered_bp"]
+        + returned_dict["query"]["genome_bp"]
+        """
+        if df.empty:
+            df = self.df
+        else:
+            # Just in case, create a copy so the original `df` is unmodified.
+            df = df.copy()
+        # Initialise answer dictionary
+        answer = {
+            "query":{"covered_bp": 0, "genome_bp": 0},
+            "target":{"covered_bp": 0, "genome_bp": 0}}
+        # Iterate through ALL the sequids, including minor scaffolds. Read
+        # function help for filtering them out.
+        query, target = (list(df["Qname"].unique()), list(df["Tname"].unique()))
+        for seq in query:
+            cov = self.coverage_sequid(seq)
+            answer["query"]["covered_bp"] += cov["mapped_bp"]
+            answer["query"]["genome_bp"] += cov["sequid_length_bp"]
+        for seq in target:
+            cov = self.coverage_sequid(seq)
+            answer["target"]["covered_bp"] += cov["mapped_bp"]
+            answer["target"]["genome_bp"] += cov["sequid_length_bp"]
+
+        # Compute the division of: (uniquely covered bp / all bp)
+        for i in ("query", "target"):
+            j = answer[i] # short-hand
+            j["genome_coverage"] = (j["covered_bp"] /j["genome_bp"])
+
+        return answer
 
     def type_alignments(self,):
         """
