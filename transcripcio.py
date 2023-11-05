@@ -377,6 +377,15 @@ class Mapping:
         Printing("Creating multiple lists of coordinates, distances between "+
                  "mappings and mapping lengths: `self.coordinates``").status()
         self.coordinates = self._list_coordinates()
+        # By default, to compute the size of indels we include the whole main
+        # dataframe (ie include indels in minor scaffolds!).
+        Printing("Computing a dataframe with the size of indels: "+
+                 "`self.df_indels`").status()
+        self.df_indels = self._list_indels()
+        Printing("Finished. Printing the head of the dataframe:").status()
+        print(self.df_indels.head(5))
+
+        Printing("Finished initialising "+self.filename+"!\n").status()
 
     def _list_coordinates(self, df=pd.DataFrame()):
         """
@@ -452,6 +461,42 @@ class Mapping:
 
         return answer
 
+    def _list_indels(self, df=pd.DataFrame()):
+        """
+        """
+        # If df is empty (default option) use the full dataframe stored in
+        # self.df (make sure it is a copy of the original dataframe).
+        if df.empty:
+            df = self.df.copy()
+        else:
+            df = df.copy()
+        # Start by creating a dataframe with all gaps in the alignment:
+        # Initialise "answer" dictionary (afterwards will generate a df)
+        answer = {"Qname": [], "Tname": [],
+                  "gap_type": [], "gap_size": []}
+        # Iterate across `df` rows and analyse CIGAR strings.
+        for index, cigar_string in df["cigar_string"].items():
+            # Split string into a list by separating letters with a space:
+            for i in "MID":
+                cigar_string = cigar_string.replace(i, i+" ")
+            cigar_list = cigar_string.strip("\n").split(" ")
+            # Remove matches from the list (we're interested in indels).
+            # Furthermore, remove the ending "D" or "I" and `intize`.
+            deletions = (
+                [int(indel[:-1]) for indel in cigar_list if "D" in indel])
+            insertions = (
+                [int(indel[:-1]) for indel in cigar_list if "I" in indel])
+            qname, tname = df.loc[index, ["Qname", "Tname"]]
+            answer["Qname"].extend([qname]*len(insertions + deletions))
+            answer["Tname"].extend([tname]*len(insertions + deletions))
+            answer["gap_type"].extend(["Del"]*len(deletions))
+            answer["gap_size"].extend(deletions)
+            answer["gap_type"].extend(["Ins"]*len(insertions))
+            answer["gap_size"].extend(insertions)
+
+        # Translate the dictionary into a pandas DataFrame.
+        return pd.DataFrame(answer)
+
     def list_chromosomes(self,):
         """
         Prints a list with all the chromosomes for the query and for the target.
@@ -491,7 +536,7 @@ class Mapping:
         for col in (("Qname", "query"), ("Tname", "target")):
             Printing(f"Printing the sequence IDs for the {col[1]} ("+
                      f"{col[0]} column)").status()
-            df = self.df
+            df = self.df.copy()
             sequences = humansorted(df[col[0]].unique())
             results[col[1]] = sequences
 
@@ -669,11 +714,12 @@ class Mapping:
         + returned_dict["query"]["genome_bp"]
         """
         if df.empty:
-            df = self.df
+            df = self.df.copy()
         else:
             # Just in case, create a copy so the original `df` is unmodified.
             df = df.copy()
         # Initialise answer dictionary
+        Printing("Computing genome coverage for "+self.filename).status()
         answer = {
             "query":{"covered_bp": 0, "genome_bp": 0},
             "target":{"covered_bp": 0, "genome_bp": 0}}
@@ -714,7 +760,7 @@ class Mapping:
         """
         Printing("Searching for the amount of rows with each type of "+
                  "alignment / mapping...").status()
-        df = self.df  # shorten variable
+        df = self.df.copy()  # shorten variable
         # Find the total amount of rows in the DataFrame
         n_rows = int(df.shape[0])
         Printing("The total amount of rows in the DataFrame is "+
@@ -911,69 +957,28 @@ class Mapping:
         An indel histogram figure, resembling the previously cited publication
         of Petrov 2002.
         """
-        # If df is empty (default option) use the full dataframe stored in
-        # self.df (make sure it is a copy of the original dataframe).
-        if df.empty:
-            df = self.df.copy()
-            Printing("Using the main dataframe (default)").status()
-        else:
-            df = df.copy()
-            Printing("Using the given, manually filtered dataframe").status()
-        # Start by creating a dataframe with all gaps in the alignment:
-        # Initialise "answer" dictionary (afterwards will generate a df)
-        answer = {"Qname": [], "Tname": [],
-                  "gap_type": [], "gap_size": []}
-        # Iterate across `df` rows and analyse CIGAR strings.
-        for index, cigar_string in df["cigar_string"].items():
-            # Split string into a list by separating letters with a space:
-            for i in "MID":
-                cigar_string = cigar_string.replace(i, i+" ")
-            cigar_list = cigar_string.strip("\n").split(" ")
-            # Remove matches from the list (we're interested in indels).
-            # Furthermore, remove the ending "D" or "I" and `intize`.
-            deletions = (
-                [int(indel[:-1]) for indel in cigar_list if "D" in indel])
-            insertions = (
-                [int(indel[:-1]) for indel in cigar_list if "I" in indel])
-            qname, tname = df.loc[index, ["Qname", "Tname"]]
-            answer["Qname"].extend([qname]*len(insertions + deletions))
-            answer["Tname"].extend([tname]*len(insertions + deletions))
-            answer["gap_type"].extend(["Del"]*len(deletions))
-            answer["gap_size"].extend(deletions)
-            answer["gap_type"].extend(["Ins"]*len(insertions))
-            answer["gap_size"].extend(insertions)
-
-        # Translate the dictionary into a pandas DataFrame.
-        answer = pd.DataFrame(answer)
-        self.df_small_indels = answer
-        Printing("Creating a seaborn histogram from the following "+
-                 "DataFrame (which has been stored in the variable "+
-                 "`self.df_indels`):").status()
-        # IMPROVEMENTS:
-        # Sum from `stop` to end of dataframe and create a bin for them... maybe
-        # there are options in seaborn already coded? =)
-        print(answer)
-
+        # The dataframe with small indels should've been computed in __init__
+        df = self.df_indels
         # Create one axis for a relative plot and another for an absolute count.
         # Moreover, include weighted and non-weighted plots (x and x^2 plots).
         ## cm = 1/2.54 # centimeters to inches conversion factor
         fig, axes = plt.subplots(
             nrows=2, ncols=2, figsize=(10,6))
         # Absolute count, non-weighted...
-        sns.histplot(ax=axes[0,0], data=answer, x="gap_size", hue="gap_type",
+        sns.histplot(ax=axes[0,0], data=df, x="gap_size", hue="gap_type",
                      multiple="dodge", binwidth=step, binrange=(1,stop),
                      stat="count", common_norm=False, )
         # Relative without common normalisation of "Del" and "Ins",
         # non-weighted...
-        sns.histplot(ax=axes[0,1], data=answer, x="gap_size", hue="gap_type",
+        sns.histplot(ax=axes[0,1], data=df, x="gap_size", hue="gap_type",
                      multiple="dodge", binwidth=step, binrange=(1,stop),
                      stat="proportion", common_norm=False, )
         # Absolute count, weighted...
-        sns.histplot(ax=axes[1,0], data=answer, x="gap_size", hue="gap_type",
+        sns.histplot(ax=axes[1,0], data=df, x="gap_size", hue="gap_type",
                      weights="gap_size", multiple="dodge", binwidth=step,
                      binrange=(1,stop), stat="count", common_norm=False, )
         # Relative without common normalisation of "Del" and "Ins", weighted...
-        sns.histplot(ax=axes[1,1], data=answer, x="gap_size", weights="gap_size",
+        sns.histplot(ax=axes[1,1], data=df, x="gap_size", weights="gap_size",
                      hue="gap_type", multiple="dodge", binwidth=step,
                      binrange=(1,stop), stat="proportion", common_norm=False, )
         if ylogscale:
@@ -988,13 +993,22 @@ class Mapping:
             plt.savefig(out_img_path, dpi=300, bbox_inches="tight")
         else:
             plt.show()
+        # When finished, close the plot
+        plt.close()
 
-def table_coordinates(mapping_list: list):
+def table_coordinates(mapping_list: list, ci_factor=1.96, plots: bool=False):
     """
     Input
     =====
 
     + mapping_list: A list of `Mapping` objects from multiple, differents files.
+
+    + ci_factor [optional]: The confidence interval factor. By default,
+      multiplies standard deviation by `1.96` to obtain the 95 % confidence
+      interval.
+
+    + plots [optional]: Create histograms portraying the datasets to make sure
+      these are normal distribution or else.
 
     Output
     ======
@@ -1002,26 +1016,60 @@ def table_coordinates(mapping_list: list):
     A table with interesting values computed from individual mapping
     coordinates.
     """
-    ## debug
-    ## file | as Q or T | median interdist pm std | median alilen pm std |
-    ## proveta.filename, "Query",
-    ## pd.Series(proveta.coordinates["Q.interdist"]).median() $\pm$ s.std()
-    print(" | filename | map as... | interdistances | alignment len. | ")
+    # Init. return columns of table as dictionary
+    answer = {"Filename": [], "Map as...": [], "Coverage": [],
+              "Interdist.": [], "Align. len.": [], "Del.": [], "Ins.": []}
     for mapping in mapping_list:
-        Qseries_interdist = pd.Series(mapping.coordinates["Q.interdist"])
-        Tseries_interdist = pd.Series(mapping.coordinates["T.interdist"])
-        # Compute the values to print inside the table cells:
-        Qrow_interdist = (str(int(Qseries_interdist.median()))+
-            "$\pm$"+str(int(Qseries_interdist.std())))
-        Trow_interdist = (str(int(Tseries_interdist.median()))+
-            "$\pm$"+str(int(Tseries_interdist.std())))
-        row_alilen = (str(int(mapping.df["ali_len"].median()))+
-            "$\pm$"+str(int(mapping.df["ali_len"].std())))
-        # Print the row for the query:
-        print(" |", mapping.filename, "| Query |", Qrow_interdist, "|",
-              row_alilen, "|")
-        print(" |", mapping.filename, "| Target |", Trow_interdist, "|",
-              row_alilen, "|")
+        for both in (("Q", "query"), ("T", "target")):
+            # Get the list of interdistances computed by the Mapping class and
+            # create a pandas Series from them, from which median and stdev can be
+            # easily computed.
+            interdist = pd.Series(mapping.coordinates[both[0]+".interdist"])
+            cell_interdist = (str(int(interdist.median()))+" $\pm$ "+
+                str(int(interdist.std() * ci_factor)) )
+            # Same for the list of alignment lengths.
+            alig_lengths = pd.Series(mapping.coordinates[both[0]+".alig_lengths"])
+            cell_alig_lengths = (str(int(alig_lengths.median()))+" $\pm$ "+
+                str(int(alig_lengths.std() * ci_factor)) )
+            # Retrieve the genome coverage and display it as a percentage, rounded
+            # to two decimals.
+            coverage = mapping.coverage_genome()[both[1]]["genome_coverage"]
+            cell_percent_coverage = round(coverage*100, 2)
+            # Retrive median deletion and insertion sizes.
+            deletions = mapping.df_indels.loc[
+                mapping.df_indels["gap_type"]=="Del"]
+            cell_deletions = (str(int(deletions.median()))+" $\pm$ "+
+                str(int(deletions.std() * ci_factor)))
+            insertions = mapping.df_indels.loc[
+                mapping.df_indels["gap_type"]=="Ins"]
+            cell_insertions = (str(int(insertions.median()))+" $\pm$ "+
+                str(int(insertions.std() * ci_factor)))
+
+            # Create plots to make sure these datasets are normally
+            # distributed...
+            if plots:
+                for data, title in zip((interdist, alig_lengths, deletions,
+                                insertions), ('Interdist', 'Alig. len.',
+                                'Deletions', 'Insertions')):
+                    sns.histplot(data=data, element="step")
+                    plt.title(title)
+                    plt.show()
+
+            # Add `rows` to answer in order to create a dataframe later on:
+            for col, val in zip(answer.keys(), (
+                    mapping.filename, both[1].capitalize(), cell_percent_coverage,
+                    cell_interdist, cell_alig_lengths, cell_deletions,
+                    cell_insertions)):
+                answer[col].append(val)
+
+    # Create the table from the `answer` dictionary.
+    df = pd.DataFrame(answer)
+
+    print("\nKeep in mind that, by default, the following results "+
+          "come from a dataframe where all minor scaffolds had been "+
+          "completely removed.")
+    print(df.to_markdown(index=False))
+    return df
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1036,6 +1084,7 @@ if __name__ == '__main__':
         formatter_class=argparse.RawTextHelpFormatter)
     # file-name: positional arg.
 #    parser.add_argument('filename', type=str, help='Path to ... file-name')
+    parser.add_argument('--paflist', help="A list of PAF filenames", nargs="+")
     # integer argument
 #    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
     # choices argument
@@ -1047,9 +1096,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
-    # IMPROVEMENTS
     # Read an array of files. Create <Mapping> instances for each given file in
     # the argument list. Export figures and tables for the suite of PAF
     # mappings, making comparisons between themselves.
+    print(args.paflist)
+    maplist = [Mapping(file) for file in args.paflist]
+    # Create small indel histograms.
+    for m in maplist:
+        m.small_indels_histogram(stop=400, step=5,
+            out_img_path="small_indels_"+str(m.filename)+".png")
+    table_coordinates(maplist, plots=False)
 
 
