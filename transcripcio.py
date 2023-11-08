@@ -1100,7 +1100,7 @@ if __name__ == '__main__':
     # the argument list. Export figures and tables for the suite of PAF
     # mappings, making comparisons between themselves.
     print(args.paflist)
-    maplist = [Mapping(file) for file in args.paflist]
+    maplist = [Mapping(file, pattern_scaff="scaf|ctg") for file in args.paflist]
     # Create small indel histograms.
     for m in maplist:
         m.small_indels_histogram(stop=400, step=5,
