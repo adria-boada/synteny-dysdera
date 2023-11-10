@@ -180,6 +180,16 @@ class Mapping:
     + path_to_paf: Path to a PAF file in order to read it and create a pandas
       DataFrame from it.
 
+    + pattern_scaff [optional]: A regex pattern which should match all minor
+      scaffolds.
+
+    + pattern_chr [optional]: A regex pattern which should match all
+      chromosomes.
+
+    + memory_efficient [optional]: Boolean. If True, CIGAR and difference strings will be
+      deleted from memory in order to free it up. These strings can be
+      expansive, and will end up killing Python processes.
+
     Output
     ======
 
@@ -193,7 +203,8 @@ class Mapping:
         or
     "mismatches" + "matches" == "cigM"
     """
-    def __init__(self, path_to_paf, pattern_scaff="scaff", pattern_chr="chr"):
+    def __init__(self, path_to_paf, pattern_scaff="scaff", pattern_chr="chr",
+                 memory_efficient=True):
         """
         """
         # Make sure that the provided path points to an existing file
@@ -222,13 +233,13 @@ class Mapping:
                    "matches",  # Number of matching bases
                    "ali_len",  # Sum of matches, mismatches and gaps
                    "mapQ"]     # Mapping quality
-        # Create pandas DataFrame reading PAF file in `path_to_paf`
+        # Create a pandas DataFrame by reading the PAF file in `path_to_paf`
         Printing("Reading the 12 first standard columns").status()
         df = pd.read_table(path_to_paf, header=None,
             # The regex "\s+" stands for "one or more blank spaces" (includes "\t")
             sep="\s+",
             # Load the appropiate (always present) columns and no more.
-            usecols=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            usecols=list(range(12)), # [0, 1, 2, etc, 10, 11]
             # Use the following column names (from first to last column).
             names=colnames)
 
@@ -236,7 +247,7 @@ class Mapping:
         # all rows). See minimap2 reference manual for an explanation of each
         # label/column/"tag":  <https://lh3.github.io/minimap2/minimap2.html#10>
         # Keep in mind that the keys or "tags" have been manually sorted by
-        # importance (so in the dataframe, important columns appear first).
+        # importance (so, in the dataframe, important columns appear first).
         tag_to_columns = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
                           "cg": [], "cs": [], "SA": [], "ts": [],
                           "cm": [], "s1": [], "s2": [], "MD": [], "AS": [],
@@ -283,24 +294,38 @@ class Mapping:
                           "dv": "divergence", "de": "gap_compr_diverg",
                           "rl": "length_repetitive_seeds",
                           "zd": "zd_unknown",}
-        # Finally, add optional fields to the dataframe.
+        # Finally, add the previous optional fields to the dataframe.
         for tag, values_list in tag_to_columns.items():
             df[tag_to_colnames[tag]] = values_list
         # Add the sum of lengths of the CIGAR string:
         for colname, values_list in cigar.items():
             df[colname] = values_list
 
-        # Change these optional columns to numerical type, if it is pertinent:
-        to_numerical = ["num_minimizers", "chaining_score",
-                        "second_chain_score", "mismatches_and_gaps",
-                        "DP_ali_score", "DP_max_score", "ambiguous_bases",
-                        "divergence", "gap_compr_diverg",
-                        "length_repetitive_seeds", "zd_unknown",
-                        "cig_deletions", "cig_insertions", "cig_matches"]
-        for column in to_numerical:
-            df[column] = pd.to_numeric(df[column])
+        # Change these optional columns to numerical type, if it is pertinent.
+        # Try to use few columns and efficient dtypes by downcasting if possible
+        # (alleviate memory usage; eg, instead of float64, try to use float32
+        # dtype when possible).
+        to_numerical_ints = ["Qlen", "Qstart", "Qend", "Tlen", "Tstart", "Tend",
+                             "matches", "ali_len", "mapQ",
+                             "mismatches_and_gaps", "ambiguous_bases",
+                             "num_minimizers", "chaining_score", "DP_ali_score",
+                             "DP_max_score", "length_repetitive_seeds",
+                             "cig_deletions", "cig_insertions", "cig_matches",
+                             "cig_compressed"]
+        # Apply downcasted integer to the previous columns.
+        df[to_numerical_ints] = df[to_numerical_ints].apply(pd.to_numeric,
+                                                    downcast="integer")
+        to_numerical_floats = ["gap_compr_diverg", "second_chain_score",
+                               "zd_unknown"]
+        # Apply downcasted float to the previous columns.
+        df[to_numerical_floats] = df[to_numerical_floats].apply(pd.to_numeric,
+                                                    downcast="float")
         # Drop columns with zero non-null entries (drop empty columns)
         df.dropna(axis="columns", how="all", inplace=True)
+        # Another great way to efficiently leverage the computer's memory is to
+        # use 'category' dtypes instead of text/object dtypes.
+        to_categorical = ["Qname", "Tname", "strand", "type_aln"]
+        df[to_categorical] = df[to_categorical].apply(pd.Categorical)
 
         # Now that the columns have been defined as integer/floats, compute some
         # more parameters and add them to the dataframe:
@@ -367,10 +392,10 @@ class Mapping:
         queries, targets = (df["Qname"].unique(), df["Tname"].unique())
         self.sequence_sizes = dict()
         for seq in queries:
-            size = df.loc[df["Qname"]==seq, "Qlen"].head(1)
+            size = int(df.loc[df["Qname"]==seq, "Qlen"].head(1))
             self.sequence_sizes[seq] = size
         for seq in targets:
-            size = df.loc[df["Tname"]==seq, "Tlen"].head(1)
+            size = int(df.loc[df["Tname"]==seq, "Tlen"].head(1))
             self.sequence_sizes[seq] = size
 
         # From the following lists we can obtain means, medians and st. devs.
@@ -495,6 +520,13 @@ class Mapping:
             answer["gap_size"].extend(insertions)
 
         # Translate the dictionary into a pandas DataFrame.
+        answer = pd.DataFrame(answer)
+        # Use efficient dtypes, like "categorical" for columns with repetitive
+        # string data.
+        to_categorical = ["Qname", "Tname", "gap_type"]
+        answer[to_categorical] = answer[to_categorical].apply(pd.Categorical)
+        answer["gap_size"] = pd.to_numeric(answer["gap_size"],
+                                           downcast="integer")
         return pd.DataFrame(answer)
 
     def list_chromosomes(self,):
