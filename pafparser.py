@@ -1071,21 +1071,31 @@ def table_coordinates(mapping_list: list, ci_factor=1.96, plots: bool=False):
     answer = {"Filename": [], "Map as...": [], "Coverage": [],
               "Interdist.": [], "Align. len.": [], "Del.": [], "Ins.": []}
     for mapping in mapping_list:
+        # Retrieve the genome coverage for the whole alignment
+        coverage = mapping.coverage_genome()
         for both in (("Q", "query"), ("T", "target")):
             # Get the list of interdistances computed by the Mapping class and
             # create a pandas Series from them, from which median and stdev can be
             # easily computed.
-            interdist = pd.Series(mapping.coordinates[both[0]+".interdist"])
-            cell_interdist = (str(int(interdist.median()))+" $\pm$ "+
-                str(int(interdist.std() * ci_factor)) )
+            interdist = pd.Series(mapping.coordinates[both[0]+".interdist"],
+                                  dtype="int")  # base pairs are integers
+            if interdist.empty:
+                cell_interdist = "NA"
+            else:
+                cell_interdist = (str(int(interdist.median()))+" $\pm$ "+
+                    str(int(interdist.std() * ci_factor)) )
             # Same for the list of alignment lengths.
-            alig_lengths = pd.Series(mapping.coordinates[both[0]+".alig_lengths"])
-            cell_alig_lengths = (str(int(alig_lengths.median()))+" $\pm$ "+
-                str(int(alig_lengths.std() * ci_factor)) )
-            # Retrieve the genome coverage and display it as a percentage, rounded
-            # to two decimals.
-            coverage = mapping.coverage_genome()[both[1]]["genome_coverage"]
-            cell_percent_coverage = round(coverage*100, 2)
+            alig_lengths = pd.Series(mapping.coordinates[both[0]+".alig_lengths"],
+                                  dtype="int")  # base pairs are integers
+            if alig_lengths.empty:
+                cell_alig_lengths = "NA"
+            else:
+                cell_alig_lengths = (str(int(alig_lengths.median()))+" $\pm$ "+
+                    str(int(alig_lengths.std() * ci_factor)) )
+            # Specifically, retrieve either query or target percentual
+            # coverages, rounded to two decimal places.
+            cov = coverage[both[1]]["genome_coverage"]
+            cell_percent_coverage = round(cov * 100, 2)
             # Retrive median deletion and insertion sizes.
             deletions = mapping.df_indels.loc[
                 mapping.df_indels["gap_type"]=="Del"]
@@ -1119,6 +1129,9 @@ def table_coordinates(mapping_list: list, ci_factor=1.96, plots: bool=False):
     print("\nKeep in mind that, by default, the following results "+
           "come from a dataframe where all minor scaffolds had been "+
           "completely removed.")
+    print("Consequently, if a whole alignment was composed of "+
+          "mappings between minor scaffolds, its results might "+
+          "be erroneous or deceitful.")
     print(df.to_markdown(index=False))
     return df
 
