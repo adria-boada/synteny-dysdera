@@ -181,7 +181,9 @@ class Mapping:
       DataFrame from it.
 
     + pattern_scaff [optional]: A regex pattern which should match all minor
-      scaffolds.
+      scaffolds. To introduce multiple patterns, use the OR operand (which is
+      the pipe character '|' for pandas). For instance, "scaff|ctg" will include
+      minor scaffolds labelled either "Scaffold_33" and "ctg_V123_456".
 
     + pattern_chr [optional]: A regex pattern which should match all
       chromosomes.
@@ -325,7 +327,7 @@ class Mapping:
         # Another great way to efficiently leverage the computer's memory is to
         # use 'category' dtypes instead of text/object dtypes.
         to_categorical = ["Qname", "Tname", "strand", "type_aln"]
-        df[to_categorical] = df[to_categorical].apply(pd.Categorical)
+        df[to_categorical] = df[to_categorical].astype("category")
 
         # Now that the columns have been defined as integer/floats, compute some
         # more parameters and add them to the dataframe:
@@ -352,11 +354,32 @@ class Mapping:
             print("Rows matching the scaffold pattern:", nrows_matching_scaff,
                   f"[{round((nrows_matching_scaff/nrows_total)*100)} %]")
             print("Rows not matching any pattern:", df_copy.shape[0])
-        # Save these types (sequences are either a minor scaffold or a
-        # chromosome)
-        ###### Maybe storing sequence type in a column is not needed because
-        ###### you can call filter the dataframe at any moment
-        ###### So, save these patterns in a variable?
+            # If some rows do not match any given pattern, WARN the user.
+            if df_copy.shape[0] != 0:
+                Printing(f"Some rows from the {i} column have not "+
+                         "matched neither chromosome "+
+                         "nor scaffold pattern. Revise the parameters "+
+                         "`pattern_scaff` and `pattern_chr` when calling "+
+                         "the `Mapping()` class!").warning()
+
+        # Store this categories (scaffold and chromosome) in a categorical
+        # column. First, init. a column with all rows equal to the string
+        # "Qscf_Tscf", symbolising that both query and target sequids are minor
+        # scaffolds:
+        df["sequid_types"] = "Qscf_Tscf"
+        # Then, fill with other categories:
+        df.loc[df["Qname"].str.contains(pattern_chr, case=False),
+               "sequid_types"] = "Qchr_Tscf"
+        df.loc[df["Tname"].str.contains(pattern_chr, case=False),
+               "sequid_types"] = "Qscf_Tchr"
+        # Both Qname and Tname columns contain a chromosome...
+        df.loc[
+            df["Qname"].str.contains(pattern_chr, case=False) &
+            df["Tname"].str.contains(pattern_chr, case=False),
+            "sequid_types"] = "Qchr_Tchr"
+        # Change the dtype of column "sequid_types" to categorical:
+        df["sequid_types"] = df["sequid_types"].astype("category")
+        # Save the patterns that have been used for sequid type identification:
         self.pattern_chr = pattern_chr
         self.pattern_scaff = pattern_scaff
 
@@ -365,26 +388,11 @@ class Mapping:
         df["Tname"] = pd.Series(["T"]*df.shape[0]).str.cat(df["Tname"], sep=".")
 
         # Storing modified pandas dataframe in a class variable:
-        Printing("The dataframe that has been read has the following "+
-                     "columns...").status()
-        df.info()  # Print information about the columns that have been read.
         Printing("Printing the first five rows of the dataframe...").status()
         print(df.head(5))
         Printing("Storing modified pandas dataframe in a variable "+
                      "(self.df)").status()
         self.df = df
-        # Create an instance of the previous dataframe which only stores
-        # mappings including at least one chromosome in columns "Qname" or
-        # "Tname"...
-        Printing("Storing modified pandas dataframe filtered by chromosome "+
-                 "pattern in a pair of variables: `self.df_chromosomes` and "+
-                 "`self.df_both_chromosomes`").status()
-        self.df_chromosomes = df.loc[
-            df["Qname"].str.contains(self.pattern_chr, case=False) |
-            df["Tname"].str.contains(self.pattern_chr, case=False)]
-        self.df_both_chromosomes = df.loc[
-            df["Qname"].str.contains(self.pattern_chr, case=False) &
-            df["Tname"].str.contains(self.pattern_chr, case=False)]
 
         # Create a dictionary where sequence sizes are stored...
         Printing("Creating a dictionary to store sequence sizes: "+
@@ -400,15 +408,26 @@ class Mapping:
 
         # From the following lists we can obtain means, medians and st. devs.
         Printing("Creating multiple lists of coordinates, distances between "+
-                 "mappings and mapping lengths: `self.coordinates``").status()
+                 "mappings and mapping lengths: `self.coordinates`").status()
         self.coordinates = self._list_coordinates()
         # By default, to compute the size of indels we include the whole main
         # dataframe (ie include indels in minor scaffolds!).
         Printing("Computing a dataframe with the size of indels: "+
                  "`self.df_indels`").status()
         self.df_indels = self._list_indels()
-        Printing("Finished. Printing the head of the dataframe:").status()
+        Printing("Finished computing `self.df_indels`. Printing its "+
+                 "five first rows:").status()
         print(self.df_indels.head(5))
+
+        if memory_efficient:
+            Printing("Because `memory_efficient` setting is set to True, "+
+                     "CIGAR and difference strings will be deleted from "+
+                     "the DataFrame to save up memory").status()
+            self.df = self.df.drop(columns=["cigar_string", "diff_string"])
+
+        Printing("The dataframe that has been read has the following "+
+                     "columns...").status()
+        self.df.info(memory_usage="deep")
 
         Printing("Finished initialising "+self.filename+"!\n").status()
 
@@ -421,9 +440,8 @@ class Mapping:
         Input
         =====
 
-        + df [optional]: A filtered dataframe. By default reads from the
-          dataframe which contains only chromosomes (removes all minor scaffolds),
-          ie. `self.df_both_chromosomes`.
+        + df [optional]: A filtered dataframe. By default it will use the rows
+          of `self.df` where both query and target sequids are chromosomes.
 
         Output
         ======
@@ -432,7 +450,8 @@ class Mapping:
         and end pairs of coordinates.
         """
         if df.empty:
-            df = self.df_both_chromosomes
+            # Copy the dataframe where query and target are chromosomes.
+            df = self.df.loc[self.df["sequid_types"]=="Qchr_Tchr"]
         else:
             df = df.copy()
         answer = dict()
