@@ -3,7 +3,7 @@
 
 help = paste0("\n1. Supply a PAF file as the first arg. value. ",
               "\n\n2. Supply a TSV (TAB-separated values) file pairing ",
-              "chromosomes and colours ",
+              "chromosome IDs (sequids) and colours ",
               "as the second arg. value. For instance:\n\n",
               "```\n",
               "Dtilchr1\t#ff6dd3\n",
@@ -51,6 +51,7 @@ species_target.col = "#30acac"
 library(pafr)
 library(circlize)
 # Read the PAF file
+print(paste0("Reading file at ", path_to_paf))
 raw_aln_circos = read_paf(path_to_paf)
 # Read a file with a specific format which pairs chromosomes with colours.
 colour_pairs = read.table(path_to_colours, header=FALSE, sep="\t")
@@ -146,8 +147,12 @@ for (i in 1:nrow(colour_pairs)) {
 
 # Sort alignments by mapping quality. Consequently, the worst mappings will
 # be plotted first, and thus hidden underneath the best mappings, which will
-# be plotted afterwards in succession.
+# be plotted afterwards in succession. Secondarily, sort by alignment length.
 aln_circos = aln_circos[order(aln_circos$mapq, aln_circos$alen), ]
+# To see the differences applied by this setting, create a CIRCOS plot in which
+# the worst alignments are plotted above the rest.
+worst_aln_first = aln_circos[order(aln_circos$mapq, aln_circos$alen,
+                                   decreasing=TRUE), ]
 
 # Search for regions of main sequids which are mapped by minor scaffolds.
 query_highlight = df_single_scaffold[grepl("Scaffold|ctg", df_single_scaffold$tname),
