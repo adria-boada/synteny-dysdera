@@ -21,12 +21,22 @@ path_to_colours = args[2]
 
 ## OPTIONAL VARIABLES ##
 
-# Discard mappings with a mapping quality below `min_map_qual`. Mapping quality
-# ranges from 0 to 60 (do not input a value outside this threshold).
-min_map_qual = 0
-# Discard mappings with an alignment length below `min_align_len` (in base
+# CIRCOS plots cannot adequately portray data with low signal-to-noise ratio.
+# For such scenarios, dotplots should provide a more straightforward
+# visualisation.
+# However, CIRCOS can be useful to plot an overview of the more conserved
+# syntenic relations. To do so, we will filter/remove "low quality" alignments.
+
+# Discard mappings with a mapping quality below these variables.
+# Mapping quality ranges from 0 to 60 (do not input a value outside this
+# threshold).
+low_filter_mapq = 0    # low quality figure
+high_filter_mapq = 45  # high quality figure
+# Discard mappings with an alignment length below these variables (in base
 # pairs).
-min_align_len = 600
+low_filter_aln = 600      # low quality figure
+high_filter_aln = 3500    # high quality figure
+
 # The following patterns should be found in Qname and Tname strings:
   # Regex patterns which identify only minor scaffolds (all of them):
   pattern_scaff = "Scaffold|ctg"
@@ -80,24 +90,29 @@ df_single_scaffold = df_minor_scaffold[
   grepl(pattern_chr, df_minor_scaffold$tname), ]
 removed.single_min_scaffold = nrow(df_single_scaffold)
 # Remove mappings which involve any minor scaffold at all.
-aln_circos = raw_aln_circos
 aln_circos = raw_aln_circos[
   # Sequid names do not (!) contain "Scaffold"
   # (at least one of these names is a chromosome)
   ! grepl(pattern_scaff, raw_aln_circos$qname) &
   ! grepl(pattern_scaff, raw_aln_circos$tname), ]
+# We will need to create a different dataframe for high
+# quality syntenic relations.
+aln_circos.hqual = aln_circos
 # Remove low mapping quality.
-aln_circos = subset(aln_circos, mapq >= min_map_qual)
-df_single_scaffold = subset(df_single_scaffold, mapq >= (min_map_qual))
+aln_circos = subset(aln_circos, mapq >= low_filter_mapq)
+aln_circos.hqual = subset(aln_circos.hqual, mapq >= high_filter_mapq)
+df_single_scaffold = subset(df_single_scaffold, mapq >= (low_filter_mapq))
 removed.mapq = (nrow(raw_aln_circos) -
-                nrow(subset(raw_aln_circos, mapq >= min_map_qual)))
+                nrow(subset(raw_aln_circos, mapq >= low_filter_mapq)))
 # Remove short mappings (below specified alignment length)
-aln_circos = subset(aln_circos, alen > min_align_len)
-df_single_scaffold = subset(df_single_scaffold, alen > (min_align_len))
+aln_circos = subset(aln_circos, alen > low_filter_aln)
+aln_circos.hqual = subset(aln_circos.hqual, alen > high_filter_aln)
+df_single_scaffold = subset(df_single_scaffold, alen > (low_filter_aln))
 removed.alilen = (nrow(raw_aln_circos) -
-                  nrow(subset(raw_aln_circos, alen > min_align_len)))
+                  nrow(subset(raw_aln_circos, alen > low_filter_aln)))
 # Remove secondary alignments.
 aln_circos = filter_secondary_alignments(aln_circos)
+aln_circos.hqual = filter_secondary_alignments(aln_circos.hqual)
 removed.secali = (nrow(raw_aln_circos) -
                   nrow(filter_secondary_alignments(raw_aln_circos)))
 # Total of rows removed at the end...
@@ -114,9 +129,9 @@ included.single_min_scaffold.qualfiltered = nrow(df_single_scaffold)
   cat(paste0('Included rows where one minor scaffold maps to a main chromosome: ',
              round((included.single_min_scaffold.qualfiltered/t)*100, digits=1), ' %\n'))
   cat(paste0('Excluded rows because their mapQ. was lower than ',
-             min_map_qual, ': ', round((removed.mapq/t)*100, digits=1), ' %\n'))
+             low_filter_mapq, ': ', round((removed.mapq/t)*100, digits=1), ' %\n'))
   cat(paste0('Excluded rows because their alig. length was lower than ',
-             min_align_len, ': ', round((removed.alilen/t)*100, digits=1), ' %\n'))
+             low_filter_aln, ': ', round((removed.alilen/t)*100, digits=1), ' %\n'))
   cat(paste0('Excluded rows because they were secondary mappings: ',
              round((removed.secali/t)*100,digits=1), ' %\n'))
   cat(paste0('The combined percentage of original rows that have been removed is: ',
@@ -135,6 +150,7 @@ included.single_min_scaffold.qualfiltered = nrow(df_single_scaffold)
 # Initialise as black (unspecified colours in `colour_pairs`
 # will be black).
 aln_circos$colours <- "black"
+aln_circos.hqual$colours <- "black"
 # Fill the newly created column `colours`:
 for (i in 1:nrow(colour_pairs)) {
   colour = colour_pairs[i, "colour"]
@@ -145,12 +161,18 @@ for (i in 1:nrow(colour_pairs)) {
              grepl(sequid, aln_circos$tname),
            # Substitute the `colour` column of the selected rows by sequid.
            "colours"] = colour
+  aln_circos.hqual[
+             grepl(sequid, aln_circos.hqual$qname) |
+             grepl(sequid, aln_circos.hqual$tname),
+           # Substitute the `colour` column of the selected rows by sequid.
+           "colours"] = colour
 }
 
 # Sort alignments by mapping quality. Consequently, the worst mappings will
 # be plotted first, and thus hidden underneath the best mappings, which will
 # be plotted afterwards in succession. Secondarily, sort by alignment length.
 aln_circos = aln_circos[order(aln_circos$mapq, aln_circos$alen), ]
+aln_circos.hqual = aln_circos.hqual[order(aln_circos.hqual$mapq, aln_circos.hqual$alen), ]
 # To see the differences applied by this setting, create a CIRCOS plot in which
 # the worst alignments are plotted above the rest.
 worst_aln_first = aln_circos[order(aln_circos$mapq, aln_circos$alen,
@@ -299,13 +321,14 @@ reverse_coord_windows <- function(dfw, inverted_sequids) {
   return(dfw.rev)}
 
 aln_circos = reverse_coord_windows(aln_circos, inverted_sequids)
+aln_circos.hqual = reverse_coord_windows(aln_circos.hqual, inverted_sequids)
 
 ## PLOT CIRCOS FROM THE GIVEN PAF ##
 
 # Open a PDF output device for the CIRCOS plot.
 pdf(paste0(path_to_paf, ".circos.pdf"))
 # Plot two CIRCOS; `aln_circos` and `worst_aln_first`.
-for (data_circos in list(aln_circos, worst_aln_first)) {
+for (data_circos in list(aln_circos, worst_aln_first, aln_circos.hqual)) {
 
 circos.clear()
 amount_sequids_query = length(grep("^Q", index$sequid)) -1
