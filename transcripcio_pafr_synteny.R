@@ -58,6 +58,8 @@ colour_pairs = read.table(path_to_colours, header=FALSE, sep="\t")
 names(colour_pairs) = c("sequid", "colour")
 
 ## LOAD AND FILTER DATAFRAME (ie PAF) ##
+# The filtered dataframe (aln_circos) excludes minor scaffolds, low mapping
+# quality, short alignments and secondary mappings.
 
 # Label chromosomes with "Q." and "T." at the beginning of the sequence ID.
 raw_aln_circos$tname = paste0('T.', raw_aln_circos$tname)
@@ -178,8 +180,7 @@ reduce_column = function(df, col) {
 # Ggplot theme for the dotplots. Remove background lines.
 theme = theme(panel.background = element_rect(fill = "white", colour = "grey50"))
 
-print("Dot-plotting...")
-print(paste0("Creating dotplots at the PDF `",
+print(paste0("Writing dotplots to the PDF `",
              path_to_paf, ".dotplots.pdf`"))
 pdf(paste0(path_to_paf, ".dotplots.pdf"))
 # Create a dotplot from the filtered PAF file.
@@ -268,22 +269,23 @@ for (sequid in target_main_chrs) {
 
 query_idx = query_idx[order(query_idx$end), ]
 target_idx = target_idx[order(target_idx$end), ]
-dysdera_tracks = rbind(query_idx, target_idx)
+index = rbind(query_idx, target_idx)
 # Restart index row numbers so they are sorted from one to N.
-row.names(dysdera_tracks) = NULL
+row.names(index) = NULL
 
 ## INVERTING CHROMOSOMES ##
 
 # Chromosomes are not always in the correct order. The beginning of some
 # chromosomes pair with the end of their homologous chromosome. This leads to
 # "orthogonal" syntenic relations instead of "parallel" syntenic relations.
+# (entangled syntenic relations)
 reverse_coord_windows <- function(dfw, inverted_sequids) {
   # Reverse start and end columns of dfw only for selected inverted_sequids
   dfw.rev = dfw
   for (s in inverted_sequids) {
     # Range of the selected (s) chromosome which will be inverted
-    xrange = as.double(dysdera_tracks[
-                       grepl(s, dysdera_tracks$sequid),
+    xrange = as.double(index[
+                       grepl(s, index$sequid),
                        c('start', 'end')])
     # Emmascara el df que hauria d'invertir-se
     # Boolean list which masks by sequid (the one which should be inverted).
@@ -300,21 +302,24 @@ aln_circos = reverse_coord_windows(aln_circos, inverted_sequids)
 
 ## PLOT CIRCOS FROM THE GIVEN PAF ##
 
-circos.clear()
 # Open a PDF output device for the CIRCOS plot.
 pdf(paste0(path_to_paf, ".circos.pdf"))
-amount_sequids_query = length(grep("^Q", dysdera_tracks$sequid)) -1
-amount_sequids_target = length(grep("^T", dysdera_tracks$sequid)) -1
+# Plot two CIRCOS; `aln_circos` and `worst_aln_first`.
+for (data_circos in list(aln_circos, worst_aln_first)) {
+
+circos.clear()
+amount_sequids_query = length(grep("^Q", index$sequid)) -1
+amount_sequids_target = length(grep("^T", index$sequid)) -1
 # Specify size of the CIRCOS (amount of chromosomes, spaces between chrs.)
 circos.par(gap.degree = c(rep(2, amount_sequids_query), 6,
                           rep(2, amount_sequids_target), 6),
            track.margin = c(mm_h(1), mm_h(1))
            )
 # Initialise CIRCOS
-circos.genomicInitialize(dysdera_tracks, plotType=NULL)
+circos.genomicInitialize(index, plotType=NULL)
 
 # Create the outer tracks (symbolising chromosomes)
-circos.track(dysdera_tracks$sequid,
+circos.track(index$sequid,
              ylim=c(0,1), track.height = mm_h(1),
              cell.padding=c(0, 0, 0, 0),
              #bg.border = NA, # what did this do?
@@ -340,7 +345,7 @@ circos.track(dysdera_tracks$sequid,
 # Add the empty rectangles below the chromosomes
 circos.track(ylim = c(0, 1), track.height = .1)
 # Colour the chromosomes
-for (seq in dysdera_tracks$sequid) {
+for (seq in index$sequid) {
   # Remove the labels "Q." or "T." at the beginning of the string
   s = substr(seq, start=3, stop=nchar(seq))
   colour = colour_pairs[
@@ -349,9 +354,9 @@ for (seq in dysdera_tracks$sequid) {
 }
 
 # Create the syntenic links between homologous chromosomes.
-circos.genomicLink(aln_circos[, c("qname", "qstart", "qend")],
-                   aln_circos[, c("tname", "tstart", "tend")],
-                   col = aln_circos[, "colours"])
+circos.genomicLink(data_circos[, c("qname", "qstart", "qend")],
+                   data_circos[, c("tname", "tstart", "tend")],
+                   col = data_circos[, "colours"])
 
 # Add text labelling each species' genomes
 text(-0.85, 0.9, species_query, col=species_query.col,
@@ -359,4 +364,5 @@ text(-0.85, 0.9, species_query, col=species_query.col,
 text(0.9, -0.85, species_target, col=species_target.col,
      cex = 1.1, font = 4)
 circos.clear()
+}
 
