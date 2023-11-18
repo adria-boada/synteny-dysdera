@@ -6,8 +6,30 @@
 # 14 Nov 2023  <adria@molevol-OptiPlex-9020>
 
 help_msg = """
-Describe here the goal, input, output, etc. of the script
-as a multi-line block of text.
+RM.out files (--rmlist)
+=======================
+
+RepeatMasker's output files. They must be paired with a species nickname/label,
+which must match the species label found in the index file. For instance:
+
+script.py --rmfiles file1,sp1 file2,sp2
+
+Where file1 and file2 are different files from RM output, and sp1 and sp2 are
+species labels (separated by a comma).
+
+Index files (--idxlist)
+=======================
+
+They are TSV (Tab-separated Values) files with sequence regexes paired with the
+sum of their lengths. The header (first row) must contain an species nickname.
+For example:
+
+Species-label
+Sequence-regex1\t32
+Sequence-regex2\t56
+etc.
+
+See the comments below `class Repeats` for more information.
 """
 
 import sys, math
@@ -18,18 +40,22 @@ import os
 import pandas as pd, numpy as np
 # Plotting figures
 import seaborn as sns, matplotlib.pyplot as plt
+# Measure the time it takes to run this script
+from datetime import datetime
+import locale
+locale.setlocale(locale.LC_TIME, '') # sets locale to the one used by user
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-prepare_plotting_folder(file, folder=None):
+def prepare_plotting_folder(file, folder=None):
     """
     Makes a new directory if the folder path does not already exist.
     Concatenates the filename (which should include the extension) with the
     folder path.
 
     Input
-    -----
+    =====
 
     + file: The filename where the newly created plot should be written to.
 
@@ -38,7 +64,7 @@ prepare_plotting_folder(file, folder=None):
       filename, only.
 
     Output
-    ------
+    ======
 
     Returns a path where the plot can be written to, as a string. Creates the
     folder if it did not exist.
@@ -104,37 +130,49 @@ class Printing:
         return message
 
 class Repeats:
+    """
+    The class `Repeats` reads RepeatMasker's output, standardises the repeat
+    type classification and returns summary tables of repeat content.
 
+    RepeatMasker's documentation:
+    <https://www.repeatmasker.org/webrepeatmaskerhelp.html>
+
+    Input
+    =====
+
+    + files_dict: A dictionary with "species" as keys and "filepaths" as
+      values. The "species" of this dictionary and "seqsizes_dict" should
+      match. The filepath leads to RepeatMasker's output.
+
+    + seqsizes_dict: A dictionary pairing sequence ID regexes (for
+      instance, *chr* to match all chromosomes) with their cumulative length,
+      in base pairs. Keys are species and values another dictionary. See
+      below for reference:
+
+      dict("species1": dict("chr1": length.int,
+                            "chr2": length.int,
+                            ...
+                            "minor_scaffolds": sum_len_scaffolds.int
+                            ),
+           "species2": dict(...),
+          )
+
+      Sequid strings (ie. "chr1", "chr2", etc.) should be a regex which can
+      match multiple sequences.
+      Use '|' for OR matching: `string1|string2|string3`, `Scaff|ctg`...
+      Use '&' for AND matching: `Sca&ffolds`...
+
+    Output
+    ======
+
+    TBD
+
+    Methods
+    =======
+
+    TBD
+    """
     def __init__(self, files_dict, seqsizes_dict):
-        """
-        The class `Repeats` reads RepeatMasker's output, standardises the repeat
-        type classification and returns summary tables of repeat content.
-
-        Input
-        -----
-
-        + files_dict: A dictionary with "species" as keys and "filepaths" as
-          values. The "species" of this dictionary and "seqsizes_dict" should
-          match. The filepath leads to RepeatMasker's output.
-
-        + seqsizes_dict: A dictionary pairing sequence ID regexes (for
-          instance, *chr* to match all chromosomes) with their cumulative length,
-          in base pairs. Keys are species and values another dictionary. See
-          below for reference:
-
-          dict("species1": dict("chr1": length.int,
-                                "chr2": length.int,
-                                ...
-                                "minor_scaffolds": sum_len_scaffolds.int
-                                ),
-               "species2": dict(...),
-              )
-
-          Sequid strings (ie. "chr1", "chr2", etc.) should be a regex which can
-          match multiple sequences.
-          Use '|' for OR matching: `string1|string2|string3`, `Scaff|ctg`...
-          Use '&' for AND matching: `Sca&ffolds`...
-        """
         # Store the dictionary with sequence sizes for use down the line.
         self.seqsizes_dict = seqsizes_dict
         # Compute whole genome sizes (sum of all sequences).
@@ -154,6 +192,73 @@ class Repeats:
                 Printing("Cannot read the provided path.").error()
                 return None
 
+        # Read input tabulated files. Create dfs with pandas.
+        dfs_catalog = dict()
+        Printing("Checking file sizes:").status()
+        for species, filepath in files_dict.items():
+            # Print file size before reading.
+            file_size = os.path.getsize(file)
+            print(f" * {filepath}:  {file_size} bytes")
+            # Load as pd.DataFrame
+            dfs_catalog[species] = pd.read_table(filepath,
+                header=None,
+                skiprows=3,     # skip the first three rows
+                sep="\s+",      # fields separated by 'space' regex
+                names=[         # use these strings as column names
+                    # For an explanation of RepeatMasker's fields, see its
+                    # manual.
+                    "score_SW", "perc_divg", "perc_del", "perc_ins", "sequid",
+                    "begin", "end", "left", "orient", "name",
+                    "default_repclass", "begin_match", "end_match",
+                    "left_match", "ID", "overlapping"],
+                                                 )
+            # Compute element length. Compared to consensus' length would be a
+            # proxy for divergence. Disabled because we already have "perc_divg".
+            ## dfs_catalog[species]["replen"] = abs(df["end"] - df["begin"]) +1
+
+        # Count rows matching each sequid regex in seqsizes_dict. Make sure all
+        # rows match with a single regex; not more, not less.
+        Printing("Revising sequid regex matches between provided index file "+
+                 "and RepeatMasker's output...").status()
+        for species in seqsizes_dict.keys():
+            df_species = dfs_catalog[species]
+            df_species_totnrows = df_species.shape[0]
+            df_species_nuniqseq = len(list(df_species["sequid"].unique()))
+            df_species_matchrows = 0
+            df_species_matchuniqseq = 0
+            for sequid_regex in seqsizes_dict[species].keys():
+                # Filter dataframe by sequids matching "sequid_regex"
+                df_species_and_regex = df_species.loc[
+                    df_species["sequid"].str.contains(sequid_regex,
+                                    case=False)] # case-insensitive.
+                print("--", sequid_regex, "--")
+                # Print the number of rows matching and the number of unique
+                # sequids that did match.
+                print(" + N.rows:", df_species_and_regex.shape[0])
+                df_species_matchrows += df_species_and_regex.shape[0]
+                print(" + Regex matching count:",
+                      len(list(df_species_and_regex["sequid"].unique())),
+                      "unique sequids")
+                df_species_matchuniqseq += (
+                    len(list(df_species_and_regex["sequid"].unique())))
+#                print(" + Regex matching list:",
+#                      list(df_species_and_regex["sequid"].unique()))
+##                # add new col to keep track of these 'sequid_types'
+##                df_concat.loc[
+##                    (df_concat["Species"] == species) &
+##                    (df_concat["sequid"].str.contains(sequid_regex)),
+##                    "sequid_type"] = sequid_regex
+            print("-----------------------------")
+            print(species, "summary: matched", df_species_matchrows,
+                  "out of", df_species_totnrows, "rows (",
+                  round((df_species_matchrows/df_species_totnrows) *100, ndigits=3),
+                  "%)")
+            print(" " * len(species + "summary: "), "found",
+                  df_species_matchuniqseq, "out of", df_species_nuniqseq,
+                  "unique sequids (",
+                  round((df_species_matchuniqseq/df_species_nuniqseq) *100,
+                        ndigits=3), "%)\n")
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -166,10 +271,15 @@ if __name__ == '__main__':
         # make sure the 'help_msg' is not automatically
         # wrapped at 80 characters (manually assign newlines).
         formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--rmlist", nargs="+", required=True,
+                        help="A list of RepeatMasker's output files.")
+    parser.add_argument("--idxlist", nargs="+", required=True,
+                        help="A list of index files, as specified in --help")
+    # IMPROVEMENT?
+    # Add argument that creates desired output format (this table, that figure)
+
     # file-name: positional arg.
 #    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
     # choices argument
 #    parser.add_argument('-o', '--operacio', 
 #            type=str, choices=['suma', 'resta', 'multiplicacio'],
@@ -179,31 +289,23 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
+    # Create the `files_dict` dictionary required by the class `Repeats`.
+    files_dict = dict()
+    for pair in args.rmlist:
+        values = pair.split(",")
+        if len(values) != 2:
+            Printing("One of the specified pairs in --rmlist was not of "+
+                     "length equal to two").error()
+            sys.exit()
+        else:
+            file, species = values
+            files_dict[species] = file
+    # Create the `seqsizes_dict` dictionary required by the class `Repeats`.
+    seqsizes_dict = dict()
+    for index in args.idxlist:
+        df_indexfile = pd.read_table(index, index_col=0, sep="\s+")
+        seqsizes_dict[df_indexfile.index.name] = (
+            df_indexfile.iloc[:,0].to_dict())
 
-    """
-    ### LLEGIR INDEX-FILE ###
-
-    Reads an index file in TSV (Tab-Separated Values) format in which sequence
-    IDs are paired with their lengths in base pairs. The header (first row)
-    contains the species name. For instance:
-
-    Species name
-    sequence-1\t32
-    sequence-3\t56
-    etc.
-
-    Input
-    -----
-
-    + filename: The path to the previously explained TSV file.
-
-    Output
-    ------
-
-    Returns a dictionary pairing sequids with their sizes
-    """
-    # script.py --rmlist out1 out2 --idxlist idx1 idx2 --out???
-
-    # second script that does img???
-
+    repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
 
