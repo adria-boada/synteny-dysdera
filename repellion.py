@@ -253,15 +253,23 @@ class Repeats:
                     "left_match", "ID", "overlapping"],
                                                  )
             # Compute element length. Compared to consensus' length would be a
-            # proxy for divergence. Disabled because we already have "perc_divg".
-            ## dfs_catalog[species]["replen"] = abs(df["end"] - df["begin"]) +1
+            # proxy for divergence. It will be used to compute cumulative sum of
+            # repeat types' basepairs.
+            d = dfs_catalog[species]
+            d["replen"] = abs(d["end"] - d["begin"]) +1
+
+            # In order to concatenate all dataframes in `dfs_catalog` add a new
+            # column which contains the species label.
+            dfs_catalog[species]["Species"] = species
+        # Concatenate RM.out files from all species into a single df.
+        df = pd.concat(list(dfs_catalog.values()))
 
         # Count rows matching each sequid regex in seqsizes_dict. Make sure all
         # rows match with a single regex; not more, not less.
         Printing("Revising sequid regex matches between provided index file "+
                  "and RepeatMasker's output...").status()
         for species in seqsizes_dict.keys():
-            df_species = dfs_catalog[species]
+            df_species = df.loc[df["Species"] == species]
             df_species_totnrows = df_species.shape[0]
             df_species_nuniqseq = len(list(df_species["sequid"].unique()))
             df_species_matchrows = 0
@@ -281,13 +289,13 @@ class Repeats:
                       "unique sequids")
                 df_species_matchuniqseq += (
                     len(list(df_species_and_regex["sequid"].unique())))
-#                print(" + Regex matching list:",
-#                      list(df_species_and_regex["sequid"].unique()))
-##                # add new col to keep track of these 'sequid_types'
-##                df_concat.loc[
-##                    (df_concat["Species"] == species) &
-##                    (df_concat["sequid"].str.contains(sequid_regex)),
-##                    "sequid_type"] = sequid_regex
+##                print(" + Regex matching list:",
+##                      list(df_species_and_regex["sequid"].unique()))
+                # Add a new col to keep track of 'sequid_types'
+                df.loc[
+                    (df["Species"] == species) &
+                    (df["sequid"].str.contains(sequid_regex, case=False)),
+                    "sequid_type"] = sequid_regex
             print("-----------------------------")
             print(species, "summary: matched", df_species_matchrows,
                   "out of", df_species_totnrows, "rows (",
@@ -300,37 +308,70 @@ class Repeats:
                         ndigits=3), "%)\n")
 
         # Reclassify repeat types into 4 new columns.
-        [self.reclassify_default_reptypes(df) for df in dfs_catalog.values()]
+        self.reclassify_default_reptypes(df)
 
-        # Clean the dataframes (drop columns, change dtypes of columns).
-        for df in dfs_catalog.values():
-            # Drop some unnecessary columns:
-            df.drop(columns=["left", "begin_match", "end_match",
-                             "left_match"], inplace=True)
-            # Assess the dtypes of all columns and try to downcast numbers
-            # (improve memory usage; see dataframe.info(memory_usage="deep")
-            float_cols = df.select_dtypes("float").columns
-            df[float_cols] = df[float_cols].apply(pd.to_numeric,
-                                                  downcast="float")
-            int_cols = df.select_dtypes("integer").columns
-            df[int_cols] = df[int_cols].apply(pd.to_numeric,
-                                              downcast="integer")
-            obj_cols = df.select_dtypes("object").columns
-            df[obj_cols] = df[obj_cols].astype("category")
+        # Decrease memory usage by cleaning the df (drop col, change dtypes).
+        # Drop some unnecessary columns:
+        df.drop(columns=["left", "begin_match", "end_match",
+                         "left_match"], inplace=True)
+        # Assess the dtypes of all columns and try to downcast numbers
+        # (decrease memory usage; see dataframe.info(memory_usage="deep")
+        float_cols = df.select_dtypes("float").columns
+        df[float_cols] = df[float_cols].apply(pd.to_numeric,
+                                              downcast="float")
+        int_cols = df.select_dtypes("integer").columns
+        df[int_cols] = df[int_cols].apply(pd.to_numeric,
+                                          downcast="integer")
+        obj_cols = df.select_dtypes("object").columns
+        df[obj_cols] = df[obj_cols].astype("category")
 
         # Check whether the reclassification correctly labelled all default
         # repeat types.
-        for sp, df in dfs_catalog.items():
-            Printing("Checking the reclassification of "+str(sp)).status()
-            self.check_reclassification(df)
+        Printing("Checking the reclassification/standardisation of "+
+                 "repeat types").status()
+        self.check_reclassification(df)
+
+        # Summarise the dataframe (RM.out) into a table with absolute bp
+        # counts per species, sequid and repeat type combinations.
+        # Furthermore, use multiple algorithms/methods to obtain bp count.
+        # "NAIVE" count of base pairs (includes all REs):
+        Printing("Computing count of base pairs using the 'NAIVE' "+
+                 "method").status()
+        df_sum_naive = df.groupby([
+            "Species", "sequid_type",
+            "class", "subclass", "order", "superfam"])[
+                "replen"].agg(["count", # amount of REs
+                               "sum"])  # base pairs of REs
+        # "BEST" count of base pairs (remove overlapping repeats from the sum):
+        Printing("Computing count of base pairs using the 'BEST' "+
+                 "method").status()
+        df_sum_best = df.loc[df["overlapping"] == False].groupby([
+            "Species", "sequid_type",
+            "class", "subclass", "order", "superfam"])[
+                "replen"].agg(["count", # amount of REs
+                               "sum"])  # base pairs of REs
+        # Rename aggregated columns "count" and "sum".
+        df_sum_naive = df_sum_naive.rename(columns={
+            "sum": "naive_bpsum",
+            "count": "naive_numele"})
+        df_sum_best = df_sum_best.rename(columns={
+            "sum": "best_bpsum",
+            "count": "best_numele"})
+        # Merge both summary dataframes into a single summary dataframe.
+        df_summary = df_sum_naive.join([df_sum_best]).reset_index()
+        # "ALGORITHMICAL" count of base pairs. Remove only the overlapping
+        # regions instead of the entire RE.
+        Printing("Computing count of base pairs using the 'ALGOR' "+
+                 "method").status()
 
         # debug
-        [df.info(memory_usage="deep") for df in dfs_catalog.values()]
-        [print(df) for df in dfs_catalog.values()]
+        df.info(memory_usage="deep")
+        print(df)
+        print(df_summary)
 
     def reclassify_default_reptypes(self, df):
         """
-        Very long function of many paragraphs. Each paragraph reclassified a
+        Very long function of many paragraphs. Each paragraph reclassifies a
         default repeat type into four standardised clades, which can be easily
         read and analysed.
 
@@ -338,6 +379,8 @@ class Repeats:
         exactly matches a single string (Y==X), while other repeat types are
         reclassified if the "default_repclass" matches/contains a regex-like
         string (Y.str.contains(X)).
+
+        These modifications are done in-place to the specified `df`.
 
         Input
         =====
@@ -348,13 +391,14 @@ class Repeats:
         ======
 
         A modified df, with more columns, standardising the repeat types.
+        Modifications are done in-place.
         """
         # Unclassified
 
         df.loc[
             df["default_repclass"]=="__unknown",
             ["class", "subclass", "order", "superfam"]
-        ] = ("Unclass.", "NA", "NA", "NA")
+        ] = ("Unclassified", "NA", "NA", "NA")
 
         # Enzymatic RNAs.
 
