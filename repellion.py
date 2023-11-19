@@ -302,6 +302,7 @@ class Repeats:
         # Reclassify repeat types into 4 new columns.
         [self.reclassify_default_reptypes(df) for df in dfs_catalog.values()]
 
+        # Clean the dataframes (drop columns, change dtypes of columns).
         for df in dfs_catalog.values():
             # Drop some unnecessary columns:
             df.drop(columns=["left", "begin_match", "end_match",
@@ -316,6 +317,12 @@ class Repeats:
                                               downcast="integer")
             obj_cols = df.select_dtypes("object").columns
             df[obj_cols] = df[obj_cols].astype("category")
+
+        # Check whether the reclassification correctly labelled all default
+        # repeat types.
+        for sp, df in dfs_catalog.items():
+            Printing("Checking the reclassification of "+str(sp)).status()
+            self.check_reclassification(df)
 
         # debug
         [df.info(memory_usage="deep") for df in dfs_catalog.values()]
@@ -915,6 +922,43 @@ class Repeats:
 
         return df_resulting
 
+    def check_reclassification(self, df):
+        """
+        Checks how the default repeat types have been reclassified. Returns a
+        dataframe pairing every unique default type with their assigned class,
+        subclass, order and superfamily.
+
+        Input
+        =====
+
+        + df: A dataframe generated in the __init__ function by reading RM
+          output.
+
+        Output
+        ======
+
+        Prints and returns a pandas dataframe in which default types are paired
+        with their reassigned classification.
+        """
+        # Drop rows with non-unique cell values.
+        df_unique_classes = df.drop_duplicates(
+            subset=["default_repclass", "class",
+                    "subclass", "order", "superfam"])
+        # Sort the dataframe by the newly assigned types.
+        df_unique_classes = df_unique_classes.sort_values(
+            by=["class", "subclass", "order", "superfam"])
+        # Reset the dataframe index
+        df_unique_classes = df_unique_classes.reset_index()
+        # We are only interested in columns with the repeat types;
+        # drop the rest of columns
+        df_unique_classes = df_unique_classes[["class", "subclass", "order",
+                                               "superfam", "mite",
+                                               "default_repclass"]]
+        # Print the dataframe in markdown format (without writing to a file)
+        print(df_unique_classes.to_markdown(None))
+
+        return df_unique_classes
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -952,6 +996,8 @@ if __name__ == '__main__':
         if len(values) != 2:
             Printing("One of the specified pairs in --rmlist was not of "+
                      "length equal to two").error()
+            Printing("Use --help for an explanation on --rmlist "+
+                     "parameter requirements").error()
             sys.exit()
         else:
             file, species = values
