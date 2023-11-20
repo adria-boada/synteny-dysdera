@@ -334,12 +334,15 @@ class Repeats:
         # Summarise the dataframe (RM.out) into a table with absolute bp
         # counts per species, sequid and repeat type combinations.
         # Furthermore, use multiple algorithms/methods to obtain bp count.
+        # As some columns are categorical, it is important to specify the
+        # parameter `observed=True` (otherwise returns all catg. combinations).
+
         # "NAIVE" count of base pairs (includes all REs):
         Printing("Computing count of base pairs using the 'NAIVE' "+
                  "method").status()
         df_sum_naive = df.groupby([
             "Species", "sequid_type",
-            "class", "subclass", "order", "superfam"])[
+            "class", "subclass", "order", "superfam"], observed=True)[
                 "replen"].agg(["count", # amount of REs
                                "sum"])  # base pairs of REs
         # "BEST" count of base pairs (remove overlapping repeats from the sum):
@@ -347,7 +350,7 @@ class Repeats:
                  "method").status()
         df_sum_best = df.loc[df["overlapping"] == False].groupby([
             "Species", "sequid_type",
-            "class", "subclass", "order", "superfam"])[
+            "class", "subclass", "order", "superfam"], observed=True)[
                 "replen"].agg(["count", # amount of REs
                                "sum"])  # base pairs of REs
         # Rename aggregated columns "count" and "sum".
@@ -363,6 +366,22 @@ class Repeats:
         # regions instead of the entire RE.
         Printing("Computing count of base pairs using the 'ALGOR' "+
                  "method").status()
+        # `algorithmically_bpsum` updates df_summary in-place.
+        df_summary = self.algorithmically_bpsum(df_summary, df)
+
+        # Print the sum of overlapping bps computed by "BEST" and "ALGOR"
+        # methods in comparison to "NAIVE".
+        Printing("Printing the differences between 'NAIVE', 'BEST' and "+
+                 "'ALGOR' methods caused by overlapping repeats (ie. "+
+                 "a measure of the prevalence of overlapping repeats).").status()
+        self.evaluate_overlapping(df_summary)
+
+        Printing("Computing the total repetitive and nonrepetitive "+
+                 "fractions per species, sequid_type pairs").status()
+        df_summary = self.compute_nonrepetitive(df_summary, seqsizes_dict)
+
+        # Store the full summary dataframe.
+        self.df_summary = df_summary
 
         # debug
         df.info(memory_usage="deep")
@@ -964,9 +983,9 @@ class Repeats:
                     [int(intervals[iden][2]), # score
                     iden])                    # ID
 
-        return df_resulting
+        return df_resulting.reset_index()
 
-    def algorithmically_bpsum(df_summary, df):
+    def algorithmically_bpsum(self, df_summary, df):
         """
         In conjunction with `remove_overlapping` function, creates a summary
         column which will be added to the dataframe `df_summary`. This column
@@ -985,8 +1004,40 @@ class Repeats:
                 # of the column "sequid_type". It will be used as a category to
                 # summarize base pairs to (much like "NAIVE" and "BEST" methods).
                 sequid_type = df_sequid.iloc[0]["sequid_type"]
-                # Group by `sequid_type` instead of `seq`, just like it is done
-                # by the "NAIVE" and "BEST" methods.
+                # Furthermore, group by repeat types:
+                tuple_repclass = tuple(zip(
+                    list(df_sequid["class"]),
+                    list(df_sequid["subclass"]),
+                    list(df_sequid["order"]),
+                    list(df_sequid["superfam"]) ))
+                # Acquire the list of intervals which will be feed to the
+                # function `remove_overlapping`.
+                intervals = list(zip(
+                    list(df_sequid["begin"]),
+                    list(df_sequid["end"]),
+                    list(df_sequid["score_SW"]),
+                    tuple_repclass ))
+                # Compute bp count for every type of repeat in sequid in
+                # species.
+                df_sum_algor = self.remove_overlapping(intervals)
+                # Insert a column with sequid and species analyzed in for-loop.
+                df_sum_algor.insert(0, "Species",
+                                    [species]*df_sum_algor.shape[0])
+                df_sum_algor.insert(1, "sequid_type",
+                                    [sequid_type]*df_sum_algor.shape[0])
+                df_summary = pd.merge(right=df_summary, left=df_sum_algor,
+                                      # preserve right dataframe's keys
+                                      how="right", on=["Species", "sequid_type",
+                                    "class", "subclass", "order", "superfam"])
+                df_summary["algor_bpsum_x"] = (
+                    df_summary["algor_bpsum_x"].fillna(0))
+                df_summary["algor_bpsum_y"] = (
+                    df_summary["algor_bpsum_x"] + df_summary["algor_bpsum_y"])
+                df_summary.drop(columns=["algor_bpsum_x"], inplace=True)
+                df_summary.rename(columns={"algor_bpsum_y": "algor_bpsum"},
+                                  inplace=True)
+
+        return df_summary
 
     def check_reclassification(self, df):
         """
@@ -1025,6 +1076,75 @@ class Repeats:
 
         return df_unique_classes
 
+    def evaluate_overlapping(self, df_summary):
+        """
+        Compute the sum of base pairs obtained by each method ("NAIVE", "BEST",
+        "ALGOR"). and their percentages relative to "NAIVE" (how much
+        overlapping is accounted by each method). Of these three methods, "BEST"
+        and "ALGOR" should never surpass "NAIVE" in base pair count.
+        """
+        for species in df_summary["Species"].unique():
+            df = df_summary.loc[df_summary["Species"] == species]
+            # Compute the sum of these three columns/methods.
+            naive_bpsum = df["naive_bpsum"].sum()
+            best_bpsum = df["best_bpsum"].sum()
+            algor_bpsum = df["algor_bpsum"].sum()
+            # Print results.
+            print(" --- Overlapping summary in "+species+" ---")
+            print(" + Naive sum of base pairs: "+str(naive_bpsum)+
+                  " / 100.0%")
+            print(" + Best sum of base pairs: "+str(best_bpsum)+
+                  " / "+str(round((best_bpsum/naive_bpsum)*100, 1))+"%")
+            print(" + Algor. sum of base pairs: "+str(algor_bpsum)+
+                  " / "+str(round((algor_bpsum/naive_bpsum)*100, 1))+"%")
+            print() # Aesthetic empty line between species and at the end.
+
+        return None
+
+    def compute_nonrepetitive(self, df_summary, seqsizes_dict):
+        """
+        Compute non-repetitive and total repetitive fractions per `sequid_type`
+        (single chromosomes or multiple minor sequids specified in the
+        idx-file).
+        """
+        for species in df_summary["Species"].unique():
+            df_species = df_summary.loc[df_summary["Species"] == species]
+            for seq in df_species["sequid_type"].unique():
+                df_sequid = df_species.loc[df_species["sequid_type"] == seq]
+                # Compute rep. fraction for the `located` dataframe cells.
+                rep_fractions = {
+                    "naive_bpsum": int(df_sequid["naive_bpsum"].sum()),
+                    "naive_numele": int(df_sequid["naive_numele"].sum()),
+                    "best_bpsum": int(df_sequid["best_bpsum"].sum()),
+                    "best_numele": int(df_sequid["best_numele"].sum()),
+                    "algor_bpsum": int(df_sequid["algor_bpsum"].sum()), }
+                # Add non-repetitive fraction to the previously computed
+                # `rep_fractions`.
+                new_rows = {
+                    "Species": [species] *2,
+                    "sequid_type": [seq] *2,
+                    "class": ["Repetitive_fraction",
+                              "Nonrepetitive_fraction"],
+                    "subclass": ["NA"] *2, "order": ["NA"] *2,
+                    "superfam": ["NA"] *2,
+                    "naive_numele": [rep_fractions["naive_numele"], "NA"],
+                    "naive_bpsum": [rep_fractions["naive_bpsum"],
+                        # Non-repetitive = (SEQ.LENGTH - REP.LENGTH)
+                                    seqsizes_dict[species][seq] -
+                                    rep_fractions["naive_bpsum"]],
+                    "best_numele": [rep_fractions["best_numele"], "NA"],
+                    "best_bpsum": [rep_fractions["best_bpsum"],
+                                   seqsizes_dict[species][seq] -
+                                   rep_fractions["best_bpsum"]],
+                    "algor_bpsum": [rep_fractions["algor_bpsum"],
+                                    seqsizes_dict[species][seq] -
+                                    rep_fractions["algor_bpsum"]],
+                }
+                df_summary = pd.concat([df_summary, pd.DataFrame(new_rows)])
+
+        return df_summary.sort_values(
+            by=["Species", "sequid_type"]).reset_index(drop=True)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1041,6 +1161,9 @@ if __name__ == '__main__':
                         help="A list of RepeatMasker's output files.")
     parser.add_argument("--idxlist", nargs="+", required=True,
                         help="A list of index files, as specified in --help")
+    parser.add_argument("--summary",
+                        help="A writeable path (string) where the summary "+
+                        "TSV file of base pair counts will be written")
     # IMPROVEMENT?
     # Add argument that creates desired output format (this table, that figure)
 
@@ -1076,4 +1199,7 @@ if __name__ == '__main__':
             df_indexfile.iloc[:,0].to_dict())
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
+    if args.summary:
+        repeats.df_summary.round(2).to_csv(args.summary,
+            sep="\t", na_rep="NA", index=False)
 
