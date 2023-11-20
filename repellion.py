@@ -966,6 +966,28 @@ class Repeats:
 
         return df_resulting
 
+    def algorithmically_bpsum(df_summary, df):
+        """
+        In conjunction with `remove_overlapping` function, creates a summary
+        column which will be added to the dataframe `df_summary`. This column
+        will be composed of the cumulative sums of each group of repeats, whilst
+        accounting for REs overlapping.
+        """
+        # Initialise the new column
+        df_summary["algor_bpsum"] = 0
+        # Subset the dataframe for each pair of sequid, species:
+        for species in df["Species"].unique():
+            df_species = df.loc[df["Species"] == species]
+            # Iterate across all sequids found in `df_species`.
+            for seq in df_species["sequid"].unique():
+                df_sequid = df_species.loc[df_species["sequid"] == seq]
+                # Acquire the `sequid_type` of `seq` by reading the first cell
+                # of the column "sequid_type". It will be used as a category to
+                # summarize base pairs to (much like "NAIVE" and "BEST" methods).
+                sequid_type = df_sequid.iloc[0]["sequid_type"]
+                # Group by `sequid_type` instead of `seq`, just like it is done
+                # by the "NAIVE" and "BEST" methods.
+
     def check_reclassification(self, df):
         """
         Checks how the default repeat types have been reclassified. Returns a
