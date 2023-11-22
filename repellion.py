@@ -354,15 +354,6 @@ class Repeats:
                 "replen"].agg(["count", # amount of REs
                                "sum"])  # base pairs of REs
 
-        # Additionally, obtain median, mean and mode divergences per repeat
-        # type, sequid type and species (column "perc_divg").
-        df_sum_diverg = df.groupby([
-            "Species", "sequid_type",
-            "class", "subclass", "order", "superfam"], observed=True)[
-                "perc_divg"].agg(["median",       # divergence median
-                                  "mean",         # divergence mean
-                                  pd.Series.mode  # divergence mode
-
         # Rename aggregated columns "count" and "sum".
         df_sum_naive = df_sum_naive.rename(columns={
             "sum": "naive_bpsum",
@@ -390,10 +381,26 @@ class Repeats:
                  "fractions per species, sequid_type pairs").status()
         df_summary = self.compute_nonrepetitive(df_summary, seqsizes_dict)
 
+        Printing("Computing summary dataframes with different aggregate "+
+                 "levels of 'repeat types' (from class to "+
+                 "superfamily).").status()
+        dict_df_summary = self.branching_summaries(df_summary)
+
+
+#        # Additionally, obtain median, mean and mode divergences per repeat
+#        # type, sequid type and species (column "perc_divg").
+#        df_sum_diverg = df.groupby([
+#            "Species", "sequid_type",
+#            "class", "subclass", "order", "superfam"], observed=True)[
+#                "perc_divg"].agg(["median",       # divergence median
+#                                  "mean",         # divergence mean
+#                                  pd.Series.mode  # divergence mode
         # Store the full summary dataframe.
         self.df_summary = df_summary
 
         # debug
+        print(dict_df_summary)
+        self.dict_df_summary = dict_df_summary
         self.df = df
         df.info(memory_usage="deep")
         print(df)
@@ -1156,6 +1163,53 @@ class Repeats:
         return df_summary.sort_values(
             by=["Species", "sequid_type"]).reset_index(drop=True)
 
+    def aggregate_dfsum_by_agglist(self, df_summary, agg_list):
+        """
+        Aggregate the summary dataframe by a given list of columns.
+
+        Input
+        =====
+
+        + df_summary: Dataframe created in the __init__ function.
+
+        + agg_list: A list of columns found in the given `df_summary`; for
+          instance, `["Species", "sequid_type", "class"]`.
+        """
+        # Compute summary by classes:
+        df_sum_by_agglist = df_summary.groupby(agg_list)[
+                ["naive_numele", "naive_bpsum", "best_numele",
+                "best_bpsum", "algor_bpsum"]].agg([
+                    "sum"]).reset_index()
+        # Remove MultiIndex column names.
+        df_sum_by_agglist.columns = df_sum_by_agglist.columns.droplevel(1)
+
+        return df_sum_by_agglist
+
+    def branching_summaries(self, df_summary):
+        """
+        Uses `aggregate_dfsum_by_agglist` to aggregate the summary dataframe
+        into multiple datasets. The information remains the same, but is
+        approached at the level of "class", "subclass", "order", and
+        "superfamily".
+        """
+        df_sum_byclass = self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class"])
+        df_sum_bysubclass = self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass"])
+        df_sum_byorder = self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass", "order"])
+        df_sum_bysuperfam = self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass", "order", "superfam"])
+        df_sum_byspecies = self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "class"])
+
+        answer = {"df_sum_byclass": df_sum_byclass,
+                  "df_sum_bysubclass": df_sum_bysubclass,
+                  "df_sum_byorder": df_sum_byorder,
+                  "df_sum_bysuperfam": df_sum_bysuperfam,
+                  "df_sum_byspecies": df_sum_byspecies,
+                  }
+        return answer
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
