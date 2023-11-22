@@ -353,6 +353,16 @@ class Repeats:
             "class", "subclass", "order", "superfam"], observed=True)[
                 "replen"].agg(["count", # amount of REs
                                "sum"])  # base pairs of REs
+
+        # Additionally, obtain median, mean and mode divergences per repeat
+        # type, sequid type and species (column "perc_divg").
+        df_sum_diverg = df.groupby([
+            "Species", "sequid_type",
+            "class", "subclass", "order", "superfam"], observed=True)[
+                "perc_divg"].agg(["median",       # divergence median
+                                  "mean",         # divergence mean
+                                  pd.Series.mode  # divergence mode
+
         # Rename aggregated columns "count" and "sum".
         df_sum_naive = df_sum_naive.rename(columns={
             "sum": "naive_bpsum",
@@ -384,6 +394,7 @@ class Repeats:
         self.df_summary = df_summary
 
         # debug
+        self.df = df
         df.info(memory_usage="deep")
         print(df)
         print(df_summary)
@@ -1164,8 +1175,6 @@ if __name__ == '__main__':
     parser.add_argument("--summary",
                         help="A writeable path (string) where the summary "+
                         "TSV file of base pair counts will be written")
-    # IMPROVEMENT?
-    # Add argument that creates desired output format (this table, that figure)
 
     # file-name: positional arg.
 #    parser.add_argument('filename', type=str, help='Path to ... file-name')
@@ -1202,4 +1211,5 @@ if __name__ == '__main__':
     if args.summary:
         repeats.df_summary.round(2).to_csv(args.summary,
             sep="\t", na_rep="NA", index=False)
+
 
