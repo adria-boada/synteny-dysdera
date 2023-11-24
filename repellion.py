@@ -235,6 +235,8 @@ class Repeats:
         # Read input tabulated files. Create dfs with pandas.
         dfs_catalog = dict()
         Printing("Checking file sizes:").status()
+        Printing("Keep in mind that the first three rows are considered to be "+
+                 "the header and, consequently, they are stripped...").status()
         for species, filepath in files_dict.items():
             # Print file size before reading.
             file_size = os.path.getsize(file)
@@ -324,6 +326,9 @@ class Repeats:
                                           downcast="integer")
         obj_cols = df.select_dtypes("object").columns
         df[obj_cols] = df[obj_cols].astype("category")
+        Printing("Information about the loaded DataFrame from the "+
+                 "given RepeatMasker output:").status()
+        df.info(memory_usage="deep")
 
         # Check whether the reclassification correctly labelled all default
         # repeat types.
@@ -343,24 +348,17 @@ class Repeats:
         df_sum_naive = df.groupby([
             "Species", "sequid_type",
             "class", "subclass", "order", "superfam"], observed=True)[
-                "replen"].agg(["count", # amount of REs
-                               "sum"])  # base pairs of REs
+                "replen"].agg(naive_numele="count", # amount of REs
+                              naive_bpsum="sum")    # base pairs of REs
         # "BEST" count of base pairs (remove overlapping repeats from the sum):
         Printing("Computing count of base pairs using the 'BEST' "+
                  "method").status()
         df_sum_best = df.loc[df["overlapping"] == False].groupby([
             "Species", "sequid_type",
             "class", "subclass", "order", "superfam"], observed=True)[
-                "replen"].agg(["count", # amount of REs
-                               "sum"])  # base pairs of REs
+                "replen"].agg(best_numele="count", # amount of REs
+                              best_bpsum="sum")    # base pairs of REs
 
-        # Rename aggregated columns "count" and "sum".
-        df_sum_naive = df_sum_naive.rename(columns={
-            "sum": "naive_bpsum",
-            "count": "naive_numele"})
-        df_sum_best = df_sum_best.rename(columns={
-            "sum": "best_bpsum",
-            "count": "best_numele"})
         # Merge both summary dataframes into a single summary dataframe.
         df_summary = df_sum_naive.join([df_sum_best]).reset_index()
         # "ALGORITHMICAL" count of base pairs. Remove only the overlapping
@@ -378,7 +376,7 @@ class Repeats:
         self.evaluate_overlapping(df_summary)
 
         Printing("Computing the total repetitive and nonrepetitive "+
-                 "fractions per species, sequid_type pairs").status()
+                 "fractions per `species` and `sequid_type` pairs").status()
         df_summary = self.compute_nonrepetitive(df_summary, seqsizes_dict)
 
         Printing("Computing summary dataframes with different aggregate "+
@@ -386,25 +384,18 @@ class Repeats:
                  "superfamily).").status()
         dict_df_summary = self.branching_summaries(df_summary)
 
+        Printing("Computing estimators of 'sample' divergence: median, "+
+                 "mean and mode divergences (including standard dev.)").status()
+        for key, dfsum in dict_df_summary.items():
+            dict_df_summary[key] = self.estimators_divergence_summary(dfsum, df)
 
-#        # Additionally, obtain median, mean and mode divergences per repeat
-#        # type, sequid type and species (column "perc_divg").
-#        df_sum_diverg = df.groupby([
-#            "Species", "sequid_type",
-#            "class", "subclass", "order", "superfam"], observed=True)[
-#                "perc_divg"].agg(["median",       # divergence median
-#                                  "mean",         # divergence mean
-#                                  pd.Series.mode  # divergence mode
-        # Store the full summary dataframe.
-        self.df_summary = df_summary
-
-        # debug
-        print(dict_df_summary)
+        Printing("Writing summary DataFrames to the dictionary `"+
+                 "self.dict_df_summary`.").status()
         self.dict_df_summary = dict_df_summary
-        self.df = df
-        df.info(memory_usage="deep")
-        print(df)
-        print(df_summary)
+
+        # DEBUG
+        (print(d) for d in dict_df_summary.values())
+        #dict_df_summary[key] = dict_df_summary[key].round(3)
 
     def reclassify_default_reptypes(self, df):
         """
@@ -422,7 +413,7 @@ class Repeats:
         Input
         =====
 
-        + df: A dataframe from the __init__ function of self (in `dfs_catalog`).
+        + df: A dataframe from the __init__ function of this class.
 
         Output
         ======
@@ -1145,12 +1136,15 @@ class Repeats:
                               "Nonrepetitive_fraction"],
                     "subclass": ["NA"] *2, "order": ["NA"] *2,
                     "superfam": ["NA"] *2,
-                    "naive_numele": [rep_fractions["naive_numele"], "NA"],
+                    # it is not possible to combine "NA" in an int column;
+                    # instead of "NA" num. of ele. use zero.
+                    "naive_numele": [rep_fractions["naive_numele"], 0],
                     "naive_bpsum": [rep_fractions["naive_bpsum"],
                         # Non-repetitive = (SEQ.LENGTH - REP.LENGTH)
                                     seqsizes_dict[species][seq] -
                                     rep_fractions["naive_bpsum"]],
-                    "best_numele": [rep_fractions["best_numele"], "NA"],
+                    # instead of "NA" num. of ele. use zero.
+                    "best_numele": [rep_fractions["best_numele"], 0],
                     "best_bpsum": [rep_fractions["best_bpsum"],
                                    seqsizes_dict[species][seq] -
                                    rep_fractions["best_bpsum"]],
@@ -1211,6 +1205,57 @@ class Repeats:
                   }
         return answer
 
+    def estimators_divergence_summary(self, df_summary, df):
+        """
+        Obtain median, mean and mode divergences per category in the summary
+        dataframe. It will compute these estimators from "perc_divg" column.
+
+        Input
+        =====
+
+        + df: A dataframe from the __init__ function of this class.
+
+        + df_summary: A summary (aggregated) dataframe created in the __init__
+          function of this class.
+        """
+        # Aconsegueix llistat de columnes que calen agrupar.
+        list_columns = list(df_summary.columns)
+        acceptable_columns = ["Species", "sequid_type", "class", "subclass",
+                              "order", "superfam"]
+        # Remove non-categorical/non-object/non-acceptable columns.
+        # (I'm using a strange reversal range loop; from end to begin).
+        for i in range(len(list_columns)-1, -1, -1):
+            if list_columns[i] not in acceptable_columns:
+                list_columns.pop(i)
+        # Groupby the list of columns.
+        df_sum_diverg = df.groupby(list_columns, observed=True)[
+            "perc_divg"].agg(divg_median="median", divg_mean="mean",
+        # The mode() function could return an array of divergence with multiple
+        # 'most common' values; take the first and the last one in two columns.
+                            divg_modeBeg=lambda x: pd.Series.mode(x)[0],
+                            divg_modeEnd=lambda x: pd.Series.mode(x)[
+                                len(pd.Series.mode(x))-1])
+        # Join the estimators of divergence with the categories in `df_summary`
+        df_summary = df_summary.merge(df_sum_diverg.reset_index(),
+                                     how="outer",
+                                     left_on=list_columns,
+                                     right_on=list_columns)
+        # Make sure that the dtypes of `df_summary` are integers/floats where
+        # necessary.
+        dict_assign_dtypes = {"naive_numele": "int", "naive_bpsum": "int",
+                              "best_numele": "int", "best_bpsum": "int",
+                              "algor_bpsum": "int", "divg_median": "float64",
+                              "divg_mean": "float64", "divg_modeBeg": "float64",
+                              "divg_modeEnd": "float64"}
+        df_summary = df_summary.astype(dict_assign_dtypes)
+        # Approximate amount of substitutions (base pairs * divergence):
+        df_summary["divg_median_x_algor_bpsum"] = (
+            df_summary["divg_median"] *
+            df_summary["algor_bpsum"] )/100
+
+        return df_summary
+
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Si es crida com a script:
@@ -1228,7 +1273,8 @@ if __name__ == '__main__':
                         help="A list of index files, as specified in --help")
     parser.add_argument("--summary",
                         help="A writeable path (string) where the summary "+
-                        "TSV file of base pair counts will be written")
+                        "TSV files of base pair counts will be written. "+
+                        "Do not include the TSV extension!")
 
     # file-name: positional arg.
 #    parser.add_argument('filename', type=str, help='Path to ... file-name')
@@ -1263,7 +1309,10 @@ if __name__ == '__main__':
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
     if args.summary:
-        repeats.df_summary.round(2).to_csv(args.summary,
-            sep="\t", na_rep="NA", index=False)
+        for key, dfsum in repeats.dict_df_summary.items():
+            add_to_path = key.split("_")[-1]
+            dfsum.round(2).to_csv(
+                str(args.summary)+"_"+add_to_path+".tsv",  # file-name
+                sep="\t", na_rep="NA", index=False)
 
 
