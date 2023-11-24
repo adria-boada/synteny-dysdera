@@ -231,6 +231,13 @@ class Repeats:
                 Printing("Cannot read the provided path to `"+
                          str(file)+"`").error()
                 return None
+        # Ensure there is one idxfile for each RM.out file:
+        if len(files_dict.values()) != len(seqsizes_dict.keys()):
+            Printing("Index file and RepeatMasker's output files "+
+                     "are not found in a one-to-one proportion; "+
+                     "make sure that there is one index file per "+
+                     "RM.out file").error()
+            return None
 
         # Read input tabulated files. Create dfs with pandas.
         dfs_catalog = dict()
@@ -239,7 +246,7 @@ class Repeats:
                  "the header and, consequently, they are stripped...").status()
         for species, filepath in files_dict.items():
             # Print file size before reading.
-            file_size = os.path.getsize(file)
+            file_size = os.path.getsize(filepath)
             print(f" * {filepath}:  {file_size} bytes")
             # Load as pd.DataFrame
             dfs_catalog[species] = pd.read_table(filepath,
@@ -394,7 +401,7 @@ class Repeats:
         self.dict_df_summary = dict_df_summary
 
         # DEBUG
-        (print(d) for d in dict_df_summary.values())
+        #[print(d) for d in dict_df_summary.values()]
         #dict_df_summary[key] = dict_df_summary[key].round(3)
 
     def reclassify_default_reptypes(self, df):
