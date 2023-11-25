@@ -343,6 +343,10 @@ class Repeats:
                   "unique sequids (",
                   round((df_species_matchuniqseq/df_species_nuniqseq) *100,
                         ndigits=3), "%)\n")
+        # As soon as all sequid types have been added, downcast the
+        # `sequid_type` column to the category dtype.
+        obj_cols = df.select_dtypes("object").columns
+        df[obj_cols] = df[obj_cols].astype("category")
 
         # Reclassify repeat types into 4 new columns.
         self.reclassify_default_reptypes(df)
@@ -882,6 +886,11 @@ class Repeats:
             df["default_repclass"].str.contains("_nMITE"),
             ["mite"]
         ] = (False)
+
+        # Object dtypes are more expensive than category dtypes. Try to
+        # downcast from objects to categories, if possible.
+        obj_cols = df.select_dtypes("object").columns
+        df[obj_cols] = df[obj_cols].astype("category")
 
         return df
 
