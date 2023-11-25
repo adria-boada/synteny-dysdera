@@ -261,17 +261,45 @@ class Repeats:
                     "default_repclass", "begin_match", "end_match",
                     "left_match", "ID", "overlapping"],
                                                  )
-            # Compute element length. Compared to consensus' length would be a
-            # proxy for divergence. It will be used to compute cumulative sum of
-            # repeat types' basepairs.
-            d = dfs_catalog[species]
-            d["replen"] = abs(d["end"] - d["begin"]) +1
+            d = dfs_catalog[species] # Short-hand variable.
 
+            # Decrease memory usage by dropping unnecessary columns:
+            d.drop(columns=["left", "begin_match", "ID",
+                            "end_match", "left_match"], inplace=True)
+
+            # Create a new column where element length will be computed. As well
+            # as percent substitutions ("perc_divg"), it could be used as a
+            # proxy for rep. ele. divergence. However, substitutions are more
+            # straightforward and should be more accurate. Later on it will be
+            # used to compute the cumulative sum of RE's base pairs.
+            d["replen"] = abs(d["end"] - d["begin"]) +1
             # In order to concatenate all dataframes in `dfs_catalog` add a new
             # column which contains the species label.
             dfs_catalog[species]["Species"] = species
+
+            # Decrease memory usage by using efficient 'dtypes' (see
+            # <https://pandas.pydata.org/docs/user_guide/scale.html>)
+
+            # Select float columns and try to downcast them.
+            float_cols = d.select_dtypes("float").columns
+            d[float_cols] = d[float_cols].apply(
+                    pd.to_numeric, downcast="float")
+
+            # Select integer columns and try to downcast them.
+            int_cols = d.select_dtypes("integer").columns
+            d[int_cols] = d[int_cols].apply(
+                    pd.to_numeric, downcast="integer")
+
+            # Object dtypes are more expensive than category dtypes. Try to
+            # downcast from objects to categories, if possible.
+            obj_cols = d.select_dtypes("object").columns
+            d[obj_cols] = d[obj_cols].astype("category")
+
         # Concatenate RM.out files from all species into a single df.
         df = pd.concat(list(dfs_catalog.values()))
+        Printing("Information about the loaded DataFrame from the "+
+                 "given RepeatMasker output:").status()
+        df.info(memory_usage="deep")
 
         # Count rows matching each sequid regex in seqsizes_dict. Make sure all
         # rows match with a single regex; not more, not less.
@@ -319,29 +347,11 @@ class Repeats:
         # Reclassify repeat types into 4 new columns.
         self.reclassify_default_reptypes(df)
 
-        # Decrease memory usage by cleaning the df (drop col, change dtypes).
-        # Drop some unnecessary columns:
-        df.drop(columns=["left", "begin_match", "end_match",
-                         "left_match"], inplace=True)
-        # Assess the dtypes of all columns and try to downcast numbers
-        # (decrease memory usage; see dataframe.info(memory_usage="deep")
-        float_cols = df.select_dtypes("float").columns
-        df[float_cols] = df[float_cols].apply(pd.to_numeric,
-                                              downcast="float")
-        int_cols = df.select_dtypes("integer").columns
-        df[int_cols] = df[int_cols].apply(pd.to_numeric,
-                                          downcast="integer")
-        obj_cols = df.select_dtypes("object").columns
-        df[obj_cols] = df[obj_cols].astype("category")
-        Printing("Information about the loaded DataFrame from the "+
-                 "given RepeatMasker output:").status()
-        df.info(memory_usage="deep")
-
         # Check whether the reclassification correctly labelled all default
         # repeat types.
         Printing("Checking the reclassification/standardisation of "+
                  "repeat types").status()
-        self.check_reclassification(df)
+        self.df_reclassification = self.check_reclassification(df)
 
         # Summarise the dataframe (RM.out) into a table with absolute bp
         # counts per species, sequid and repeat type combinations.
@@ -396,8 +406,8 @@ class Repeats:
         for key, dfsum in dict_df_summary.items():
             dict_df_summary[key] = self.estimators_divergence_summary(dfsum, df)
 
-        Printing("Writing summary DataFrames to the dictionary `"+
-                 "self.dict_df_summary`.").status()
+        Printing("Writing summary DataFrames to the dictionary (Python var"+
+                 "iable) `self.dict_df_summary`.").status()
         self.dict_df_summary = dict_df_summary
 
         # DEBUG
@@ -1316,6 +1326,11 @@ if __name__ == '__main__':
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
     if args.summary:
+        # Store reclassification dataframe
+        repeats.df_reclassification.to_csv(
+            str(args.summary)+"_reclassification.tsv", # file-name
+            sep="\t", na_rep="NA", index=True)
+        # Store summary dataframes.
         for key, dfsum in repeats.dict_df_summary.items():
             add_to_path = key.split("_")[-1]
             dfsum.round(2).to_csv(
