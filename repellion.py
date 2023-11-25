@@ -409,6 +409,27 @@ class Repeats:
                  "mean and mode divergences (including standard dev.)").status()
         for key, dfsum in dict_df_summary.items():
             dict_df_summary[key] = self.estimators_divergence_summary(dfsum, df)
+            # Sort the resulting dataframes by repeat classes
+            # using a custom key.
+            custom_key_order = {"DNA": 10,
+                                "Retrotransposon": 11,
+                                "Other": 12,
+                                "Tandem_repeat": 13,
+                                "Unclassified": 14,
+                                "Repetitive_fraction": 15,
+                                "Nonrepetitive_fraction": 16, }
+            dict_df_summary[key] = dict_df_summary[key].sort_values(
+                by=["class"],
+                key=lambda x: x.replace(custom_key_order))
+            # Sort the dataframe by 'Species' and 'sequid_type'. Use the kind of
+            # sort 'mergesort' to preserve the previous sort (stable algorithm).
+            # Start by reading whether Species/sequid columns are in the df.
+            list_cols = dict_df_summary[key].columns
+            list_sorting_cols = [x for x in list_cols if x in [
+                "Species", "sequid_type"]]
+            # Once we have made sure these columns are in the df, sort it:
+            dict_df_summary[key] = dict_df_summary[key].sort_values(
+                by=list_sorting_cols, kind="mergesort")
 
         Printing("Writing summary DataFrames to the dictionary (Python var"+
                  "iable) `self.dict_df_summary`.").status()
