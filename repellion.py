@@ -120,6 +120,33 @@ def prepare_plotting_folder(file, folder=None):
     else:
         return file
 
+def prepare_input_idx(list_idx_paths):
+    """
+    Prepare the IDX input files to use interactively with the class `Repeats`.
+    Formats the data according to `Repeats` requirements.
+
+    Input
+    =====
+
+    + list_idx_paths: A list with one or multiple paths (length higher than
+      zero) to IDX files. These files must be formatted according to the
+      requirements specified in the 'help' section of `Repeats`.
+
+    Output
+    ======
+
+    Returns a dictionary of sequence sizes wich can be directly passed to the
+    init function of the `Repeats` class.
+    """
+    # Create the `seqsizes_dict` dictionary required by the class `Repeats`.
+    seqsizes_dict = dict()
+    for index in list_idx_paths:
+        df_indexfile = pd.read_table(index, index_col=0, sep="\s+")
+        seqsizes_dict[df_indexfile.index.name] = (
+            df_indexfile.iloc[:,0].to_dict())
+
+    return seqsizes_dict
+
 class Printing:
     """
     Print a given message with a formatting of interest (eg. as a warning,
@@ -431,9 +458,15 @@ class Repeats:
             dict_df_summary[key] = dict_df_summary[key].sort_values(
                 by=list_sorting_cols, kind="mergesort")
 
+        # Print the top of the most common "perc_divg" values (for debug
+        # purposes; compare with pd.Series.mode)
+
         Printing("Writing summary DataFrames to the dictionary (Python var"+
                  "iable) `self.dict_df_summary`.").status()
         self.dict_df_summary = dict_df_summary
+        Printing("Writing entire RepeatMasker DataFrame to "+
+                 "the variable `self.df`.").status()
+        self.df = df
 
         # DEBUG
         #[print(d) for d in dict_df_summary.values()]
@@ -1301,6 +1334,13 @@ class Repeats:
             df_summary["algor_bpsum"] )/100
 
         return df_summary
+
+def f(x):
+    """
+    Histogrames en desenvolupament?
+    """
+
+    return None
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
