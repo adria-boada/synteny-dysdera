@@ -6,6 +6,15 @@
 # 14 Nov 2023  <adria@molevol-OptiPlex-9020>
 
 help_msg = """
+In development
+==============
+
+Top10 value counts for the "perc_divg" column (and other variable columns, like
+replen, if possible). Hand a subset of a dataframe (eg. loc DNA). Otherwise,
+hand a list of groupby columns (["class", "Species"]).
+
+Divergence histograms. Try to include max-mins (inflection points using SciPy).
+
 RM.out files (--rmlist)
 =======================
 
