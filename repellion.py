@@ -317,9 +317,10 @@ class Repeats:
             # <https://pandas.pydata.org/docs/user_guide/scale.html>)
 
             # Select float columns and try to downcast them.
-            float_cols = d.select_dtypes("float").columns
-            d[float_cols] = d[float_cols].apply(
-                    pd.to_numeric, downcast="float")
+            ##float_cols = d.select_dtypes("float").columns
+            ##d[float_cols] = d[float_cols].apply(
+            ##        pd.to_numeric, downcast="float")
+            ## Downcasting integers makes it impossible to round them?
 
             # Select integer columns and try to downcast them.
             int_cols = d.select_dtypes("integer").columns
@@ -383,6 +384,9 @@ class Repeats:
         # `sequid_type` column to the category dtype.
         obj_cols = df.select_dtypes("object").columns
         df[obj_cols] = df[obj_cols].astype("category")
+        # Round float columns, like "perc_divg". Otherwise pd.Series.mode() is
+        # very unprecise. RepeatMasker returns up to one decimal of precision.
+        df = df.round(1)
 
         # Reclassify repeat types into 4 new columns.
         self.reclassify_default_reptypes(df)
@@ -469,6 +473,8 @@ class Repeats:
 
         # Print the top of the most common "perc_divg" values (for debug
         # purposes; compare with pd.Series.mode)
+        print(df["perc_divg"].value_counts(bins=None, normalize=True))
+        print(df["perc_divg"].value_counts(bins=20, normalize=True))
 
         Printing("Writing summary DataFrames to the dictionary (Python var"+
                  "iable) `self.dict_df_summary`.").status()
