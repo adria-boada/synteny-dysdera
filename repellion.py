@@ -1386,9 +1386,15 @@ def plot_histolike_recursively(
         # level (one category down the list) with the filtered `df`.
         if checkval > 1:
             plot_histolike_recursively(
-                df_filtered, value_column,
-                categorical_columns[1:], hueby_column,
-                current_title + "_")
+                # Run with filtered df.
+                df=df_filtered,
+                value_column=value_column,
+                # Run one category down the list.
+                categorical_columns=categorical_columns[1:],
+                hueby_column=hueby_column,
+                title=current_title + "_",
+                minmaxing=minmaxing,
+                yaxis_relative=yaxis_relative)
 
         # Now, the plotting section.
         # If a hueby_column was specified, start by iterating across it.
