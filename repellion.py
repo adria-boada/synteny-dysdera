@@ -88,6 +88,8 @@ import os
 import pandas as pd, numpy as np
 # Plotting figures
 import seaborn as sns, matplotlib.pyplot as plt
+# Obtain local minima/maxima values to plot them
+from scipy.signal import argrelextrema
 # Measure the time it takes to run this script
 from datetime import datetime
 import locale
@@ -473,8 +475,8 @@ class Repeats:
 
         # Print the top of the most common "perc_divg" values (for debug
         # purposes; compare with pd.Series.mode)
-        print(df["perc_divg"].value_counts(bins=None, normalize=True))
-        print(df["perc_divg"].value_counts(bins=20, normalize=True))
+        #print(df["perc_divg"].value_counts(bins=None, normalize=True))
+        #print(df["perc_divg"].value_counts(bins=20, normalize=True))
 
         Printing("Writing summary DataFrames to the dictionary (Python var"+
                  "iable) `self.dict_df_summary`.").status()
@@ -482,10 +484,6 @@ class Repeats:
         Printing("Writing entire RepeatMasker DataFrame to "+
                  "the variable `self.df`.").status()
         self.df = df
-
-        # DEBUG
-        #[print(d) for d in dict_df_summary.values()]
-        #dict_df_summary[key] = dict_df_summary[key].round(3)
 
     def reclassify_default_reptypes(self, df):
         """
@@ -1350,10 +1348,86 @@ class Repeats:
 
         return df_summary
 
-def f(x):
+def plot_histolike_recursively(
+    df, value_column: str,
+    categorical_columns: list, hueby_column: str=None,
+    title: str="", yaxis_relative=True, minmaxing: int=10):
     """
-    Histogrames en desenvolupament?
+    Plot a column `value_column` of a pandas DataFrame. Plot local minima and
+    maxima as red and green (respectively) scatter points.
+
+    Input
+    =====
+
+    + title: Serves as the plot title. Furthermore, it is added as a prefix to
+      the filename of all generated PNG files.
+
+    + minmaxing: An integer >=1 or zero/False. It is passed to the parameter
+      `order` of `scipy.signal.argrelextrema`. It determines the sensitivity of
+      the algorithm; the higher the `minmaxing` value, the less sensitive (less
+      local minima or maxima). Adjust this value depending on the prevalence of
+      noise in your datasets. To disable the search of local minima and maxima,
+      pass a value of zero/False.
     """
+    # For each `category` in the zeroeth column of the list
+    # `categorical_columns`:
+    for category in df[categorical_columns[0]].unique():
+        # Filter `df` by `category` within each for-loop.
+        bool_filter = (df[categorical_columns[0]] == category)
+        df_filtered = df.loc[bool_filter]
+        # Obtain the title that will be used in the current plot.
+        current_title = title + category
+        # Try to find further categorical subdivisions in the list of
+        # categorical columns. Count all combinations of unique categories.
+        checkval = df_filtered.drop_duplicates(
+            subset=categorical_columns)[categorical_columns].shape[0]
+        # If `checkval` is above 1 there are further subdivisions of the `df`
+        # (more than one combination). Run this function recursively at a lower
+        # level (one category down the list) with the filtered `df`.
+        if checkval > 1:
+            plot_histolike_recursively(
+                df_filtered, value_column,
+                categorical_columns[1:], hueby_column,
+                current_title + "_")
+
+        # Now, the plotting section.
+        # If a hueby_column was specified, start by iterating across it.
+        if hueby_column:
+            for hue in df_filtered[hueby_column].unique():
+                # Filter by `hue` categories and create a Series of
+                # value_counts.
+                valcounts_series = (
+                    df_filtered.loc[df_filtered[hueby_column] == hue,
+                                    value_column]
+                    ).value_counts(normalize=yaxis_relative).sort_index(
+                    ).to_frame()
+                # Try to find local min/max points.
+                if minmaxing:
+                    valcounts_series["min"] = valcounts_series.iloc[argrelextrema(
+                        valcounts_series[value_column].values, np.less_equal,
+                        order=minmaxing,)][value_column]
+                    valcounts_series["max"] = valcounts_series.iloc[argrelextrema(
+                        valcounts_series[value_column].values, np.greater_equal,
+                        order=minmaxing,)][value_column]
+                    # Plot max as green and min as red scatter points.
+                    plt.scatter(valcounts_series.index,
+                                valcounts_series["min"], c="r")
+                    plt.scatter(valcounts_series.index,
+                                valcounts_series["max"], c="g")
+                # Lastly, with the value counts, plot them as a line plot.
+                plt.plot(valcounts_series.index, valcounts_series[value_column],
+                         label=hue)
+        else:
+            pass # only works hueing atm
+            # Es podria crear una columna buida '1' i destriar segons aquesta
+            # columna (irresponsable?).
+
+        plt.title(current_title)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(current_title+".png", dpi=500,)
+        # Close the plt.axes or they will leak to the next figures.
+        plt.close()
 
     return None
 
@@ -1374,9 +1448,15 @@ if __name__ == '__main__':
     parser.add_argument("--idxlist", nargs="+", required=True,
                         help="A list of index files, as specified in --help")
     parser.add_argument("--summary",
-                        help="A writeable path (string) where the summary "+
-                        "TSV files of base pair counts will be written. "+
-                        "Do not include the TSV extension!")
+                        help="A suffix (string) with which a path will be "+
+                        "created. Then, multiple TSV summary tables will "+
+                        "be written to different paths starting with the "+
+                        "given suffix. Do not include the TSV extension!")
+    parser.add_argument("--plots",
+                        help="A suffix (string) with which a path will be "+
+                        "created. Then, multiple PNG plots will be written "+
+                        "to different paths starting with the given suffix. "+
+                        "Do not include the PNG extension!")
 
     # file-name: positional arg.
 #    parser.add_argument('filename', type=str, help='Path to ... file-name')
@@ -1410,6 +1490,7 @@ if __name__ == '__main__':
             df_indexfile.iloc[:,0].to_dict())
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
+    # Write table summaries
     if args.summary:
         # Store reclassification dataframe
         repeats.df_reclassification.to_csv(
@@ -1421,5 +1502,12 @@ if __name__ == '__main__':
             dfsum.round(2).to_csv(
                 str(args.summary)+"_"+add_to_path+".tsv",  # file-name
                 sep="\t", na_rep="NA", index=False)
+    # Write PNG figures
+    if args.plots:
+        plot_histolike_recursively(
+            df=repeats.df, value_column="perc_divg",
+            categorical_columns=["class", "order", "superfam"],
+            hueby_column="Species", title=args.plots + "_",
+            minmaxing=None)
 
 
