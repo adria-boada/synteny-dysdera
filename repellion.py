@@ -1279,22 +1279,18 @@ class Repeats:
         approached at the level of "class", "subclass", "order", and
         "superfamily".
         """
-        df_sum_byclass = self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "sequid_type", "class"])
-        df_sum_bysubclass = self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "sequid_type", "class", "subclass"])
-        df_sum_byorder = self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "sequid_type", "class", "subclass", "order"])
-        df_sum_bysuperfam = self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "sequid_type", "class", "subclass", "order", "superfam"])
-        df_sum_byspecies = self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "class"])
-
-        answer = {"df_sum_byclass": df_sum_byclass,
-                  "df_sum_bysubclass": df_sum_bysubclass,
-                  "df_sum_byorder": df_sum_byorder,
-                  "df_sum_bysuperfam": df_sum_bysuperfam,
-                  "df_sum_byspecies": df_sum_byspecies,
+        answer = {"df_aggby_spec_seq_class": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class"]),
+                  "df_aggby_spec_seq_class_subc": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass"]),
+                  "df_aggby_spec_seq_class_subc_ord": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass", "order"]),
+                  "df_aggby_spec_seq_class_subc_ord_supf": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "sequid_type", "class", "subclass", "order", "superfam"]),
+                  "df_aggby_spec_class": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "class"]),
+                  "df_aggby_spec_class_ord_supf": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "class", "order", "superfam"]),
                   }
         return answer
 
@@ -1464,14 +1460,6 @@ if __name__ == '__main__':
                         "to different paths starting with the given suffix. "+
                         "Do not include the PNG extension!")
 
-    # file-name: positional arg.
-#    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
-
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
 
@@ -1504,10 +1492,13 @@ if __name__ == '__main__':
             sep="\t", na_rep="NA", index=True)
         # Store summary dataframes.
         for key, dfsum in repeats.dict_df_summary.items():
-            add_to_path = key.split("_")[-1]
-            dfsum.round(2).to_csv(
-                str(args.summary)+"_"+add_to_path+".tsv",  # file-name
-                sep="\t", na_rep="NA", index=False)
+            add_to_path = key.split("_")[2:]
+            add_to_path = '_'.join(add_to_path)
+            filename = str(args.summary) + "_" + add_to_path + ".tsv"
+            dfsum.to_csv(
+                filename, sep="\t", na_rep="NA", index=False, decimal=".",
+                # Write up to five decimal places; keep trailing zeroes.
+                float_format="%.5f")
     # Write PNG figures
     if args.plots:
         plot_histolike_recursively(
