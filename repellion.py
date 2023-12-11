@@ -1301,8 +1301,8 @@ class Repeats:
             ["Species", "sequid_type", "class", "subclass", "order", "superfam"]),
                   "df_aggby_spec_class": self.aggregate_dfsum_by_agglist(df_summary,
             ["Species", "class"]),
-                  "df_aggby_spec_class_ord_supf": self.aggregate_dfsum_by_agglist(df_summary,
-            ["Species", "class", "order", "superfam"]),
+                  "df_aggby_spec_class_subc_ord_supf": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "class", "subclass", "order", "superfam"]),
                   }
         return answer
 
