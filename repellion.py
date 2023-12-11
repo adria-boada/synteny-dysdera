@@ -387,7 +387,8 @@ class Repeats:
         obj_cols = df.select_dtypes("object").columns
         df[obj_cols] = df[obj_cols].astype("category")
         # Round float columns, like "perc_divg". Otherwise pd.Series.mode() is
-        # very unprecise. RepeatMasker returns up to one decimal of precision.
+        # very unprecise. RepeatMasker returns up to one decimal of precision,
+        # so... it shouldn't affect much?
         df = df.round(1)
 
         # Reclassify repeat types into 4 new columns.
@@ -472,6 +473,17 @@ class Repeats:
             # Once we have made sure these columns are in the df, sort it:
             dict_df_summary[key] = dict_df_summary[key].sort_values(
                 by=list_sorting_cols, kind="mergesort")
+
+            # We want to introduce np.nan to pandas.DataFrame "int" column;
+            # Nonrepetitive_fraction cannot have a count of REs (numele)!!!
+            # np.nan values are floats. The dtype has to be changed to "Int64"
+            # (capitalised "Int"!!!).
+            int_cols = dict_df_summary[key].select_dtypes("integer").columns
+            dict_df_summary[key][int_cols] = (
+                dict_df_summary[key][int_cols].astype("Int64"))
+            dict_df_summary[key].loc[
+                dict_df_summary[key]["class"]=="Nonrepetitive_fraction",
+                ["naive_numele", "best_numele"]] = pd.NA
 
         # Print the top of the most common "perc_divg" values (for debug
         # purposes; compare with pd.Series.mode)
@@ -1231,13 +1243,13 @@ class Repeats:
                     "superfam": ["NA"] *2,
                     # it is not possible to combine "NA" in an int column;
                     # instead of "NA" num. of ele. use zero.
-                    "naive_numele": [rep_fractions["naive_numele"], 0],
+                    "naive_numele": [rep_fractions["naive_numele"], pd.NA],
                     "naive_bpsum": [rep_fractions["naive_bpsum"],
                         # Non-repetitive = (SEQ.LENGTH - REP.LENGTH)
                                     seqsizes_dict[species][seq] -
                                     rep_fractions["naive_bpsum"]],
                     # instead of "NA" num. of ele. use zero.
-                    "best_numele": [rep_fractions["best_numele"], 0],
+                    "best_numele": [rep_fractions["best_numele"], pd.NA],
                     "best_bpsum": [rep_fractions["best_bpsum"],
                                    seqsizes_dict[species][seq] -
                                    rep_fractions["best_bpsum"]],
