@@ -1445,6 +1445,90 @@ def plot_histolike_recursively(
 
     return None
 
+def plot_histogram_recursively(
+    df, value_column: str,
+    categorical_columns: list, hueby_column: str=None,
+    title: str="", yaxis_relative=True, ):
+    """
+    Plot a column `value_column` of a pandas DataFrame. Plot local minima and
+    maxima as red and green (respectively) scatter points.
+
+    Input
+    =====
+
+    + title: Serves as the plot title. Furthermore, it is added as a prefix to
+      the filename of all generated PNG files.
+
+    + minmaxing: An integer >=1 or zero/False. It is passed to the parameter
+      `order` of `scipy.signal.argrelextrema`. It determines the sensitivity of
+      the algorithm; the higher the `minmaxing` value, the less sensitive (less
+      local minima or maxima). Adjust this value depending on the prevalence of
+      noise in your datasets. To disable the search of local minima and maxima,
+      pass a value of zero/False.
+    """
+    # For each `category` in the zeroeth column of the list
+    # `categorical_columns`:
+    for category in df[categorical_columns[0]].unique():
+        # Filter `df` by `category` within each for-loop.
+        bool_filter = (df[categorical_columns[0]] == category)
+        df_filtered = df.loc[bool_filter]
+        # Obtain the title that will be used in the current plot.
+        current_title = title + category
+        # Try to find further categorical subdivisions in the list of
+        # categorical columns. Count all combinations of unique categories.
+        checkval = df_filtered.drop_duplicates(
+            subset=categorical_columns)[categorical_columns].shape[0]
+        # If `checkval` is above 1 there are further subdivisions of the `df`
+        # (more than one combination). Run this function recursively at a lower
+        # level (one category down the list) with the filtered `df`.
+        if checkval > 1:
+            plot_histogram_recursively(
+                # Run with filtered df.
+                df=df_filtered,
+                value_column=value_column,
+                # Run one category down the list (recursive aspect)
+                categorical_columns=categorical_columns[1:],
+                hueby_column=hueby_column,
+                title=current_title + "_",
+                yaxis_relative=yaxis_relative)
+
+        # Now, the plotting section.
+        # If a hueby_column was specified, start by iterating across it.
+        if hueby_column:
+            # Init a DataFrame where value counts will be concatenated.
+            df_plot = pd.DataFrame()
+            for hue in df_filtered[hueby_column].unique():
+                # Filter by `hue` categories and create a Series of
+                # value_counts.
+                valcounts_series = (
+                    df_filtered.loc[df_filtered[hueby_column] == hue,
+                                    value_column]
+                    ).value_counts(normalize=yaxis_relative).sort_index(
+                    ).to_frame()
+                # Label these values with their hue and concatenate to main df.
+                valcounts_series['hue'] = hue
+                df_plot = pd.concat([df_plot, valcounts_series])
+            # Lastly, with the value counts, plot them as an histogram.
+            sns.histplot(x=df_plot.index, weights=df_plot[value_column],
+                         hue=df_plot["hue"], binwidth=1, multiple="layer",
+                         # Colors for each species (it should not be a static
+                         # variable, but parameterised by the function).
+                         palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+                                  "b": "brown"})
+        else:
+            pass # only works hueing atm
+            # Es podria crear una columna buida '1' i destriar segons aquesta
+            # columna (irresponsable?).
+
+        plt.title(current_title)
+        #plt.legend()
+        plt.tight_layout()
+        plt.savefig(current_title+".png", dpi=500,)
+        # Close the plt.axes or they will leak to the next figures.
+        plt.close()
+
+    return None
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1513,10 +1597,9 @@ if __name__ == '__main__':
                 float_format="%.5f")
     # Write PNG figures
     if args.plots:
-        plot_histolike_recursively(
+        plot_histogram_recursively(
             df=repeats.df, value_column="perc_divg",
             categorical_columns=["class", "order", "superfam"],
-            hueby_column="Species", title=args.plots + "_",
-            minmaxing=None)
+            hueby_column="Species", title=args.plots + "_", )
 
 
