@@ -1343,12 +1343,25 @@ class Repeats:
                                      right_on=list_columns)
         # Make sure that the dtypes of `df_summary` are integers/floats where
         # necessary.
-        dict_assign_dtypes = {"naive_numele": "int", "naive_bpsum": "int",
-                              "best_numele": "int", "best_bpsum": "int",
-                              "algor_bpsum": "int", "divg_median": "float64",
+        dict_assign_dtypes = {"naive_numele": "Int64", "naive_bpsum": "Int64",
+                              "best_numele": "Int64", "best_bpsum": "Int64",
+                              "algor_bpsum": "Int64", "divg_median": "float64",
                               "divg_mean": "float64", "divg_modeBeg": "float64",
                               "divg_modeEnd": "float64"}
         df_summary = df_summary.astype(dict_assign_dtypes)
+        # Evaluate `mode` columns: are there multiple modes? If so, assign them
+        # `pd.NA`.
+        df_summary["divg_modeRaw"] = 0
+        df_summary.loc[df_summary["divg_modeEnd"]==df_summary["divg_modeBeg"],
+                       "divg_modeRaw"] = (
+        df_summary.loc[df_summary["divg_modeEnd"]==df_summary["divg_modeBeg"],
+                       "divg_modeBeg"] )
+        df_summary.loc[df_summary["divg_modeEnd"]!=df_summary["divg_modeBeg"],
+                       "divg_modeRaw"] = np.nan
+        # Drop the now redundant "Beg" and "End" mode columns.
+        df_summary = df_summary.drop(columns=["divg_modeBeg", "divg_modeEnd"])
+        df_summary["divg_modeRaw"] = df_summary["divg_modeRaw"].astype("float64")
+
         # Approximate amount of substitutions (base pairs * divergence):
         df_summary["divg_median_x_algor_bpsum"] = (
             df_summary["divg_median"] *
