@@ -1335,7 +1335,12 @@ class Repeats:
         # 'most common' values; take the first and the last one in two columns.
                             divg_modeBeg=lambda x: pd.Series.mode(x)[0],
                             divg_modeEnd=lambda x: pd.Series.mode(x)[
-                                len(pd.Series.mode(x))-1])
+                                len(pd.Series.mode(x))-1],
+        # Get the floor of the series and apply the mode to it (mode with
+        # intervals/bins of one divergence percent).
+                            divg_modeFloor=lambda x:
+                             pd.Series.mode(np.floor(x))[0],
+                             )
         # Join the estimators of divergence with the categories in `df_summary`
         df_summary = df_summary.merge(df_sum_diverg.reset_index(),
                                      how="outer",
