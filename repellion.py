@@ -1466,7 +1466,7 @@ def plot_histolike_recursively(
 def plot_histogram_recursively(
     df, value_column: str,
     categorical_columns: list, hueby_column: str=None,
-    title: str="", yaxis_relative=True, ):
+    title: str="", yaxis_relative=True, multiple="layer"):
     """
     Plot a column `value_column` of a pandas DataFrame. Plot local minima and
     maxima as red and green (respectively) scatter points.
@@ -1483,6 +1483,9 @@ def plot_histogram_recursively(
       local minima or maxima). Adjust this value depending on the prevalence of
       noise in your datasets. To disable the search of local minima and maxima,
       pass a value of zero/False.
+
+    + multiple: String. Which style will be used by `seaborn.histplot()`
+      multiple parameter.
     """
     # For each `category` in the zeroeth column of the list
     # `categorical_columns`:
@@ -1524,23 +1527,26 @@ def plot_histogram_recursively(
                     ).value_counts(normalize=yaxis_relative).sort_index(
                     ).to_frame()
                 # Label these values with their hue and concatenate to main df.
-                valcounts_series['hue'] = hue
+                valcounts_series[hueby_column] = hue
                 df_plot = pd.concat([df_plot, valcounts_series])
             # Lastly, with the value counts, plot them as an histogram.
-            sns.histplot(x=df_plot.index, weights=df_plot[value_column],
-                         hue=df_plot["hue"], binwidth=1, multiple="layer",
+            ax = sns.histplot(x=df_plot.index, weights=df_plot[value_column],
+                         hue=df_plot[hueby_column], binwidth=1, kde=True,
+                         multiple=multiple, legend=True,
                          # Colors for each species (it should not be a static
                          # variable, but parameterised by the function).
                          palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
-                                  "b": "brown"})
+                                  "b": "brown"},)
         else:
             pass # only works hueing atm
             # Es podria crear una columna buida '1' i destriar segons aquesta
             # columna (irresponsable?).
 
         plt.title(current_title)
-        #plt.legend()
-        plt.tight_layout()
+        #ax.legend_.set_title("debug")#DEBUG
+        # Reduce the linewidth of the patches to be minimalistic.
+        for patch in ax.legend_.get_patches():
+            patch.set_linewidth(0.5)
         plt.savefig(current_title+".png", dpi=500,)
         # Close the plt.axes or they will leak to the next figures.
         plt.close()
@@ -1573,6 +1579,8 @@ if __name__ == '__main__':
                         "created. Then, multiple PNG plots will be written "+
                         "to different paths starting with the given suffix. "+
                         "Do not include the PNG extension!")
+    parser.add_argument("--matplotlib_style",
+                        help="The basename of a file in ``")
 
     args = parser.parse_args()
     # call a value: args.operacio or args.filename.
@@ -1598,6 +1606,7 @@ if __name__ == '__main__':
             df_indexfile.iloc[:,0].to_dict())
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
+
     # Write table summaries
     if args.summary:
         # Store reclassification dataframe
@@ -1613,6 +1622,10 @@ if __name__ == '__main__':
                 filename, sep="\t", na_rep="NA", index=False, decimal=".",
                 # Write up to five decimal places; keep trailing zeroes.
                 float_format="%.5f")
+
+    # Set the path to the matplotlib.style file.
+    if args.matplotlib_style:
+        plt.style.use(args.matplotlib_style)
     # Write PNG figures
     if args.plots:
         plot_histogram_recursively(
