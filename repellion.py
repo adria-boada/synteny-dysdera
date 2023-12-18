@@ -831,15 +831,17 @@ class Repeats:
             ["class", "subclass", "order", "superfam"]
         ] = ("DNA", "1", "NA", "Zator")
 
+        # Both MITE and nMITE are difficult to assign to "taxons"; these
+        # attributes are not unique to any one clade of repeats...
+        # I'd rather classify them as no further than "DNA" (all else unknown).
         df.loc[
             df["default_repclass"].str.contains("ClassII_MITE"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "NA", "MITE")
-
+        ] = ("DNA", "1", "NA", "NA")
         df.loc[
             df["default_repclass"].str.contains("ClassII_nMITE"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "NA", "nMITE")
+        ] = ("DNA", "1", "NA", "NA")
 
         df.loc[
             df["default_repclass"].str.contains("DNA") &
