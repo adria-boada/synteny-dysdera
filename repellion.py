@@ -1210,9 +1210,9 @@ class Repeats:
             print(" + Naive sum of base pairs: "+str(naive_bpsum)+
                   " / 100.0%")
             print(" + Best sum of base pairs: "+str(best_bpsum)+
-                  " / "+str(round((best_bpsum/naive_bpsum)*100, 1))+"%")
+                  " / "+str(round((best_bpsum/naive_bpsum)*100, 5))+"%")
             print(" + Algor. sum of base pairs: "+str(algor_bpsum)+
-                  " / "+str(round((algor_bpsum/naive_bpsum)*100, 1))+"%")
+                  " / "+str(round((algor_bpsum/naive_bpsum)*100, 5))+"%")
             print() # Aesthetic empty line between species and at the end.
 
         return None
