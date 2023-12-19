@@ -1538,7 +1538,7 @@ def plot_histogram_recursively(
                          # Colors for each species (it should not be a static
                          # variable, but parameterised by the function).
                          palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
-                                  "b": "brown"},)
+                                  "b": "brown", "Dsil": "green"},)
         else:
             pass # only works hueing atm
             # Es podria crear una columna buida '1' i destriar segons aquesta
@@ -1549,7 +1549,9 @@ def plot_histogram_recursively(
         # Reduce the linewidth of the patches to be minimalistic.
         for patch in ax.legend_.get_patches():
             patch.set_linewidth(0.5)
-        plt.savefig(current_title+".png", dpi=500,)
+
+        f = "svg" # format of the output plot
+        plt.savefig(current_title+"."+f, dpi=300, format=f)
         # Close the plt.axes or they will leak to the next figures.
         plt.close()
 
@@ -1633,6 +1635,6 @@ if __name__ == '__main__':
         plot_histogram_recursively(
             df=repeats.df, value_column="perc_divg",
             categorical_columns=["class", "order", "superfam"],
-            hueby_column="Species", title=args.plots + "_", )
+            hueby_column="Species", title=args.plots + "_", multiple="layer")
 
 
