@@ -1311,6 +1311,8 @@ class Repeats:
             ["Species", "class"]),
                   "df_aggby_spec_class_subc_ord_supf": self.aggregate_dfsum_by_agglist(df_summary,
             ["Species", "class", "subclass", "order", "superfam"]),
+                  "df_aggby_spec_class_subc_ord": self.aggregate_dfsum_by_agglist(df_summary,
+            ["Species", "class", "subclass", "order"]),
                   }
         return answer
 
