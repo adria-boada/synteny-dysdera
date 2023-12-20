@@ -473,6 +473,12 @@ class Repeats:
             # Once we have made sure these columns are in the df, sort it:
             dict_df_summary[key] = dict_df_summary[key].sort_values(
                 by=list_sorting_cols, kind="mergesort")
+            # Create a custom species order
+            custom_species_order = {"Dcatv33": 10, "Dcatv35":11, "Dcat": 12,
+                                    "Dtil": 13, "Dsil": 14}
+            dict_df_summary[key] = dict_df_summary[key].sort_values(
+                by=["Species"], kind="mergesort",
+                key=lambda x: x.replace(custom_species_order))
 
             # We want to introduce np.nan to pandas.DataFrame "int" column;
             # Nonrepetitive_fraction cannot have a count of REs (numele)!!!
@@ -1343,11 +1349,36 @@ class Repeats:
                             divg_modeFloor=lambda x:
                              pd.Series.mode(np.floor(x))[0],
                              )
+        # Assess global divergence (class "Repetitive_fraction") for each
+        # Species.
+        if "sequid_type" in list_columns:
+            list_repfrac_cols = ["Species", "sequid_type"]
+        else:
+            list_repfrac_cols = ["Species"]
+        df_tot_diverg = df.groupby(list_repfrac_cols, observed=True,)[
+            "perc_divg"].agg(divg_median="median", divg_mean="mean",
+                            divg_modeBeg=lambda x: pd.Series.mode(x)[0],
+                            divg_modeEnd=lambda x: pd.Series.mode(x)[
+                                len(pd.Series.mode(x))-1],
+                            divg_modeFloor=lambda x:
+                             pd.Series.mode(np.floor(x))[0],
+                             )
+        if "class" in list_columns:
+            df_tot_diverg["class"] = "Repetitive_fraction"
+        if "subclass" in list_columns:
+            df_tot_diverg["subclass"] = "NA"
+        if "order" in list_columns:
+            df_tot_diverg["order"] = "NA"
+        if "superfam" in list_columns:
+            df_tot_diverg["superfam"] = "NA"
+        df_sum_diverg = pd.concat([df_sum_diverg.reset_index(),
+                                   df_tot_diverg.reset_index()])
         # Join the estimators of divergence with the categories in `df_summary`
-        df_summary = df_summary.merge(df_sum_diverg.reset_index(),
+        df_summary = df_summary.merge(df_sum_diverg.reset_index(drop=True),
                                      how="outer",
                                      left_on=list_columns,
                                      right_on=list_columns)
+
         # Make sure that the dtypes of `df_summary` are integers/floats where
         # necessary.
         dict_assign_dtypes = {"naive_numele": "Int64", "naive_bpsum": "Int64",
@@ -1533,7 +1564,8 @@ def plot_histogram_recursively(
                 df_plot = pd.concat([df_plot, valcounts_series])
             # Lastly, with the value counts, plot them as an histogram.
             ax = sns.histplot(x=df_plot.index, weights=df_plot[value_column],
-                         hue=df_plot[hueby_column], binwidth=1, kde=True,
+                         hue=df_plot[hueby_column], binwidth=1,
+                         kde=True, kde_kws={"bw_adjust": .25},
                          multiple=multiple, legend=True,
                          # Colors for each species (it should not be a static
                          # variable, but parameterised by the function).
