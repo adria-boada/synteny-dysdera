@@ -1572,7 +1572,8 @@ def plot_histogram_recursively(
                          # Colors for each species (it should not be a static
                          # variable, but parameterised by the function).
                          palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
-                                  "b": "brown", "Dsil": "green"},)
+                                  "Dsil": "green", "Dcatv33": "#eb8f46",
+                                  "Dcatv35": "#eb8f46"},)
         else:
             pass # only works hueing atm
             # Es podria crear una columna buida '1' i destriar segons aquesta
