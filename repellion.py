@@ -1595,9 +1595,10 @@ def plot_histogram_recursively(
 
 def plot_pies(
     df_summary: pd.DataFrame, value_column: str,
-    categorical_column: str, title: str="",
+    categorical_column: str,
     explode_column: str, explode_max: float=1,
-    threshold_small_repgroup: float=5, ):
+    threshold_small_repgroup: float=5,
+    colours="salmon", title: str=""):
     """
     Plot a column `value_column` of a pandas DataFrame.
 
@@ -1611,6 +1612,7 @@ def plot_pies(
     + title: Serves as the plot title. Furthermore, it is added as a prefix to
       the filename of all generated PNG files.
     """
+    Printing("Plotting pies for the category `"+categorical_column+"`").status()
     # Copia el DataFrame, per evitar sobreescriure dades.
     df = df_summary.copy()
 
@@ -1618,7 +1620,6 @@ def plot_pies(
     # segons una "occupancy" donada, arbitrària). Suma els parells de bases de
     # la fracció repetitiva i no repetitiva.
     df["threshold"] = 0
-
     for species in df["Species"].unique():
         # Compute "total basepairs" (genome length).
         total_basepairs = df.loc[
@@ -1642,35 +1643,85 @@ def plot_pies(
     for species in df["Species"].unique():
         value_sum = df.loc[
             # Find all rows for which the category is in the list.
-            df[categorical_column].isin(remaining_categories_list) &
-            df["Species"] == species,
+            (df[categorical_column].isin(remaining_categories_list)) &
+            (df["Species"] == species),
             # ...and sum all the values of `value_column`.
             value_column].sum()
         new_row = {
-            categorical_column: "Remaining",
-            value_column: value_sum,
-            explode_column: 0,
-            "colour": "lightgrey", }
-
-    # Assigna colors a cada categoria; es pot assignar manualment a partir d'un
-    # diccionari o generar una paleta de colors automàticament (mitjançant
-    # seaborn color palettes).
-    # The palette might've to be passed as an argument.
-    # Set a palette of colours for the main classes.
-    # For available shades, take a look at:
-    # https://matplotlib.org/stable/gallery/color/named_colors.html
-    class_palette = {
-        "DNA": "mediumslateblue",
-        "Other": "orange",
-        "Retrotransposon": "salmon",
-        "Unknown": "olive",
-        "Tandem_repeat": "yellow",
-        "Nonrepetitive_fraction": "lightgrey",
-        "Remaining": "plum",
-    }
+            "Species": [species],
+            categorical_column: ["Remaining"],
+            value_column: [value_sum],
+            explode_column: [0],
+            "colour": ["plum"], }
+        df = pd.concat([df, pd.DataFrame(new_row)], ignore_index=True)
 
     # Remove the overall repetitive fraction sum of basepairs.
-    df = df_summary.loc[df_summary["class"] != "Repetitive_fraction"]
+    df = df.loc[df[categorical_column] != "Repetitive_fraction"]
+    df = df.loc[~ df[categorical_column].isin(remaining_categories_list)]
+
+    # Assigna colors a cada categoria; es pot assignar manualment a partir d'un
+    # diccionari o generar una paleta/gradient de colors automàticament
+    # (mitjançant seaborn color palettes).
+    # For available shades/colours, take a look at:
+    # https://matplotlib.org/stable/gallery/color/named_colors.html
+    if type(colours) == type(dict()):
+        # Initialise the colour column as black (finds unassigned categories).
+        # Do not assign black to "Remaining"! It is already assigned.
+        df.loc[
+            df[categorical_column] != "Remaining",
+            "colour"] = "b" # `b` for black
+        # Manually assigning colours to categories.
+        for category_key, colour_value in colours.items():
+            df.loc[
+                df[categorical_column] == category_key,
+            "colour"] = colour_value
+
+    elif type(colours) == type(str()):
+        # Colour palette/gradient generated from a given shade.
+        first_species = df["Species"][0]
+        categories_plotted = df.loc[
+            (df["Species"] == first_species) &
+            # Check values *not* (tilde) in the list.
+            (~ df[categorical_column].isin(remaining_categories_list)),
+            categorical_column].unique()
+        # Use a gradient from `colours` to white.
+        colours = "light:" + colours
+        colours_list = sns.color_palette(colours, len(categories_plotted))
+        # Colour the biggest slices and leave the smallest ones as white.
+        colours_list.reverse()
+        colours_dict = dict(zip(
+            categories_plotted,   # keys: categories
+            colours_list))        # values: colours
+        # Now assign these generated colours to the categories in the df. They
+        # are in RGB format (tuple of three floats). Sketchy method to assign.
+        for category_key, colour_value in colours_dict.items():
+            mask = df[categorical_column] == category_key
+            df.loc[
+                mask, "colour"] = pd.Series([
+                    colour_value for x in range(df.loc[mask].shape[0])],
+                    index=df.loc[mask].index)
+
+    else:
+        # No proper type for colours given?
+        Printing("`Colour` argument is neither str() nor dict() type").error()
+        return None
+
+    # Set a palette of colours for the main classes.
+    ## class_palette = {
+    ##    "DNA": "mediumslateblue",
+    ##    "Other": "orange",
+    ##    "Retrotransposon": "salmon",
+    ##    "Unknown": "olive",
+    ##    "Tandem_repeat": "yellow",
+    ##    "Nonrepetitive_fraction": "lightgrey",
+    ##    "Remaining": "plum",
+    ## }
+
+    return df # DEBUG
+
+    # For chromosome regexes and species pairs, create pies.
+
+    # Fill NA values in explosive column with zeroes!
 
     # For each `category` in the zeroeth column of the list
     # `categorical_columns` try to find further subdivisions:
