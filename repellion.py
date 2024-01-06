@@ -623,6 +623,7 @@ class Repeats:
 
         df.loc[
             (df["default_repclass"].str.contains("_LTR")) |
+            (df["default_repclass"].str.contains("^LTR/")) |
             (df["default_repclass"] == "LTR"),
             ["class", "subclass", "order", "superfam"]
         ] = ("Retrotransposon", "NA", "LTR", "NA")
@@ -727,18 +728,18 @@ class Repeats:
             df["default_repclass"].str.contains("LTR") &
             df["default_repclass"].str.contains("DIRS"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("Retrotransposon", "NA", "DIRS", "DIRS")
+        ] = ("Retrotransposon", "NA", "YR", "DIRS")
 
         df.loc[
             df["default_repclass"].str.contains("LTR") &
             df["default_repclass"].str.contains("Ngaro"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("Retrotransposon", "NA", "DIRS", "Ngaro")
+        ] = ("Retrotransposon", "NA", "YR", "Ngaro")
 
         df.loc[
             df["default_repclass"].str.contains("LTR/Viper"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("Retrotransposon", "NA", "DIRS", "Viper")
+        ] = ("Retrotransposon", "NA", "YR", "Viper-group")
 
         df.loc[
             df["default_repclass"].str.contains("LTR/Pao") |
@@ -835,7 +836,7 @@ class Repeats:
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Zator"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "NA", "Zator")
+        ] = ("DNA", "1", "DDE", "Zator")
 
         # Both MITE and nMITE are difficult to assign to "taxons"; these
         # attributes are not unique to any one clade of repeats...
@@ -853,87 +854,87 @@ class Repeats:
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Academ"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Academ")
+        ] = ("DNA", "1", "DDE", "Academ")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("CMC")) |
             df["default_repclass"].str.contains("ClassII_DNA_CACTA"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "CACTA")
+        ] = ("DNA", "1", "DDE", "CACTA")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Dada")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Dada")
+        ] = ("DNA", "1", "DDE", "Dada")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Kolobok")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Kolobok")
+        ] = ("DNA", "1", "DDE", "Kolobok")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Ginger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Ginger")
+        ] = ("DNA", "1", "DDE", "Ginger")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("MULE")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "MULE")
+        ] = ("DNA", "1", "DDE", "MULE")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Merlin")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Merlin")
+        ] = ("DNA", "1", "DDE", "Merlin")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA/P")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "P")
+        ] = ("DNA", "1", "DDE", "P")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA/PIF")) |
             (df["default_repclass"].str.contains("ClassII_DNA_Harbinger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "PIF-Harbinger")
+        ] = ("DNA", "1", "DDE", "PIF-Harbinger")
 
         df.loc[
             (df["default_repclass"].str.contains("PiggyBac")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "PiggyBac")
+        ] = ("DNA", "1", "DDE", "PiggyBac")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Sola")
+        ] = ("DNA", "1", "DDE", "Sola")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Sola")
+        ] = ("DNA", "1", "DDE", "Sola")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA/TcMar") |
             df["default_repclass"].str.contains("DNA_TcMar")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "TcMar")
+        ] = ("DNA", "1", "DDE", "TcMar")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("hAT")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "hAT")
+        ] = ("DNA", "1", "DDE", "hAT")
 
         df.loc[
             (df["default_repclass"].str.contains("DNA_Mutator")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "TIR", "Mutator")
+        ] = ("DNA", "1", "DDE", "Mutator")
 
         df.loc[
             df["default_repclass"].str.contains("IS3EU"),
@@ -1529,7 +1530,7 @@ def plot_histogram_recursively(
         bool_filter = (df[categorical_columns[0]] == category)
         df_filtered = df.loc[bool_filter]
         # Obtain the title that will be used in the current plot.
-        current_title = title + category
+        current_title = title + "_" + category
         # Try to find further categorical subdivisions in the list of
         # categorical columns. Count all combinations of unique categories.
         checkval = df_filtered.drop_duplicates(
@@ -1545,7 +1546,7 @@ def plot_histogram_recursively(
                 # Run one category down the list (recursive aspect)
                 categorical_columns=categorical_columns[1:],
                 hueby_column=hueby_column,
-                title=current_title + "_",
+                title=current_title,
                 yaxis_relative=yaxis_relative)
 
         # Now, the plotting section.
@@ -1589,6 +1590,129 @@ def plot_histogram_recursively(
         plt.savefig(current_title+"."+f, dpi=300, format=f)
         # Close the plt.axes or they will leak to the next figures.
         plt.close()
+
+    return None
+
+def plot_pies(
+    df_summary: pd.DataFrame, value_column: str,
+    categorical_column: str, title: str="",
+    explode_column: str, explode_max: float=1,
+    threshold_small_repgroup: float=5, ):
+    """
+    Plot a column `value_column` of a pandas DataFrame.
+
+    Input
+    =====
+
+    + threshold_small_repgroup: Percentage ranging from 0 to 100. Will divide
+      REs between "small" groups (below threshold in occupancy) and "big" groups
+      (above threshold in occupancy).
+
+    + title: Serves as the plot title. Furthermore, it is added as a prefix to
+      the filename of all generated PNG files.
+    """
+    # Copia el DataFrame, per evitar sobreescriure dades.
+    df = df_summary.copy()
+
+    # Obtenir el llindar que divideix grups "petits" i "grans" (importància
+    # segons una "occupancy" donada, arbitrària). Suma els parells de bases de
+    # la fracció repetitiva i no repetitiva.
+    df["threshold"] = 0
+
+    for species in df["Species"].unique():
+        # Compute "total basepairs" (genome length).
+        total_basepairs = df.loc[
+            (df[categorical_column].str.contains("fraction")) &
+            (df["Species"] == species),
+            value_column].sum()
+        df.loc[df["Species"] == species,
+            # El llindar es calcula multiplicant el llindar (percentatge) pel
+            # total de parell de bases (p. ex., 5% * 100bp; llindar = 5bp).
+            "threshold"] = (threshold_small_repgroup/100)*total_basepairs
+
+    # Segons el llindar obtingut, revisa quines fileres es troben per sota del
+    # llindar. Agrupa aquestes categories dins una llista. Més endavant les
+    # agruparem totes al grup "Remaining".
+    remaining_categories_list = list(
+        df.loc[df[value_column] < df["threshold"],
+               categorical_column].unique())
+
+    # Genera la nova categoria "Remaining" (suma de bp de
+    # `remaining_categories_list`).
+    for species in df["Species"].unique():
+        value_sum = df.loc[
+            # Find all rows for which the category is in the list.
+            df[categorical_column].isin(remaining_categories_list) &
+            df["Species"] == species,
+            # ...and sum all the values of `value_column`.
+            value_column].sum()
+        new_row = {
+            categorical_column: "Remaining",
+            value_column: value_sum,
+            explode_column: 0,
+            "colour": "lightgrey", }
+
+    # Assigna colors a cada categoria; es pot assignar manualment a partir d'un
+    # diccionari o generar una paleta de colors automàticament (mitjançant
+    # seaborn color palettes).
+    # The palette might've to be passed as an argument.
+    # Set a palette of colours for the main classes.
+    # For available shades, take a look at:
+    # https://matplotlib.org/stable/gallery/color/named_colors.html
+    class_palette = {
+        "DNA": "mediumslateblue",
+        "Other": "orange",
+        "Retrotransposon": "salmon",
+        "Unknown": "olive",
+        "Tandem_repeat": "yellow",
+        "Nonrepetitive_fraction": "lightgrey",
+        "Remaining": "plum",
+    }
+
+    # Remove the overall repetitive fraction sum of basepairs.
+    df = df_summary.loc[df_summary["class"] != "Repetitive_fraction"]
+
+    # For each `category` in the zeroeth column of the list
+    # `categorical_columns` try to find further subdivisions:
+    for category in df[categorical_columns[0]].unique():
+        # Filter `df` by `category` within each for-loop.
+        bool_filter = (df[categorical_columns[0]] == category)
+        df_filtered = df.loc[bool_filter]
+        # Obtain the title that will be passed recursively.
+        passed_title = title + "_" + category
+        # Try to find further categorical subdivisions in the list of
+        # categorical columns. Count all combinations of unique categories.
+        checkval = df_filtered.drop_duplicates(
+            subset=categorical_columns)[categorical_columns].shape[0]
+        # If `checkval` is above 1 there are further subdivisions of the `df`
+        # (more than one combination). Run this function recursively at a lower
+        # level (one category down the list) with the filtered `df`.
+        if checkval > 1:
+            plot_pies_recursively(
+                # Run with filtered df.
+                df=df_filtered,
+                value_column=value_column,
+                # Run one category down the list; splicing [1:] allows the
+                # function to be recursive.
+                categorical_columns=categorical_columns[1:],
+                title=passed_title)
+
+    # Now, the plotting section (unbound from the recursive category loop)
+    # Count the amount of unique species (three pies per species).
+    num_species = len(list(df["Species"].unique()))
+    fig, axs = plt.subplots(nrows=3, ncols=num_species)
+
+
+    plt.title(current_title)
+    #ax.legend_.set_title("debug")#DEBUG
+    # Reduce the linewidth of the patches to be minimalistic.
+    for patch in ax.legend_.get_patches():
+        patch.set_linewidth(0.5)
+
+    f = "svg" # format of the output plot
+    plt.savefig(current_title+"."+f, dpi=300, format=f)
+    # Close the plt.axes or they will leak to the next figures.
+    plt.close()
 
     return None
 
@@ -1670,6 +1794,6 @@ if __name__ == '__main__':
         plot_histogram_recursively(
             df=repeats.df, value_column="perc_divg",
             categorical_columns=["class", "order", "superfam"],
-            hueby_column="Species", title=args.plots + "_", multiple="layer")
+            hueby_column="Species", title=args.plots, multiple="layer")
 
 
