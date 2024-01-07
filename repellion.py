@@ -1596,9 +1596,13 @@ def plot_histogram_recursively(
 def plot_pies(
     df_summary: pd.DataFrame, value_column: str,
     categorical_column: str,
-    explode_column: str, explode_max: float=1,
+    explode_column: str, explode_max: float=1/100,
+    #genome_partition_regexes: dict={
+    #    "Genome": ".*",
+    #    "Autosomes": "chr\d",
+    #    "Sex chr.": "chrX"},
     threshold_small_repgroup: float=5,
-    colours="salmon", title: str=""):
+    colours="salmon", title: str="pies"):
     """
     Plot a column `value_column` of a pandas DataFrame.
 
@@ -1613,8 +1617,9 @@ def plot_pies(
       the filename of all generated PNG files.
     """
     Printing("Plotting pies for the category `"+categorical_column+"`").status()
-    # Copia el DataFrame, per evitar sobreescriure dades.
-    df = df_summary.copy()
+    # Copia el DataFrame, per evitar sobreescriure dades. A més a més, elimina
+    # la suma total de REs (Repetitive_fraction).
+    df = df_summary.copy().loc[df_summary[categorical_column] != "Repetitive_fraction"]
 
     # Obtenir el llindar que divideix grups "petits" i "grans" (importància
     # segons una "occupancy" donada, arbitrària). Suma els parells de bases de
@@ -1623,7 +1628,6 @@ def plot_pies(
     for species in df["Species"].unique():
         # Compute "total basepairs" (genome length).
         total_basepairs = df.loc[
-            (df[categorical_column].str.contains("fraction")) &
             (df["Species"] == species),
             value_column].sum()
         df.loc[df["Species"] == species,
@@ -1636,10 +1640,24 @@ def plot_pies(
     # agruparem totes al grup "Remaining".
     remaining_categories_list = list(
         df.loc[df[value_column] < df["threshold"],
-               categorical_column].unique())
+               categorical_column])
+    # Elimina tan sols si en totes les espècies es troba per sota del llindar.
+    num_species = len(df["Species"].unique())
+    remain = list()
+    for category in set(remaining_categories_list):
+        if remaining_categories_list.count(category) == num_species:
+            remain.append(category)
+    remaining_categories_list = remain
 
     # Genera la nova categoria "Remaining" (suma de bp de
     # `remaining_categories_list`).
+    # Inicialitza un diccionari on guardar els valors rescatats.
+    remaining_categories_dict = {
+        "Species": [],
+        categorical_column: [],
+        value_column: [],
+        explode_column: [],
+        "colour": [], }
     for species in df["Species"].unique():
         value_sum = df.loc[
             # Find all rows for which the category is in the list.
@@ -1647,17 +1665,16 @@ def plot_pies(
             (df["Species"] == species),
             # ...and sum all the values of `value_column`.
             value_column].sum()
-        new_row = {
-            "Species": [species],
-            categorical_column: ["Remaining"],
-            value_column: [value_sum],
-            explode_column: [0],
-            "colour": ["plum"], }
-        df = pd.concat([df, pd.DataFrame(new_row)], ignore_index=True)
+        # Append values to lists in the dictionary.
+        remaining_categories_dict["Species"].append(species)
+        remaining_categories_dict[categorical_column].append("Remaining")
+        remaining_categories_dict[value_column].append(value_sum)
+        remaining_categories_dict[explode_column].append(0)
+        remaining_categories_dict["colour"].append("plum")
 
-    # Remove the overall repetitive fraction sum of basepairs.
-    df = df.loc[df[categorical_column] != "Repetitive_fraction"]
+    # Remove categories grouped in "Remaining".
     df = df.loc[~ df[categorical_column].isin(remaining_categories_list)]
+    print(remaining_categories_list)#debug
 
     # Assigna colors a cada categoria; es pot assignar manualment a partir d'un
     # diccionari o generar una paleta/gradient de colors automàticament
@@ -1678,9 +1695,7 @@ def plot_pies(
 
     elif type(colours) == type(str()):
         # Colour palette/gradient generated from a given shade.
-        first_species = df["Species"][0]
-        categories_plotted = df.loc[
-            (df["Species"] == first_species) &
+        categories_plotted = df.sort_values(value_column, ascending=False).loc[
             # Check values *not* (tilde) in the list.
             (~ df[categorical_column].isin(remaining_categories_list)),
             categorical_column].unique()
@@ -1717,51 +1732,39 @@ def plot_pies(
     ##    "Remaining": "plum",
     ## }
 
-    return df # DEBUG
-
-    # For chromosome regexes and species pairs, create pies.
-
     # Fill NA values in explosive column with zeroes!
+    df[explode_column] = df[explode_column].fillna(0)
+    # Ordena el dataframe segons la columna de valors.
+    df = df.sort_values(value_column, ascending=False)
+    # Concatena els valors "Remaining" amb la resta del dataframe.
+    df = pd.concat([df, pd.DataFrame(remaining_categories_dict)],
+                   ignore_index=True)
 
-    # For each `category` in the zeroeth column of the list
-    # `categorical_columns` try to find further subdivisions:
-    for category in df[categorical_columns[0]].unique():
-        # Filter `df` by `category` within each for-loop.
-        bool_filter = (df[categorical_columns[0]] == category)
-        df_filtered = df.loc[bool_filter]
-        # Obtain the title that will be passed recursively.
-        passed_title = title + "_" + category
-        # Try to find further categorical subdivisions in the list of
-        # categorical columns. Count all combinations of unique categories.
-        checkval = df_filtered.drop_duplicates(
-            subset=categorical_columns)[categorical_columns].shape[0]
-        # If `checkval` is above 1 there are further subdivisions of the `df`
-        # (more than one combination). Run this function recursively at a lower
-        # level (one category down the list) with the filtered `df`.
-        if checkval > 1:
-            plot_pies_recursively(
-                # Run with filtered df.
-                df=df_filtered,
-                value_column=value_column,
-                # Run one category down the list; splicing [1:] allows the
-                # function to be recursive.
-                categorical_columns=categorical_columns[1:],
-                title=passed_title)
-
-    # Now, the plotting section (unbound from the recursive category loop)
-    # Count the amount of unique species (three pies per species).
-    num_species = len(list(df["Species"].unique()))
-    fig, axs = plt.subplots(nrows=3, ncols=num_species)
-
-
-    plt.title(current_title)
-    #ax.legend_.set_title("debug")#DEBUG
-    # Reduce the linewidth of the patches to be minimalistic.
-    for patch in ax.legend_.get_patches():
-        patch.set_linewidth(0.5)
-
+    # For each species, create a pie.
+    fig, axs = plt.subplots(nrows=len(df["Species"].unique()),
+                            figsize=(16,20))
+    # Initialise `i` as a counter for axes.
+    i = 0
+    for species in df["Species"].unique():
+        # Filter the dataframe and create list of values to plot.
+        mask_sp = df["Species"] == species
+        df_filtered = df.copy().loc[mask_sp]
+        # Compute explode range in the pie.
+        df_filtered[explode_column] = df_filtered[explode_column] * explode_max
+        # Set up labels with a combination of "category", "value" and "explode".
+        df_filtered["labels"] = \
+            df_filtered[categorical_column].astype(str) + "_" + \
+            (df_filtered[value_column]/df_filtered[value_column].sum()). \
+                round(3).astype(str) + "_" + \
+            df_filtered[explode_column].round(2).astype(str)
+        axs[i].pie(x=value_column, labels="labels", colors="colour",
+                      explode=explode_column, data=df_filtered)
+        axs[i].set_title(species)
+        i += 1
+    #>fig.suptitle("By "+categorical_column)
+    plt.tight_layout()
     f = "svg" # format of the output plot
-    plt.savefig(current_title+"."+f, dpi=300, format=f)
+    plt.savefig(title+"."+f, dpi=300, format=f)
     # Close the plt.axes or they will leak to the next figures.
     plt.close()
 
