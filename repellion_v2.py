@@ -294,6 +294,8 @@ class Repeats(object):
 
         # Initialise a catalog of summary dataframe. Each one considers a
         # different grouping of the dataset.
+        Printing("Grouping the main dataframe by categorical columns, "+
+                 "thereby creating summarised dataframes.").status()
         self.catalog_df_summaries = dict()
         for main_categories in [["Species"],
                                 ["Species", "sequid_type"]]:
@@ -302,13 +304,16 @@ class Repeats(object):
                                     ["class", "subclass", "order"],
                                     ["class", "subclass", "order", "superfam"]]:
                 categories = list(main_categories) + list(secondary_group)
-                print(categories)#debug
                 self.catalog_df_summaries["_".join(categories)] = \
                     self.generate_summary_table(df, categories)
 
-        #>Printing("Writing summary DataFrames to the dictionary (Python var"+
-        #>         "iable) `self.dict_df_summary`.").status()
-        #>self.dict_df_summary = dict_df_summary
+        # Create a new catalog of summaries with a different (more concise)
+        # style.
+        Printing("Applying a style to the summary dataframes.").status()
+        self.catalog_df_summaries_concise = dict()
+        for key in self.catalog_df_summaries.keys():
+            self.catalog_df_summaries_concise[key] = \
+                self.style_julio_dysdera(self.catalog_df_summaries[key])
 
         Printing("Writing entire RepeatMasker DataFrame to "+
                  "the variable `self.df`.").status()
@@ -1018,7 +1023,7 @@ class Repeats(object):
         Prints and returns a pandas dataframe with the sum of basepairs obtained
         from each method.
         """
-        answer = dict()
+        answer = list()
         # Compute sum per species.
         for species in df["Species"].unique():
             mask_species = df["Species"] == species
@@ -1030,7 +1035,9 @@ class Repeats(object):
             genome_size = self.gensizes_dict[species]
             # Create a dataframe with the sum of base pairs.
             df_answer = pd.DataFrame(
-                data={"basepairs": [
+                data={
+                    "Species": [species]*3,
+                    "basepairs": [
                     method_1_bpsum,
                     method_2_bpsum,
                     method_3_bpsum]},
@@ -1040,13 +1047,15 @@ class Repeats(object):
             df_answer["perc_comparison"] = \
                 (df_answer["basepairs"]/method_1_bpsum)*100
             df_answer["perc_genome"] = (df_answer["basepairs"]/genome_size)*100
-
-            # Print basepair sum per species as a df in markdown format (without
-            # writing to a file).
-            print(" --- Overlapping summary in "+species+" ---")
-            print(df_answer.to_markdown(None))
             # Store the species' summary to return at the end.
-            answer[species] = df_answer
+            answer.append(df_answer)
+
+        # Concatenate the dataframes of all "Species" into a single one.
+        answer = pd.concat(answer)
+        # Print basepair sum per species as a df in markdown format (without
+        # writing to a file).
+        print(" --- Overlapping summary ---")
+        print(answer.to_markdown(None))
 
         return answer
 
@@ -1102,6 +1111,11 @@ class Repeats(object):
                 naive_div_modeFloor=pd.NamedAgg(column="perc_divg",
                     aggfunc=lambda x: pd.Series.mode(np.floor(x))[0]))
 
+        # Merge the multiple summaries into a single table/df.
+        df_summary = summary_naive.merge(
+            summary_best).merge(
+                summ_div_naive)
+
         # Aggregate the total RE fraction (genome occupancy) of each species.
         # Consider all RE types as a single RE category. Discover whether
         # 'species' and 'sequid_type' were included as categories.
@@ -1152,12 +1166,40 @@ class Repeats(object):
                 else:
                     totfrac_summary[column] = pd.NA
 
-        # Merge the multiple summaries into a single table/df.
-        df_summary = summary_naive.merge(
-            summary_best).merge(
-                summ_div_naive)
-        # Concatenate the total repetitive fraction to `df_summary`.
-        df_summary = pd.concat([df_summary, totfrac_summary])
+            # Compute non-repetitive basepairs (complimentary of repetitive
+            # fraction).
+            nonrep_summary = totfrac_summary.copy()
+            if "class" in nonrep_summary.columns:
+                nonrep_summary["class"] = "Nonrepetitive_fraction"
+            nonrep_summary[["naive_numele", "best_numele",
+                            "naive_div_medi", "naive_div_mean",
+                            "naive_div_modeBeg", "naive_div_modeEnd",
+                            "naive_div_modeFloor"]] = pd.NA
+            if main_agg_groups == ["Species"]:
+                # For each column with a base pair count, and for each row in
+                # the summary dataframe, compute the difference between species'
+                # genome and repetitive fraction... with list comprehension!
+                for basepair_column in ["naive_totbp", "naive_algbp",
+                                        "best_totbp", "best_algbp"]:
+                    nonrep_summary[basepair_column] = [
+                        self.gensizes_dict[sp] - repfrac \
+                        for sp, repfrac in \
+                        zip(totfrac_summary["Species"],
+                            totfrac_summary[basepair_column])]
+            elif main_agg_groups == ["Species", "sequid_type"]:
+                # Same as the previous `if` statement, but includes sequid where
+                # necessary.
+                for basepair_column in ["naive_totbp", "naive_algbp",
+                                        "best_totbp", "best_algbp"]:
+                    nonrep_summary[basepair_column] = [
+                        self.seqsizes_dict[sp][sequid] - repfrac \
+                        for sp, repfrac, sequid in \
+                        zip(totfrac_summary["Species"],
+                            totfrac_summary[basepair_column],
+                            totfrac_summary["sequid_type"])]
+
+            # Concatenate the total repetitive fraction to `df_summary`.
+            df_summary = pd.concat([df_summary, totfrac_summary, nonrep_summary])
 
         # Revise mode columns: is there multiple "most frequent" value?
         # If so, assign them `pd.NA`.
@@ -1175,8 +1217,70 @@ class Repeats(object):
         df_summary = df_summary.drop(columns=["naive_div_modeBeg",
                                               "naive_div_modeEnd"])
 
-        #TODO
-        # Nonrepetitive_fraction
+        return df_summary.reset_index(drop=True) \
+            .sort_values(by=categorical_columns)
+
+    def style_julio_dysdera(self, df_summary):
+        """
+        Applies the table aesthetics chosen by a dearest PI of mine, JR, to a
+        dearest spider genus of mine, *Dysdera*.
+
+        Input
+        -----
+
+        + df_summary: Summary dataframe obtained by grouping by categorical
+          columns using the function `generate_summary_table`.
+
+        Output
+        ------
+
+        Returns a stylized table.
+        """
+        # Create a copy of the dataframe. Avoid overwriting variables/data.
+        df_summary = df_summary.copy()
+        # Use a custom sorting key for classes and species.
+        custom_key_order = {"DNA": 10, "Retrotransposon": 11, "Other": 12,
+                            "Tandem_repeat": 13, "Unclassified": 14,
+                            "Repetitive_fraction": 15,
+                            "Nonrepetitive_fraction": 16,
+                            "Dcatv33": 10, "Dcatv35":11, "Dcat": 12,
+                            "Dtil": 13, "Dsil": 14}
+        # First of all, sort by the column "class" with the key
+        # "custom_key_order".
+        df_summary = df_summary.sort_values(
+            by="class",
+            key=lambda x: x.replace(custom_key_order))
+        if "sequid_type" in df_summary.columns:
+            # Use the kind of sort 'mergesort' to preserve the previous sort
+            # (stable algorithm). Otherwise subsequent sorts do not preserve,
+            # for instance, the "class" sort.
+            df_summary = df_summary.sort_values(
+                by="sequid_type", kind="mergesort")
+        df_summary = df_summary.sort_values(
+            by="Species", kind="mergesort",
+            key=lambda x: x.replace(custom_key_order))
+
+        # Drop excess information. Try to be concise. Find the trascendental
+        # datum!
+        df_summary = df_summary.drop(columns=["best_algbp"])
+
+        # The column "mode_Floor" points to the floor of the interval. Change it
+        # to the midpoint of the interval by summing 0.5, which makes it more
+        # intuitive to understand.
+        df_summary["naive_div_modeFloor"] = \
+            0.5 + df_summary["naive_div_modeFloor"]
+
+        # Change column names.
+        df_summary = df_summary.rename(columns={
+            "Species": "Species", "sequid_type": "Chromosome",
+            "class": "RE_class", "subclass": "RE_subclass",
+            "order": "RE_order", "superfam": "RE_superfam",
+            "naive_numele": "#TotRE", "naive_totbp": "#TotBP",
+            "naive_algbp": "#AlgBP",
+            "best_numele": "#ResRE", "best_totbp": "#ResBP",
+            "naive_div_medi": "div_median", "naive_div_mean": "div_mean",
+            "naive_div_modeRaw": "div_mode_raw",
+            "naive_div_modeFloor": "div_mode_bins", })
 
         return df_summary.reset_index(drop=True)
 
