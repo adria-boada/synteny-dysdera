@@ -389,21 +389,22 @@ class Repeats(object):
             species_matchuniq = 0
             for sequid_regex in self.seqsizes_dict[species].keys():
                 # Filter dataframe by sequids matching `sequid_regex`
-                mask_seqreg = df.loc[mask_species, "sequid"].str.contains(
+                mask_sequid_type = df["sequid"].str.contains(
                     sequid_regex, case=False)
+                mask_both = (mask_species) & (mask_sequid_type)
                 print("--", sequid_regex, "--")
-                print(" + Nrows:", df.loc[mask_seqreg].shape[0])
-                species_matchrows += df.loc[mask_seqreg].shape[0]
+                print(" + Nrows:", df.loc[mask_both].shape[0])
+                species_matchrows += df.loc[mask_both].shape[0]
                 print(" + Regex matching count:",
-                      len(df.loc[mask_seqreg, "sequid"].unique()),
+                      len(df.loc[mask_both, "sequid"].unique()),
                       "unique sequids")
                 species_matchuniq += len(
-                    df.loc[mask_seqreg, "sequid"].unique())
+                    df.loc[mask_both, "sequid"].unique())
                 #>print(" + Regex matching list:",
                 #>      list(df.loc[mask_seqreg, "sequid"].unique()))
 
                 # Add a new column to keep track of sequid types/regexes.
-                df.loc[mask_seqreg, "sequid_type"] = sequid_regex
+                df.loc[mask_both, "sequid_type"] = sequid_regex
 
             # Print a summary of the species, including all sequids.
             print("-----------------------------")
@@ -412,7 +413,7 @@ class Repeats(object):
                   round((species_matchrows/species_totnrows) *100, ndigits=3),
                   "%)")
             print(" " * len(species + "summary: "), "found",
-                  species_matchuniq, "out of", species_totuniq,
+                  species_matchuniq, "matching REGEXs out of", species_totuniq,
                   "unique sequids (",
                   round((species_matchuniq/species_totuniq) *100, ndigits=3),
                   "%)\n")
@@ -832,12 +833,13 @@ class Repeats(object):
                 # `sequid`, which will be feed to the algorithm.
                 # Keep in mind that two pairs of coordinates cannot overlap if
                 # they are in different sequences!
-                mask_sequid = df.loc[mask_species, "sequid"] == sequid
+                mask_sequid = df["sequid"] == sequid
+                mask_both = (mask_species) & (mask_sequid)
                 intervals = list(zip(
-                    list(df.loc[mask_sequid, "begin"]),
-                    list(df.loc[mask_sequid, "end"]),
-                    list(df.loc[mask_sequid, "score_SW"]),
-                    list(df.loc[mask_sequid,].index), ))
+                    list(df.loc[mask_both, "begin"]),
+                    list(df.loc[mask_both, "end"]),
+                    list(df.loc[mask_both, "score_SW"]),
+                    list(df.loc[mask_both,].index), ))
                 # Sort interval list by fourth field (index).
                 intervals = sorted(intervals, key=lambda x: x[3])
                 # Produce a dict. from `intervals` with the function
