@@ -365,8 +365,10 @@ class Repeats(object):
             # Add a new column which labels the dataset by species.
             d["Species"] = species
 
-            # Concatenate this data file to `df`
-            df = pd.concat([df, d])
+            # Concatenate this data file to `df`. Additionally, reset the index
+            # so multiple species are given independent indexes. Species will be
+            # orderly concatenated into `df`, sorted by sequid and begin.
+            df = pd.concat([df, d], ignore_index=True)
 
         return df
 
