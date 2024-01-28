@@ -313,7 +313,14 @@ class Repeats(object):
         self.catalog_df_summaries_concise = dict()
         for key in self.catalog_df_summaries.keys():
             self.catalog_df_summaries_concise[key] = \
-                self.style_julio_dysdera(self.catalog_df_summaries[key])
+                self.style_julio_dysdera_df_summary(self.catalog_df_summaries[key])
+
+        # Compute diversity indices for the number of elements in multiple
+        # partitions of the dataset.
+        Printing("Computing diversity indices.").status()
+        self.df_diversity = self.diversity_estimators(df)
+        self.df_diversity_concise = self.style_julio_dysdera_df_diversity(
+            self.df_diversity)
 
         Printing("Writing entire RepeatMasker DataFrame to "+
                  "the variable `self.df`.").status()
@@ -1224,7 +1231,7 @@ class Repeats(object):
         return df_summary.reset_index(drop=True) \
             .sort_values(by=categorical_columns)
 
-    def style_julio_dysdera(self, df_summary):
+    def style_julio_dysdera_df_summary(self, df_summary):
         """
         Applies the table aesthetics chosen by a dearest PI of mine, JR, to a
         dearest spider genus of mine, *Dysdera*.
@@ -1288,6 +1295,182 @@ class Repeats(object):
 
         return df_summary.reset_index(drop=True)
 
+    def _diversity_estimators_20(self, series_count):
+        """
+        Compute diversity indices from a pd.Series() of element counts.
+
+        Input
+        -----
+
+        + series_count: A pd.Series(), possibly obtained by the `.aggregate`
+          function "count". See:
+          <https://pandas.pydata.org/docs/user_guide/groupby.html#built-in-aggregation-methods>
+
+        Output
+        ------
+
+        Return a pd.DataFrame() where each column contains a diversity index.
+        """
+        # Prepare a series with proportions instead of absolute counts.
+        proportions = series_count/series_count.sum()
+        # Use these proportions to compute diversity indexes.
+        # See: https://en.wikipedia.org/wiki/Diversity_index#Shannon_index
+        shannon_summation_part = proportions * np.log(proportions)
+        # Sum the `series` "summation_part" and invert its sign.
+        shannon = (-1) * (shannon_summation_part.sum())
+        # Evenness index bounds the Shannon index between 1 and 0, making it
+        # a comparable value across different samples.
+        evenness = shannon / np.log(proportions.shape[0])
+        # Haplotypic diversity takes the square of elements in `proportions`.
+        haplotypic_summation_part = proportions ** 2
+        haplotypic = (
+            # Weigh the index with (n / (n-1)), where `n` is total categories.
+            (proportions.shape[0] / (proportions.shape[0] -1)) *
+            # Sum the column of squared proportions.
+            (1 - haplotypic_summation_part.sum())
+        )
+
+        # Return a DataFrame with three columns, with each diversity index.
+        return pd.DataFrame(dict(Shannon=[shannon],
+                                 Evenness=[evenness],
+                                 Haplo=[haplotypic]))
+
+    def _diversity_estimators_compute(self,
+                                      df_filtered,
+                                      dict_groupby_colnames):
+        """
+        Group a given dataframe, count the number of elements in each group, and
+        compute diversity indices.
+        """
+        # Initialise a dictionary with the variables we desire to compute. Later
+        # on will be transformed into a pandas DataFrame.
+        answer = dict(group=[], Shannon=[], Evenness=[], Haplo=[])
+        # For each group of columns in the dictionary:
+        for group_name, group_colnames in dict_groupby_colnames.items():
+            # Group the dataframe by the list of `group_colnames`.
+            repele_count = df_filtered.groupby(group_colnames,
+                                               as_index=False, observed=True) \
+                .agg(naive_numele=pd.NamedAgg(column="replen", aggfunc="count"))
+            # If the amount of groups is one... uncomputable diversity?
+            if repele_count.shape[0] == 1:
+                Printing("Cannot compute diversity with a single group.").error()
+                return None
+            # Prepare a column of proportions instead of absolute counts.
+            repele_count["proportions"] = \
+                repele_count["naive_numele"]/repele_count["naive_numele"].sum()
+            # Use the summary df to compute diversity indexes.
+            # See: https://en.wikipedia.org/wiki/Diversity_index#Shannon_index
+            shannon_summation_part = (
+                (repele_count["proportions"]) *
+                (np.log(repele_count["proportions"]))
+            )
+            # Sum the "column" summation_part and inverse sign.
+            shannon = (-1) * (shannon_summation_part.sum())
+            # Evenness index is the Shannon but bound between 1 and 0.
+            evenness = shannon / np.log(repele_count.shape[0])
+            # Another diversity index which takes the square of the proportion
+            # of elements (p_{i}) for each group.
+            haplotypic_summation_part = repele_count["proportions"] ** 2
+            haplotypic = (
+                # Wheigh the index with (n / (n-1))
+                (repele_count.shape[0] / (repele_count.shape[0] -1)) *
+                # Sum the column of squared proportions.
+                (1 - haplotypic_summation_part.sum())
+            )
+            # Store results to answer.
+            answer["group"].append(group_name)
+            answer["Shannon"].append(shannon)
+            answer["Evenness"].append(evenness)
+            answer["Haplo"].append(haplotypic)
+
+            # DEBUG: manually compute class level to validate results.
+            #>if group_name == "class":
+            #>    print(repele_count)
+
+        return pd.DataFrame(answer)
+
+    def diversity_estimators(self, df):
+        """
+        Compute diversity indices (Shannon, evenness and haplotypic) for
+        multiple partitions of the dataset based on "perc_divg", RE types and
+        "Species".
+
+        Input
+        -----
+
+        + df: The main pd.DataFrame() of the Repeats() class.
+
+        Output
+        ------
+
+        A table (pandas DataFrame) with the requested diversity indices obtained
+        from the main DataFrame (self.df).
+        """
+        # Initialise the columns of RE types which we want to use to groupby.
+        dict_groupby_colnames = {
+            "class": ["class"],
+            "subclass": ["class", "subclass"],
+            "order": ["class", "subclass", "order"],
+            "superfam": ["class", "subclass", "order", "superfam"]}
+        # Initialise the masks of "perc_divg" we want to use to groupby.
+        mask_divg = {"All": df["perc_divg"]>=0,
+                     "<1%": df["perc_divg"]<1,
+                     "<5%": df["perc_divg"]<5,
+                     ">=5%": df["perc_divg"]>=5}
+        # Create a list to append temp. DataFrames.
+        list_df_answer = list()
+        # For each divergence and species masks:
+        for key_md, val_md in mask_divg.items():
+            for species in df["Species"].unique():
+                mask_species = df["Species"]==species
+                # Filter the dataframe by both masks.
+                df_filtered = df.loc[(val_md) & (mask_species)]
+                # Hidden function to perform computations.
+                answer = self._diversity_estimators_compute(
+                        df_filtered=df_filtered,
+                        dict_groupby_colnames=dict_groupby_colnames)
+                # Add columns with the loop's species and divergence mask.
+                answer["Species"] = species
+                answer["Div"] = key_md
+                # Sort the column order in the answer dataframe.
+                answer = answer[["Div", "group", "Species", "Shannon",
+                                 "Evenness", "Haplo"]]
+                # Append `answer` df to a list.
+                list_df_answer.append(answer)
+
+        # Return a concatenate of all df obtained in the loop. Sort rows.
+        return pd.concat(list_df_answer, ignore_index=True) \
+            .sort_values(["Div", "group", "Species"], ignore_index=True)
+
+    def style_julio_dysdera_df_diversity(self, df_diversity):
+        """
+        Applies the table aesthetics chosen by a dearest PI of mine, JR, to a
+        dearest spider genus of mine, *Dysdera*.
+
+        Input
+        -----
+
+        + df_diversity: Diversity indices obtained by partitioning the main df
+          into multiple categories (by "perc_divg", "Species", RE types).
+
+        Output
+        ------
+
+        Returns a stylized table.
+        """
+        # Do not overwrite input.
+        df_diversity = df_diversity.copy()
+        # Manually sort the rows with custom keys.
+        custom_key_order = {
+            "All":10, "<1%":11, "<5%":12, ">=5%":13,
+            "class":10, "subclass":11, "order":12, "superfam":13,
+            "Dcat":10, "Dtil":11, "Dsil":12 }
+        df_diversity = df_diversity.sort_values(
+            by=["Div", "group", "Species"], kind="mergesort",
+            key=lambda x: x.replace(custom_key_order), ignore_index=True)
+
+        return df_diversity
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1305,10 +1488,15 @@ if __name__ == '__main__':
     parser.add_argument("--idxlist", nargs="+", required=True,
                         help="A list of index files, as specified in --help")
     parser.add_argument("--summary",
-                        help="A suffix (string) with which a path will be "+
+                        help="A suffix (string) with which a filename will be "+
                         "created. Then, multiple TSV summary tables will "+
                         "be written to different paths starting with the "+
                         "given suffix. Do not include the TSV extension!")
+    parser.add_argument("--diversity",
+                        help="Enable this setting to export a table "+
+                        "with diversity indices to the filename "+
+                        "`diversity_indices.tsv` in the working directory.",
+                        action="store_true") # True if enabled in terminal
     parser.add_argument("--plots",
                         help="A suffix (string) with which a path will be "+
                         "created. Then, multiple PNG plots will be written "+
@@ -1337,4 +1525,26 @@ if __name__ == '__main__':
             files_dict[species] = file
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
+
+    # Write summary tables.
+    if args.summary:
+        # Store the reclassification dataframe.
+        repeats.df_check_reclassification.to_csv(
+            str(args.summary)+"_reclassification.tsv", # file-name
+            sep="\t", na_rep="NA", index=True)
+        # Store the summary dataframes.
+        for key, dfsum in repeats.catalog_df_summaries_concise.items():
+            filename = str(args.summary) + "_" + str(key) + ".tsv"
+            dfsum.to_csv(
+                filename, sep="\t", na_rep="NA", index=False, decimal=".",
+                # Write up to five decimal places, keeping trailing zeroes.
+                float_format="%.5f")
+
+    if args.diversity:
+        # Store the table with diversity indices.
+        repeats.df_diversity_concise.to_csv(
+            "diversity_indices.tsv", # file-name
+            sep="\t", na_rep="NA", index=False, decimal=".",
+            # Write up to five decimal places, keeping trailing zeroes.
+            float_format="%.5f")
 
