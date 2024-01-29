@@ -1295,7 +1295,7 @@ class Repeats(object):
 
         return df_summary.reset_index(drop=True)
 
-    def _diversity_estimators_20(self, series_count):
+    def _diversity_estimators_compute_20(self, series_count):
         """
         Compute diversity indices from a pd.Series() of element counts.
 
@@ -1334,6 +1334,61 @@ class Repeats(object):
         return pd.DataFrame(dict(Shannon=[shannon],
                                  Evenness=[evenness],
                                  Haplo=[haplotypic]))
+
+    def diversity_differences(self, df):
+        """
+        """
+        # Initialise the columns of RE types which we want to use to groupby.
+        groupby_colname_categories = {
+            "class": ["class"],
+            "subclass": ["class", "subclass"],
+            "order": ["class", "subclass", "order"],
+            "superfam": ["class", "subclass", "order", "superfam"]}
+        # Create a list to append temp. DataFrames.
+        list_df_answer = list()
+        # For each divergence and species masks:
+        for key_categories, val_categories in \
+                groupby_colname_categories.items():
+            # Initialise loop variables.
+            uniq_species = df["Species"].unique()
+            i = 0
+            while i < len(uniq_species) + 1:
+                j = i + 1
+                while j < len(uniq_species):
+                    # Get a pair of species from the unique species list.
+                    spec_i, spec_j = [uniq_species[x] for x in (i, j)]
+                    # Filter the dataframe by these both species.
+                    mask_species = df["Species"].isin([spec_i, spec_j])
+                    series_count = (
+                        # Groupby the `val_categories` with the filtered
+                        # dataframe.
+                        df.loc[mask_species].groupby(val_categories,
+                                                     observed=True,
+                                                     as_index=False) \
+                        # Aggregate the group by counting rows (REs) in each
+                        # grouped category.
+                        .agg(count=pd.NamedAgg(column="replen",
+                                               aggfunc="count"))
+                    # Select the single column "count", converting a DataFrame
+                    # into a Series.
+                    )["count"]
+                    # Recover the diversity indices of the count `series_count`.
+                    answer = self._diversity_estimators_compute_20(series_count)
+                    answer["Species_pair"] = str(spec_i+","+spec_j)
+                    answer["group"] = key_categories
+                    list_df_answer.append(answer)
+                    print(spec_i, spec_j) # debug
+
+                    # Proceed across the loop, increasing `i` and `j`.
+                    j += 1
+                i += 1
+
+        answer = pd.concat(list_df_answer, ignore_index=True)
+        answer = answer[["group", "Species_pair",
+                         "Shannon", "Evenness", "Haplo"]]
+        print(answer)#debug
+
+        return None
 
     def _diversity_estimators_compute(self,
                                       df_filtered,
