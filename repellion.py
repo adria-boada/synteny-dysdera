@@ -21,26 +21,29 @@ RM.out files (--rmlist)
 RepeatMasker's output files. They must be paired with a species nickname/label,
 which must match the species label found in the index file. For instance:
 
-script.py --rmfiles file1,sp1 file2,sp2
+script.py --rmfiles file1,sp1 [file2,sp2]
 
-Where file1 and file2 are different files from RM output, and sp1 and sp2 are
-species labels (separated by a comma).
+Where file1 and file2 are different files obtained as RepeatMasker's output, and
+sp1 and sp2 are species labels. Separate file path and species label with a
+comma.
 
 Index files (--idxlist)
 =======================
 
-They are TSV (Tab-separated Values) files with sequence regexes paired with the
-sum of their lengths. The header (first row) must contain an species nickname.
-For example:
+TSV (Tab-separated Values) files with sequence regexes paired with the sum of
+their lengths. The header (first row) must contain an species nickname. For
+example:
 
 ```idxfile
-Species-label
-Sequence-regex1\t32
-Sequence-regex2\t5600
+sp1
+Chromosome1\t32
+Scaff\t5600
 etc.
 ```
 
-Another example:
+Where `sp1` is an species label (matching the label of an RM.out file) and
+`Chromosome1` and `Scaff` are regex patterns that will match sequence IDs  in
+the corresponding column of the RM.out file. Another example:
 
 ```idxfile
 Species       whatever
@@ -58,14 +61,15 @@ comments below `class Repeats` for more information on regexes and formatting.
 Formatting the RM.out files
 ===========================
 
-The output obtained from RepeatMasker must be modified
-Some modifications must be applied to the output obtained from RepeatMasker.
+The output obtained from RepeatMasker must be modified before using it.
 
 Some rows contain an asterisk (*) as a 16th field. Some other rows do end at the
 15th field. To make sure that all rows are of the same length, one can run:
 
 ```bash
-awk 'BEGIN{OFS="\t"} ; {if ( $16 ) { $16="True" } else { $16="False" } } 1' RM.out
+awk 'BEGIN{OFS="\t"}
+{if ( $16 ) { $16="True" } else { $16="False" } }
+{print}' RMfile.out > RMfile_modified.out
 ```
 
 Moreover, make sure to correctly label minor scaffolds and chromosomes in column
@@ -160,27 +164,27 @@ def prepare_input_idx(list_idx_paths):
 
 class Printing:
     """
-    Print a given message with a formatting of interest (eg. as a warning,
+    Print a given `message` with a formatting of interest (eg. as a warning,
     status, error...). Includes date and time of printing.
 
-    Use like so:
+    Examples of use
+    ---------------
 
     Printing("I love fries").status()
     Printing("Don't eat too many fries").warning()
     """
-
     def __init__(self, message):
         """
         Add the date and time of day to all the messages.
         """
-        d = datetime.now().strftime("%d %b, %H:%M")
-        self.m = f"{d}: {message}"
+        time = datetime.now().strftime("%d %b, %H:%M")
+        self.message = f"{time}: {message}"
 
     def status(self):
         """
         Print in green and with preceding "STATUS" string
         """
-        message = f"STATUS:{self.m}"
+        message = f"STATUS:{self.message}"
         # Change the colour to green (through ANSI colours in the terminal)
         message = "\033[0;32m" + str(message) + "\033[0;0m"
         print(message)
@@ -190,7 +194,7 @@ class Printing:
         """
         Print in yellow and with preceding "WARNING" string
         """
-        message = f"WARNING:{self.m}"
+        message = f"WARNING:{self.message}"
         # Change the colour to yellow (through ANSI colours in the terminal)
         message = "\033[0;33m" + str(message) + "\033[0;0m"
         print(message)
@@ -200,7 +204,7 @@ class Printing:
         """
         Print in red and with preceding "ERROR" string
         """
-        message = f"ERROR:{self.m}"
+        message = f"ERROR:{self.message}"
         # Change the colour to red (through ANSI colours in the terminal)
         message = "\033[0;31m" + str(message) + "\033[0;0m"
         print(message)
@@ -838,9 +842,9 @@ class Repeats:
             ["class", "subclass", "order", "superfam"]
         ] = ("DNA", "1", "DDE", "Zator")
 
-        # Both MITE and nMITE are difficult to assign to "taxons"; these
-        # attributes are not unique to any one clade of repeats...
-        # I'd rather classify them as no further than "DNA" (all else unknown).
+        # Both MITE and nMITE are unassignable to "taxons"; these attributes are
+        # not synapomorphic (unique to any one clade of repeats). I'd rather
+        # classify them as no further than "DNA" (all else unknown).
         df.loc[
             df["default_repclass"].str.contains("ClassII_MITE"),
             ["class", "subclass", "order", "superfam"]
@@ -1342,8 +1346,9 @@ class Repeats:
         # Groupby the list of columns.
         df_sum_diverg = df.groupby(list_columns, observed=True)[
             "perc_divg"].agg(divg_median="median", divg_mean="mean",
-        # The mode() function could return an array of divergence with multiple
-        # 'most common' values; take the first and the last one in two columns.
+        # The pd.Series.mode() function could return an array of divergence with
+        # multiple 'most common' values; take the first and the last one in two
+        # columns.
                             divg_modeBeg=lambda x: pd.Series.mode(x)[0],
                             divg_modeEnd=lambda x: pd.Series.mode(x)[
                                 len(pd.Series.mode(x))-1],
@@ -1565,18 +1570,29 @@ def plot_histogram_recursively(
                 # Label these values with their hue and concatenate to main df.
                 valcounts_series[hueby_column] = hue
                 df_plot = pd.concat([df_plot, valcounts_series])
+
             # Lastly, with the value counts, plot them as an histogram.
             ax = sns.histplot(x=df_plot.index, weights=df_plot[value_column],
                          hue=df_plot[hueby_column], binwidth=1,
                          kde=True, kde_kws={"bw_adjust": .25},
-                         multiple=multiple, legend=True,
+                         multiple=multiple, legend=True, element="step",
                          # Colors for each species (it should not be a static
                          # variable, but parameterised by the function).
                          palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
                                   "Dsil": "green", "Dcatv33": "#eb8f46",
                                   "Dcatv35": "#eb8f46"},)
+            #PROVA-debug
+            # Plots only the KDE plot without the underlying histogram.
+#>            ax = sns.kdeplot(x=df_plot.index, weights=df_plot[value_column],
+#>                        hue=df_plot[hueby_column], fill=True, bw_adjust=.25,
+#>                        multiple=multiple, legend=True,
+#>                         # Colors for each species (it should not be a static
+#>                         # variable, but parameterised by the function).
+#>                         palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+#>                                  "Dsil": "green", "Dcatv33": "#eb8f46",
+#>                                  "Dcatv35": "#eb8f46"},)
         else:
-            pass # only works hueing atm
+            return None # only works hueing atm
             # Es podria crear una columna buida '1' i destriar segons aquesta
             # columna (irresponsable?).
 
@@ -1585,11 +1601,81 @@ def plot_histogram_recursively(
         # Reduce the linewidth of the patches to be minimalistic.
         for patch in ax.legend_.get_patches():
             patch.set_linewidth(0.5)
+        # Avoid plotting values below 0% divergence. Useful for KDE plot
+        # `sns.kdeplot()`. Nonetheless, `sns.histplot()` cuts axis
+        # automatically. Sets only minimum limit, with `None` maximum limit.
+#>        ax.set_xlim(0, None)
 
         f = "svg" # format of the output plot
+        # SVG format does not read `dpi`, only useful for PNG files.
         plt.savefig(current_title+"."+f, dpi=300, format=f)
         # Close the plt.axes or they will leak to the next figures.
         plt.close()
+
+    return None
+
+def plot_whole_histogram(
+    df, value_column: str, hueby_column: str=None,
+    title: str="", yaxis_relative=True, multiple="layer"):
+    """
+    Plot a column `value_column` of a pandas DataFrame. Plot local minima and
+    maxima as red and green (respectively) scatter points.
+
+    Input
+    =====
+
+    + title: Serves as the plot title. Furthermore, it is added as a prefix to
+      the filename of all generated PNG files.
+
+    + minmaxing: An integer >=1 or zero/False. It is passed to the parameter
+      `order` of `scipy.signal.argrelextrema`. It determines the sensitivity of
+      the algorithm; the higher the `minmaxing` value, the less sensitive (less
+      local minima or maxima). Adjust this value depending on the prevalence of
+      noise in your datasets. To disable the search of local minima and maxima,
+      pass a value of zero/False.
+
+    + multiple: String. Which style will be used by `seaborn.histplot()`
+      multiple parameter.
+    """
+    # Plot the complete repeat landscape before plotting each individual
+    # category.
+    df_plot = pd.DataFrame()
+    for hue in df[hueby_column].unique():
+        # Filter by `hue` categories and create a Series of value_counts.
+        valcounts_series = (
+            df.loc[df[hueby_column] == hue,
+                   value_column] \
+            .value_counts(normalize=yaxis_relative) \
+            .sort_index().to_frame() )
+        # Label these values with their hue and concatenate to plotting df.
+        valcounts_series[hueby_column] = hue
+        df_plot = pd.concat([df_plot, valcounts_series])
+
+    # Lastly, plot the histogram with these value counts.
+    ax = sns.histplot(x=df_plot.index, weights=df_plot[value_column],
+                         hue=df_plot[hueby_column], binwidth=1,
+                         kde=True, kde_kws={"bw_adjust": .25},
+                         multiple=multiple, legend=True, element="step",
+                         # Colors for each species (it should not be a static
+                         # variable, but parameterised by the function).
+                         palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+                                  "Dsil": "green", "Dcatv33": "#eb8f46",
+                                  "Dcatv35": "#eb8f46"},)
+    current_title = title + "_All_REs"
+    plt.title(current_title)
+    #ax.legend_.set_title("debug")#DEBUG
+    # Reduce the linewidth of the patches to be minimalistic.
+    for patch in ax.legend_.get_patches():
+        patch.set_linewidth(0.5)
+    # Avoid plotting values below 0% divergence. Useful for KDE plot
+    # `sns.kdeplot()`. Nonetheless, `sns.histplot()` cuts axis
+    # automatically. Sets only minimum limit, with `None` maximum limit.
+#>    ax.set_xlim(0, None)
+    f = "svg" # format of the output plot
+    # SVG format does not read `dpi`, only useful for PNG files.
+    plt.savefig(current_title+"."+f, dpi=300, format=f)
+    # Close the plt.axes or they will leak to the next figures.
+    plt.close()
 
     return None
 
@@ -1848,6 +1934,9 @@ if __name__ == '__main__':
         plot_histogram_recursively(
             df=repeats.df, value_column="perc_divg",
             categorical_columns=["class", "order", "superfam"],
+            hueby_column="Species", title=args.plots, multiple="layer")
+        plot_whole_histogram(
+            df=repeats.df, value_column="perc_divg",
             hueby_column="Species", title=args.plots, multiple="layer")
 
 
