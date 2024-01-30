@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# repellion_v2.py
+# resquitllar.py
 #
 # 17 de gen. 2024  <adria@molevol-OptiPlex-9020>
 
