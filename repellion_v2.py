@@ -1345,12 +1345,13 @@ class Repeats(object):
             "order": ["class", "subclass", "order"],
             "superfam": ["class", "subclass", "order", "superfam"]}
         # Create a list to append temp. DataFrames.
-        list_df_answer = list()
-        # For each divergence and species masks:
+        list_df_sp_pairs = list()
+        # For each category that will group by the dataframe:
         for key_categories, val_categories in \
                 groupby_colname_categories.items():
-            # Initialise loop variables.
+            # Initialise a list with all unique Species.
             uniq_species = df["Species"].unique()
+            # Double while loop which will find unique pairs of Species.
             i = 0
             while i < len(uniq_species) + 1:
                 j = i + 1
@@ -1370,25 +1371,45 @@ class Repeats(object):
                         .agg(count=pd.NamedAgg(column="replen",
                                                aggfunc="count"))
                     # Select the single column "count", converting a DataFrame
-                    # into a Series.
+                    # into a pd.Series.
                     )["count"]
                     # Recover the diversity indices of the count `series_count`.
-                    answer = self._diversity_estimators_compute_20(series_count)
-                    answer["Species_pair"] = str(spec_i+","+spec_j)
-                    answer["group"] = key_categories
-                    list_df_answer.append(answer)
-                    print(spec_i, spec_j) # debug
+                    sp_pairs_divers = self._diversity_estimators_compute_20(series_count)
+                    sp_pairs_divers["Species_pair"] = str(spec_i+","+spec_j)
+                    sp_pairs_divers["group"] = key_categories
+                    list_df_sp_pairs.append(sp_pairs_divers)
 
                     # Proceed across the loop, increasing `i` and `j`.
                     j += 1
                 i += 1
 
-        answer = pd.concat(list_df_answer, ignore_index=True)
-        answer = answer[["group", "Species_pair",
+        # `sp_pairs_divers` contains a pd.DataFrame with indices computed by grouping
+        # pairs of species.
+        sp_pairs_divers = pd.concat(list_df_sp_pairs, ignore_index=True)
+        sp_pairs_divers = sp_pairs_divers[["group", "Species_pair",
                          "Shannon", "Evenness", "Haplo"]]
-        print(answer)#debug
+        # To compute diversity differences we need `self.df_diversity`.
+        # Remove divergence not equal to `All` (disregard divergences).
+        df_diversity = self.df_diversity.loc[
+            self.df_diversity["Div"] == "All"]
+        answer_list = list()
+        for row in sp_pairs_divers.iterrows():
+            species_pair = row[1]["Species_pair"]
+            group = row[1]["group"]
+            mask_sp = df_diversity["Species"].isin(species_pair.split(","))
+            mask_group = df_diversity["group"] == group
+            select_rows = df_diversity.loc[(mask_sp) & (mask_group)]
+            print(select_rows["Shannon"].mean())#debug
+            print(row[1]["Shannon"])#debug
+            answer = pd.DataFrame({
+                "group": [group], "Species_pair": [species_pair],
+                "Shannon": [row[1]["Shannon"] - select_rows["Shannon"].mean()],
+                "Evenness": [row[1]["Evenness"] - select_rows["Evenness"].mean()],
+                "Haplo": [row[1]["Haplo"] - select_rows["Haplo"].mean()],
+            })
+            answer_list.append(answer)
 
-        return None
+        return pd.concat(answer_list, ignore_index=True)
 
     def _diversity_estimators_compute(self,
                                       df_filtered,
