@@ -317,10 +317,15 @@ class Repeats(object):
 
         # Compute diversity indices for the number of elements in multiple
         # partitions of the dataset.
+        # Initialise the masks of "perc_divg" we want to use to groupby.
+        #> mask_divg = {"All": df["perc_divg"]>=0,
+        #>              "<1%": df["perc_divg"]<1,
+        #>              "<5%": df["perc_divg"]<5,
+        #>              ">=5%": df["perc_divg"]>=5}
         Printing("Computing diversity indices.").status()
-        self.df_diversity = self.diversity_estimators(df)
-        self.df_diversity_concise = self.style_julio_dysdera_df_diversity(
-            self.df_diversity)
+        self.df_diversity = self.estimate_diversity_indices(df)
+        #> self.df_diversity_concise = self.style_julio_dysdera_df_diversity(
+        #>     self.df_diversity)
 
         Printing("Writing entire RepeatMasker DataFrame to "+
                  "the variable `self.df`.").status()
@@ -1295,14 +1300,23 @@ class Repeats(object):
 
         return df_summary.reset_index(drop=True)
 
-    def _diversity_estimators_compute_20(self, series_count):
+    def _diversity_estimators_compute(self, series_count):
         """
-        Compute diversity indices from a pd.Series() of element counts.
+        Compute diversity indices from a pd.Series() of element counts. See:
+
+        + Wikipedia. "Diversity index". Accessed 01-feb-24:
+        <https://en.wikipedia.org/wiki/Diversity_index>
+
+        + David Zelený. "Indices of diversity and evenness". Accessed 01-feb-24:
+        <https://www.davidzeleny.net/anadat-r/doku.php/en:div-ind>
+
+        The effective number of species is the amount of equifrequent categories
+        expected from a given diversity index value (see above links).
 
         Input
         -----
 
-        + series_count: A pd.Series(), possibly obtained by the `.aggregate`
+        + series_count: A pd.Series() previously obtained by the `.aggregate`
           function "count". See:
           <https://pandas.pydata.org/docs/user_guide/groupby.html#built-in-aggregation-methods>
 
@@ -1314,158 +1328,46 @@ class Repeats(object):
         # Prepare a series with proportions instead of absolute counts.
         proportions = series_count/series_count.sum()
         # Use these proportions to compute diversity indexes.
-        # See: https://en.wikipedia.org/wiki/Diversity_index#Shannon_index
         shannon_summation_part = proportions * np.log(proportions)
-        # Sum the `series` "summation_part" and invert its sign.
-        shannon = (-1) * (shannon_summation_part.sum())
-        # Evenness index bounds the Shannon index between 1 and 0, making it
-        # a comparable value across different samples.
-        evenness = shannon / np.log(proportions.shape[0])
-        # Haplotypic diversity takes the square of elements in `proportions`.
-        haplotypic_summation_part = proportions ** 2
-        haplotypic = (
-            # Weigh the index with (n / (n-1)), where `n` is total categories.
-            (proportions.shape[0] / (proportions.shape[0] -1)) *
-            # Sum the column of squared proportions.
-            (1 - haplotypic_summation_part.sum())
-        )
+        # Sum the `series` "shannon_summation_part" and invert its sign.
+        shannon_index = (-1) * (shannon_summation_part.sum())
+        # Shannon evenness bounds the Shannon index between 1 and 0, making it
+        # comparable across samples with a varying amount of dataset partitions.
+        shannon_evenness = shannon_index / np.log(proportions.shape[0])
+        # Effective number of species.
+        shannon_effective = np.e ** shannon_index
+
+        # Gini-Simpson index takes the square of elements in `proportions`.
+        gs_summation_part = proportions ** 2
+        gs_index = 1 - gs_summation_part.sum()
+        # The GS-evenness formula resembles the formula of haplotypic diversity.
+        # Weighs the GS-index with (n / (n-1)), where `n` is the total amount of
+        # dataset partitions or categories.
+        gs_evenness = \
+            (proportions.shape[0] / (proportions.shape[0] -1)) * gs_index
+        # Effective number of species.
+        gs_effective = 1 / (1 - gs_index)
 
         # Return a DataFrame with three columns, with each diversity index.
-        return pd.DataFrame(dict(Shannon=[shannon],
-                                 Evenness=[evenness],
-                                 Haplo=[haplotypic]))
+        return pd.DataFrame({"Shan_indx": [shannon_index],
+                             "Shan_even": [shannon_evenness],
+                             "GS_indx": [gs_index],
+                             "GS_even": [gs_evenness],
+                             "Shan_eff": [shannon_effective],
+                             "GS_eff": [gs_effective],
+                             # Diversity indices are sensitive to the amount of
+                             # categories/partitions; track them.
+                             "#Types": [proportions.shape[0]]})
 
-    def diversity_differences(self, df):
-        """
-        """
-        # Initialise the columns of RE types which we want to use to groupby.
-        groupby_colname_categories = {
+    def estimate_diversity_indices(
+        self,
+        df: pd.DataFrame(),
+        groupby_colnames: dict ={
             "class": ["class"],
             "subclass": ["class", "subclass"],
             "order": ["class", "subclass", "order"],
-            "superfam": ["class", "subclass", "order", "superfam"]}
-        # Create a list to append temp. DataFrames.
-        list_df_sp_pairs = list()
-        # For each category that will group by the dataframe:
-        for key_categories, val_categories in \
-                groupby_colname_categories.items():
-            # Initialise a list with all unique Species.
-            uniq_species = df["Species"].unique()
-            # Double while loop which will find unique pairs of Species.
-            i = 0
-            while i < len(uniq_species) + 1:
-                j = i + 1
-                while j < len(uniq_species):
-                    # Get a pair of species from the unique species list.
-                    spec_i, spec_j = [uniq_species[x] for x in (i, j)]
-                    # Filter the dataframe by these both species.
-                    mask_species = df["Species"].isin([spec_i, spec_j])
-                    series_count = (
-                        # Groupby the `val_categories` with the filtered
-                        # dataframe.
-                        df.loc[mask_species].groupby(val_categories,
-                                                     observed=True,
-                                                     as_index=False) \
-                        # Aggregate the group by counting rows (REs) in each
-                        # grouped category.
-                        .agg(count=pd.NamedAgg(column="replen",
-                                               aggfunc="count"))
-                    # Select the single column "count", converting a DataFrame
-                    # into a pd.Series.
-                    )["count"]
-                    # Recover the diversity indices of the count `series_count`.
-                    sp_pairs_divers = self._diversity_estimators_compute_20(series_count)
-                    sp_pairs_divers["Species_pair"] = str(spec_i+","+spec_j)
-                    sp_pairs_divers["group"] = key_categories
-                    list_df_sp_pairs.append(sp_pairs_divers)
-
-                    # Proceed across the loop, increasing `i` and `j`.
-                    j += 1
-                i += 1
-
-        # `sp_pairs_divers` contains a pd.DataFrame with indices computed by grouping
-        # pairs of species.
-        sp_pairs_divers = pd.concat(list_df_sp_pairs, ignore_index=True)
-        sp_pairs_divers = sp_pairs_divers[["group", "Species_pair",
-                         "Shannon", "Evenness", "Haplo"]]
-        # To compute diversity differences we need `self.df_diversity`.
-        # Remove divergence not equal to `All` (disregard divergences).
-        df_diversity = self.df_diversity.loc[
-            self.df_diversity["Div"] == "All"]
-        answer_list = list()
-        for row in sp_pairs_divers.iterrows():
-            species_pair = row[1]["Species_pair"]
-            group = row[1]["group"]
-            mask_sp = df_diversity["Species"].isin(species_pair.split(","))
-            mask_group = df_diversity["group"] == group
-            select_rows = df_diversity.loc[(mask_sp) & (mask_group)]
-            print(select_rows["Shannon"].mean())#debug
-            print(row[1]["Shannon"])#debug
-            answer = pd.DataFrame({
-                "group": [group], "Species_pair": [species_pair],
-                "Shannon": [row[1]["Shannon"] - select_rows["Shannon"].mean()],
-                "Evenness": [row[1]["Evenness"] - select_rows["Evenness"].mean()],
-                "Haplo": [row[1]["Haplo"] - select_rows["Haplo"].mean()],
-            })
-            answer_list.append(answer)
-
-        return pd.concat(answer_list, ignore_index=True)
-
-    def _diversity_estimators_compute(self,
-                                      df_filtered,
-                                      dict_groupby_colnames):
-        """
-        Group a given dataframe, count the number of elements in each group, and
-        compute diversity indices.
-        """
-        # Initialise a dictionary with the variables we desire to compute. Later
-        # on will be transformed into a pandas DataFrame.
-        answer = dict(group=[], Shannon=[], Evenness=[], Haplo=[])
-        # For each group of columns in the dictionary:
-        for group_name, group_colnames in dict_groupby_colnames.items():
-            # Group the dataframe by the list of `group_colnames`.
-            repele_count = df_filtered.groupby(group_colnames,
-                                               as_index=False, observed=True) \
-                .agg(naive_numele=pd.NamedAgg(column="replen", aggfunc="count"))
-            # If the amount of groups is one... uncomputable diversity?
-            if repele_count.shape[0] == 1:
-                Printing("Cannot compute diversity with a single group.").error()
-                return None
-            # Prepare a column of proportions instead of absolute counts.
-            repele_count["proportions"] = \
-                repele_count["naive_numele"]/repele_count["naive_numele"].sum()
-            # Use the summary df to compute diversity indexes.
-            # See: https://en.wikipedia.org/wiki/Diversity_index#Shannon_index
-            shannon_summation_part = (
-                (repele_count["proportions"]) *
-                (np.log(repele_count["proportions"]))
-            )
-            # Sum the "column" summation_part and inverse sign.
-            shannon = (-1) * (shannon_summation_part.sum())
-            # Evenness index is the Shannon but bound between 1 and 0.
-            evenness = shannon / np.log(repele_count.shape[0])
-            # Another diversity index which takes the square of the proportion
-            # of elements (p_{i}) for each group.
-            haplotypic_summation_part = repele_count["proportions"] ** 2
-            haplotypic = (
-                # Wheigh the index with (n / (n-1))
-                (repele_count.shape[0] / (repele_count.shape[0] -1)) *
-                # Sum the column of squared proportions.
-                (1 - haplotypic_summation_part.sum())
-            )
-            # Store results to answer.
-            answer["group"].append(group_name)
-            answer["Shannon"].append(shannon)
-            answer["Evenness"].append(evenness)
-            answer["Haplo"].append(haplotypic)
-
-            # DEBUG: manually compute class level to validate results.
-            #>if group_name == "class":
-            #>    print(repele_count)
-
-        return pd.DataFrame(answer)
-
-    def diversity_estimators(self, df):
+            "superfam": ["class", "subclass", "order", "superfam"],
+        }):
         """
         Compute diversity indices (Shannon, evenness and haplotypic) for
         multiple partitions of the dataset based on "perc_divg", RE types and
@@ -1476,47 +1378,106 @@ class Repeats(object):
 
         + df: The main pd.DataFrame() of the Repeats() class.
 
+        + groupby_colnames: A dictionary where values are lists with the columns
+          we want to use to `groupby` the pd.DataFrame() `df`. Use `object` or
+          `categorical` columns.
+
         Output
         ------
 
         A table (pandas DataFrame) with the requested diversity indices obtained
         from the main DataFrame (self.df).
         """
-        # Initialise the columns of RE types which we want to use to groupby.
-        dict_groupby_colnames = {
-            "class": ["class"],
-            "subclass": ["class", "subclass"],
-            "order": ["class", "subclass", "order"],
-            "superfam": ["class", "subclass", "order", "superfam"]}
-        # Initialise the masks of "perc_divg" we want to use to groupby.
-        mask_divg = {"All": df["perc_divg"]>=0,
-                     "<1%": df["perc_divg"]<1,
-                     "<5%": df["perc_divg"]<5,
-                     ">=5%": df["perc_divg"]>=5}
-        # Create a list to append temp. DataFrames.
+        # Initialise a list with all unique `Species`.
+        uniq_species = list(df["Species"].unique())
+        # Create sublists with single species and pairs of species.
+        # A double while loop will find unique pairs of Species.
+        species_combinations = list()
+        i = 0
+        while i < len(uniq_species) - 1:
+            j = i + 1
+            while j < len(uniq_species):
+                # Obtain a pair of species from the `uniq_species` list.
+                spec_i, spec_j = [uniq_species[x] for x in (i, j)]
+                species_combinations.append(list([spec_i, spec_j]))
+                j += 1
+            species_combinations.append(list([spec_i]))
+            i += 1
+        species_combinations.append(list([uniq_species[i]]))
+
+        # Initialise a list to append pd.DataFrame() produced each loop.
         list_df_answer = list()
-        # For each divergence and species masks:
-        for key_md, val_md in mask_divg.items():
-            for species in df["Species"].unique():
-                mask_species = df["Species"]==species
-                # Filter the dataframe by both masks.
-                df_filtered = df.loc[(val_md) & (mask_species)]
-                # Hidden function to perform computations.
-                answer = self._diversity_estimators_compute(
-                        df_filtered=df_filtered,
-                        dict_groupby_colnames=dict_groupby_colnames)
-                # Add columns with the loop's species and divergence mask.
-                answer["Species"] = species
-                answer["Div"] = key_md
-                # Sort the column order in the answer dataframe.
-                answer = answer[["Div", "group", "Species", "Shannon",
-                                 "Evenness", "Haplo"]]
-                # Append `answer` df to a list.
+        # Iterate across the values of `groupby_colnames` and unique `Species`.
+        for key_categories, val_categories in \
+                groupby_colnames.items():
+            for sp_combo in species_combinations:
+                mask_species = df["Species"].isin(sp_combo)
+
+                # Obtain a pd.Series with "counts" of each type found in
+                # `df.groupby(groupby_colnames.vals())`
+                series_count = (
+                    # Group the dataframe of repeats by the types found in
+                    # `val_categories`. Filter by species in `sp_combo`.
+                    df.loc[mask_species].groupby(val_categories,
+                                                 observed=True,
+                                                 as_index=False) \
+                    # Aggregate the grouped dataframe by counting the total rows
+                    # per category/type.
+                    .agg(count=pd.NamedAgg(column="replen", aggfunc="count"))
+                # Select the single column "count", thereby converting a
+                # pd.DataFrame into a pd.Series.
+                )["count"]
+
+                # Recover the diversity indices from our counts of
+                # `val_categories` in `series_count`.
+                answer = self._diversity_estimators_compute(series_count)
+                answer["Species"] = ",".join([str(x) for x in sp_combo])
+                answer["Group"] = key_categories
                 list_df_answer.append(answer)
 
-        # Return a concatenate of all df obtained in the loop. Sort rows.
-        return pd.concat(list_df_answer, ignore_index=True) \
-            .sort_values(["Div", "group", "Species"], ignore_index=True)
+        # Return a concatenate of all `pd.DataFrame` obtained in the loop. Sort
+        # rows by Species.
+        return pd.concat(list_df_answer) \
+            .sort_values(["Species", "Group"], ignore_index=True)
+
+    def diversity_differences(self, df_diversity):
+        """
+        """
+        # Initialise a list to append pd.DataFrame() produced each loop.
+        list_df_answer = list()
+        # Locate rows in `df_diversity` with "Species" pairs.
+        df_diversity_sp_pairs = \
+            df_diversity.loc[df_diversity["Species"].str.contains(",")]
+        # Locate rows in `df_diversity` with single "Species".
+        df_diversity_sp_single = \
+            df_diversity.loc[~ df_diversity["Species"].str.contains(",")]
+        # Iterate across rows of `df_diversity_sp_pairs`; this loop will compare
+        # a pair of species' estimator to the mean of individual species'
+        # estimator.
+        for row in df_diversity_sp_pairs.iterrows():
+            r = row[1]
+            sp_pair = r["Species"]
+            grouping = r["Group"]
+            mask_species = \
+                df_diversity_sp_single["Species"].isin(sp_pair.split(","))
+            mask_group = \
+                df_diversity_sp_single["Group"] == grouping
+            selected_rows = \
+                df_diversity_sp_single.loc[(mask_species) & (mask_group)]
+            answer = pd.DataFrame({
+                "Group": [grouping],
+                "Species": [sp_pair],
+                "Shan_indx": [r["Shan_indx"] -
+                              selected_rows["Shan_indx"].mean()],
+                "Shan_even": [r["Shan_even"] -
+                              selected_rows["Shan_even"].mean()],
+                "GS_indx": [r["GS_indx"] -
+                            selected_rows["GS_indx"].mean()],
+                "GS_even": [r["GS_even"] - selected_rows["GS_even"].mean()],
+            })
+            list_df_answer.append(answer)
+
+        return pd.concat(list_df_answer, ignore_index=True)
 
     def style_julio_dysdera_df_diversity(self, df_diversity):
         """
@@ -1540,9 +1501,9 @@ class Repeats(object):
         custom_key_order = {
             "All":10, "<1%":11, "<5%":12, ">=5%":13,
             "class":10, "subclass":11, "order":12, "superfam":13,
-            "Dcat":10, "Dtil":11, "Dsil":12 }
+            "Dcat":10, "Dcatv33": 10, "Dtil":11, "Dsil":12 }
         df_diversity = df_diversity.sort_values(
-            by=["Div", "group", "Species"], kind="mergesort",
+            by=["Div", "Species", "Group"], kind="mergesort",
             key=lambda x: x.replace(custom_key_order), ignore_index=True)
 
         return df_diversity
