@@ -1254,30 +1254,28 @@ class Repeats(object):
         """
         # Create a copy of the dataframe. Avoid overwriting variables/data.
         df_summary = df_summary.copy()
-        # Use a custom sorting key for classes and species.
+        # Sort categories within the categorical column "Species".
+        df_summary["Species"] = pd.Categorical(df_summary["Species"],
+                                               categories=["Dcat", "Dcatv33",
+                                                           "Dcatv35", "Dtil",
+                                                           "Dsil"],
+                                               ordered=True)
+        # Use a custom sorting key for RE types.
         custom_key_order = {"DNA": 10, "Retrotransposon": 11, "Other": 12,
                             "Tandem_repeat": 13, "Unclassified": 14,
                             "Repetitive_fraction": 15,
-                            "Nonrepetitive_fraction": 16,
-                            "Dcatv33": 10, "Dcatv35":11, "Dcat": 12,
-                            "Dtil": 13, "Dsil": 14}
-        # First of all, sort by the column "class" with the key
-        # "custom_key_order".
+                            "Nonrepetitive_fraction": 16, }
+        # Sort the dataframe by the listed columns (hopefully the first listed
+        # column sorts with the most importance, and so on).
+        columns_to_sort = [x for x in df_summary.columns
+                           if x in ["Species", "sequid_type", "class",
+                                    "subclass", "order", "superfam"]]
         df_summary = df_summary.sort_values(
-            by="class",
-            key=lambda x: x.replace(custom_key_order))
-        if "sequid_type" in df_summary.columns:
-            # Use the kind of sort 'mergesort' to preserve the previous sort
-            # (stable algorithm). Otherwise subsequent sorts do not preserve,
-            # for instance, the "class" sort.
-            df_summary = df_summary.sort_values(
-                by="sequid_type", kind="mergesort")
-        df_summary = df_summary.sort_values(
-            by="Species", kind="mergesort",
-            key=lambda x: x.replace(custom_key_order))
+            by=columns_to_sort,
+            key=lambda x: x.replace(custom_key_order),
+            ignore_index=True)
 
-        # Drop excess information. Try to be concise. Find the trascendental
-        # datum!
+        # Drop excess information. Try to be concise.
         df_summary = df_summary.drop(columns=["best_algbp"])
 
         # The column "mode_Floor" points to the floor of the interval. Change it
