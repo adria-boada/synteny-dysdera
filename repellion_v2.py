@@ -1527,14 +1527,19 @@ def histogram_content_repeats(
       and RT-NA, these values might group together).
     """
     # Crea tants `subplots` com items a la llista `dict_df_grouped`.
-    fig, axes = plt.subplots(ncols=len(dict_df_grouped))
+    fig, axes = plt.subplots(ncols=len(dict_df_grouped), sharey=True)
     # Itera a través de parelles d'axes i dataframes:
     for ax, (df_title, df_loop) in zip(axes, dict_df_grouped.items()):
-        sns.histplot(data=df_loop, ax=ax, # Utilitza `ax` del "loop".
+        g = sns.histplot(data=df_loop, ax=ax, # Utilitza `ax` del "loop".
                      x=cat_x_column, weights=val_y_column,
                      hue=hue_column, multiple="stack",
-                     shrink=0.9,
+                     shrink=0.9, legend=True,
                      ).set(title=df_title)
+    # Get legend in the last subplot.
+    # print(g) # debug
+    #handles, labels = ax.get_legend_handles_labels()
+    #fig.legend(handles, labels, loc="upper left")
+
     plt.show()
 
     return None
@@ -1566,9 +1571,17 @@ def plotting_content_repeats(
                                           aggfunc="sum"))
         dict_df_grouped[key] = dict_df_grouped[key].rename(
             columns={"count": val_y_column})
+
+        # Sort the df by `hue_column` (RE types). This will make it easy for
+        # RE types to retain the same colour across subplots (otherwise might
+        # change colours if the data/order between plots changes).
+        dict_df_grouped[key] = dict_df_grouped[key].sort_values(
+            by=groupby_colnames)
+
+        # If the parameter `yaxis_relative` is equal to True, divide the column
+        # with values by each Species' sum of the values...
         if yaxis_relative:
             d = dict_df_grouped[key]
-            print(d) #debug
             for species in d["Species"].unique():
                 mask_species = d["Species"]==species
                 d.loc[mask_species, val_y_column] = (
@@ -1581,8 +1594,6 @@ def plotting_content_repeats(
         cat_x_column="Species")
 
     return None
-
-
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
