@@ -1260,6 +1260,8 @@ class Repeats(object):
                                                            "Dcatv35", "Dtil",
                                                            "Dsil"],
                                                ordered=True)
+        df_summary["Species"] = df_summary["Species"].cat \
+            .remove_unused_categories()
         # Use a custom sorting key for RE types.
         custom_key_order = {"DNA": 10, "Retrotransposon": 11, "Other": 12,
                             "Tandem_repeat": 13, "Unclassified": 14,
@@ -1403,6 +1405,10 @@ class Repeats(object):
             i += 1
         species_combinations.append(list([uniq_species[i]]))
 
+        # TODO
+        # Reescriu l'agrupació de sota dins una nova funció que generi
+        # histogrames del contingut repetitiu.
+
         # Initialise a list to append pd.DataFrame() produced each loop.
         list_df_answer = list()
         # Iterate across the values of `groupby_colnames` and unique `Species`.
@@ -1505,6 +1511,77 @@ class Repeats(object):
             key=lambda x: x.replace(custom_key_order), ignore_index=True)
 
         return df_diversity
+
+def histogram_content_repeats(
+    dict_df_grouped: dict,
+    hue_column: str, val_y_column: str, cat_x_column: str,
+    ):
+    """
+    + dict_df_grouped: keys are titles. values are pd.Dataframes for plotting.
+
+    + cat_x_column: usually species.
+
+    + val_y_column: elecount or bpcount.
+
+    + hue_column: type of repeats; try to make these unique (careful with DNA-NA
+      and RT-NA, these values might group together).
+    """
+    # Crea tants `subplots` com items a la llista `dict_df_grouped`.
+    fig, axes = plt.subplots(ncols=len(dict_df_grouped))
+    # Itera a través de parelles d'axes i dataframes:
+    for ax, (df_title, df_loop) in zip(axes, dict_df_grouped.items()):
+        sns.histplot(data=df_loop, ax=ax, # Utilitza `ax` del "loop".
+                     x=cat_x_column, weights=val_y_column,
+                     hue=hue_column, multiple="stack",
+                     shrink=0.9,
+                     ).set(title=df_title)
+    plt.show()
+
+    return None
+
+def plotting_content_repeats(
+    df: pd.DataFrame(),
+    dict_div_masks: dict,
+    groupby_colnames: list,
+    val_y_column: str,
+    yaxis_relative: bool=True,
+    ):
+    """
+    dict_div_masks = {
+        "All": df["perc_divg"] >= 0,
+        "div < 1%": df["perc_divg"] < 1,
+        "div < 5%": df["perc_divg"] < 5,
+        "div >= 5%": df["perc_divg"] >= 5,
+    }
+    groupby_colnames = ["class"] | ["class", "subclass"]
+    """
+    # Initialise a dictionary to store pd.DataFrame.groupby().agg() objects.
+    dict_df_grouped = {}
+    # Iterate across the given df masks found in the `dict_div_masks` parameter:
+    for key, mask_divg in dict_div_masks.items():
+        # Locate the df rows matching `mask_divg`.
+        dict_df_grouped[key] = df.loc[mask_divg] \
+            .groupby(groupby_colnames, observed=True, as_index=False) \
+            .agg(count=pd.NamedAgg(column=val_y_column,
+                                          aggfunc="sum"))
+        dict_df_grouped[key] = dict_df_grouped[key].rename(
+            columns={"count": val_y_column})
+        if yaxis_relative:
+            d = dict_df_grouped[key]
+            print(d) #debug
+            for species in d["Species"].unique():
+                mask_species = d["Species"]==species
+                d.loc[mask_species, val_y_column] = (
+                    d.loc[mask_species, val_y_column] /
+                    d.loc[mask_species, val_y_column].sum() )
+    # Call the plotting function.
+    histogram_content_repeats(
+        dict_df_grouped=dict_df_grouped,
+        hue_column=groupby_colnames[-1], val_y_column=val_y_column,
+        cat_x_column="Species")
+
+    return None
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
