@@ -1,7 +1,9 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# resquitllar.py
+# resquitllar.py / repellion.py
+#
+# repeatmasker_parser_v7
 #
 # 17 de gen. 2024  <adria@molevol-OptiPlex-9020>
 
