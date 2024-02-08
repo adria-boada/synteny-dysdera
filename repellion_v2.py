@@ -393,12 +393,12 @@ class Repeats(object):
 
         for species in df["Species"].unique():
             mask_species = df["Species"] == species
-            # Print total number of rows and total number of unique sequids.
+            # Store total number of rows and total number of unique sequids for
+            # each Species.
             species_totnrows = df.loc[mask_species].shape[0]
             species_totuniq = \
                 len(list(df.loc[mask_species, "sequid"].unique()))
-            # Print the number of rows matching and the number of unique
-            # sequids that did match.
+            # Initialise counters of matching rows and number of unique sequids.
             species_matchrows = 0
             species_matchuniq = 0
             for sequid_regex in self.seqsizes_dict[species].keys():
@@ -406,9 +406,16 @@ class Repeats(object):
                 mask_sequid_type = df["sequid"].str.contains(
                     sequid_regex, case=False)
                 mask_both = (mask_species) & (mask_sequid_type)
+                sequid_matchrows = df.loc[mask_both].shape[0]
                 print("--", sequid_regex, "--")
-                print(" + Nrows:", df.loc[mask_both].shape[0])
-                species_matchrows += df.loc[mask_both].shape[0]
+                print(" + Nrows: " +
+                      str(sequid_matchrows) +
+                      " [" +
+                      str( round((sequid_matchrows /
+                               species_totnrows) *100,
+                                 ndigits=1)) +
+                      " %]")
+                species_matchrows += sequid_matchrows
                 print(" + Regex matching count:",
                       len(df.loc[mask_both, "sequid"].unique()),
                       "unique sequids")
@@ -420,17 +427,21 @@ class Repeats(object):
                 # Add a new column to keep track of sequid types/regexes.
                 df.loc[mask_both, "sequid_type"] = sequid_regex
 
-            # Print a summary of the species, including all sequids.
+            # Print a summary of the species, including the amount of rows and
+            # amount of unique sequids which match the provided regexes in the
+            # index files.
             print("-----------------------------")
             print(species, "summary: matched", species_matchrows,
-                  "out of", species_totnrows, "rows (",
-                  round((species_matchrows/species_totnrows) *100, ndigits=3),
-                  "%)")
+                  "out of", species_totnrows, "rows [" +
+                  str(round((species_matchrows/species_totnrows) *100,
+                            ndigits=1)),
+                  "%]")
             print(" " * len(species + "summary: "), "found",
                   species_matchuniq, "matching REGEXs out of", species_totuniq,
-                  "unique sequids (",
-                  round((species_matchuniq/species_totuniq) *100, ndigits=3),
-                  "%)\n")
+                  "unique sequids [" +
+                  str(round((species_matchuniq/species_totuniq) *100,
+                            ndigits=1)),
+                  "%]\n")
         # As soon as all sequid types have been added, downcast the
         # `sequid_type` column to the category dtype.
         obj_cols = df.select_dtypes("object").columns
