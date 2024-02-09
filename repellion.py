@@ -1528,6 +1528,7 @@ class Repeats(object):
 def histogram_content_repeats(
     dict_df_grouped: dict,
     hue_column: str, val_y_column: str, cat_x_column: str,
+    yaxis_label: str,
     ):
     """
     + dict_df_grouped: keys are titles. values are pd.Dataframes for plotting.
@@ -1547,7 +1548,7 @@ def histogram_content_repeats(
                      x=cat_x_column, weights=val_y_column,
                      hue=hue_column, multiple="stack",
                      shrink=0.9, legend=True,
-                     ).set(title=df_title)
+                     ).set(title=df_title, ylabel=yaxis_label)
     # Get legend in the last subplot.
     # print(g) # debug
     #handles, labels = ax.get_legend_handles_labels()
@@ -1600,11 +1601,15 @@ def plotting_content_repeats(
                 d.loc[mask_species, val_y_column] = (
                     d.loc[mask_species, val_y_column] /
                     d.loc[mask_species, val_y_column].sum() )
+            yaxis_label="bp density"
+        else:
+            yaxis_label="bp count"
     # Call the plotting function.
     histogram_content_repeats(
         dict_df_grouped=dict_df_grouped,
         hue_column=groupby_colnames[-1], val_y_column=val_y_column,
-        cat_x_column="Species")
+        cat_x_column="Species",
+        yaxis_label=yaxis_label)
 
     return None
 
