@@ -199,14 +199,14 @@ class Mapping(object):
         df = self._read_paf_file(path_to_paf)
 
         # Identify chromosomes and minor scaffolds.
-        self._identify_sequence_patterns(df=df,
-                                         patterns=sequence_patterns)
+        self._identify_sequence_patterns(
+            df=df, patterns=sequence_patterns)
 
-        mapped_regions = self._mapped_regions(df=df,
-                                              patterns=sequence_patterns)
+        mapped_regions, seqtype_lens = self._mapped_regions(
+            df=df, patterns=sequence_patterns)
 
         df_stats = self._stats_mapped_regions(
-            mapped_regions=mapped_regions)
+            mapped_regions=mapped_regions, seqtype_lens=seqtype_lens)
 
         # Store variables into the class.
         self.df = df
@@ -575,10 +575,12 @@ class Mapping(object):
         # Init a dict. to store `ali_len` and `interdist` (distances between
         # mappings, unmapped regions).
         mapped_regions = dict()
+        seqtype_lens = dict()
         # Compute pd.Series with alignment lengths and unmapped lengths.
         for prefix in ("Q", "T"):
             # Init. a dict. for lengths in `prefix`.
             mapped_regions[prefix] = dict()
+            seqtype_lens[prefix] = dict()
             # Prepare query or target column names.
             column_sequid, column_start, column_end, column_len = \
                 str(prefix) + "name", \
@@ -586,13 +588,17 @@ class Mapping(object):
                 str(prefix) + "end", \
                 str(prefix) + "len"
             for seqtype, patt in patterns.items():
+                # Filter df by the prefix + sequid column using the pattern.
+                mask_seqtype = df[column_sequid].str.contains(patt, case=False)
+                df_seqtype = df.loc[mask_seqtype].copy()
+                # Compute the total length of all sequences in `df_seqtype`
+                seq_sum_lens = sum(list(df_seqtype[column_len].unique()))
                 # Init. a dict. for lengths in `seqtype`.
                 mapped_regions[prefix][seqtype] = {
                     "mapped": pd.Series(dtype="int"),
                     "unmapped": pd.Series(dtype="int"), }
-                # Filter df by the prefix + sequid column using the pattern.
-                mask_seqtype = df[column_sequid].str.contains(patt, case=False)
-                df_seqtype = df.loc[mask_seqtype].copy()
+                # Store the sum of sequence lengths for this seqtype.
+                seqtype_lens[prefix][seqtype] = seq_sum_lens
                 # Create a dict. formatted as {"seq": [intervals]}
                 intervals_per_seq = self._list_intervals_in_df(
                     df=df_seqtype, column_sequid=column_sequid,
@@ -614,20 +620,23 @@ class Mapping(object):
                     answer["unmapped"] = pd.concat(
                         [answer["unmapped"], region_series["unmapped"]])
 
-        return mapped_regions
+        return mapped_regions, seqtype_lens
 
     def _stats_mapped_regions(
         self,
-        mapped_regions: dict, ):
+        mapped_regions: dict,
+        seqtype_lens: dict, ):
         """
         """
         # Compute some stats from the series of alignment lengths or distances
         # between alignments.
         dict_stats = {"db": [], "partition": [], "region": [], "len_median": [],
-                      "len_mean": [], "len_max": [], "len_min": [], }
+                      "len_mean": [], "len_max": [], "len_min": [],
+                      "bpsum": [], "coverage": [], }
         for db, val1 in mapped_regions.items():
             for partition, val2 in val1.items():
                 for region, series in val2.items():
+                    seqlens = seqtype_lens[db][partition]
                     dict_stats["db"].append(db)
                     dict_stats["partition"].append(partition)
                     dict_stats["region"].append(region)
@@ -635,6 +644,9 @@ class Mapping(object):
                     dict_stats["len_mean"].append(series.mean())
                     dict_stats["len_max"].append(series.max())
                     dict_stats["len_min"].append(series.min())
+                    dict_stats["bpsum"].append(series.sum())
+                    dict_stats["coverage"].append(
+                        round((series.sum()/seqlens)*100,ndigits=5))
 
         df_stats = pd.DataFrame(dict_stats)
 
