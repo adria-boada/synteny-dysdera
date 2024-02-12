@@ -375,11 +375,17 @@ class Mapping(object):
         # Now that the columns have been defined as integer/floats, compute some
         # more parameters and add them to the dataframe:
         df["blast_identity"] = df["matches"] / df["ali_len"]
-        df["gap_compr_identity"] = (
-            df["matches"] / (df["cig_matches"] + df["cig_compressed"]))
-        df["mismatches"] = \
-            df["mismatches_and_gaps"] - \
-            (df["cig_insertions"] + df["cig_deletions"])
+        # Compute the following if a CIGAR was found.
+        if ("cig_matches" in df.columns) and \
+           ("cig_compressed" in df.columns) and \
+           ("cig_deletions" in df.columns) and \
+           ("cig_insertions" in df.columns) and \
+           ("mismatches_and_gaps" in df.columns):
+            df["gap_compr_identity"] = (
+                df["matches"] / (df["cig_matches"] + df["cig_compressed"]))
+            df["mismatches"] = \
+                df["mismatches_and_gaps"] - \
+                (df["cig_insertions"] + df["cig_deletions"])
 
         # Add the labels "Q." or "T." to the beginning of Qname and Tname
         # columns.
