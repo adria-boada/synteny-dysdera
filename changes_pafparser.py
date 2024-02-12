@@ -567,8 +567,8 @@ class Mapping(object):
 
         # Convert lists into pd.Series(); they are easier to manipulate.
         answer = {
-            "mapped": pd.Series(alig_lens),
-            "unmapped": pd.Series(interdist), }
+            "mapped_coords": pd.Series(alig_lens),
+            "unmapped_coords": pd.Series(interdist), }
 
         return answer
 
@@ -601,10 +601,14 @@ class Mapping(object):
                 seq_sum_lens = sum(list(df_seqtype[column_len].unique()))
                 # Init. a dict. for lengths in `seqtype`.
                 mapped_regions[prefix][seqtype] = {
-                    "mapped": pd.Series(dtype="int"),
-                    "unmapped": pd.Series(dtype="int"), }
+                    "mapped_coords": pd.Series(dtype="int"),
+                    "unmapped_coords": pd.Series(dtype="int"), }
                 # Store the sum of sequence lengths for this seqtype.
                 seqtype_lens[prefix][seqtype] = seq_sum_lens
+                # Store the list of alignment lengths (separate from mapping
+                # coordinate lists).
+                mapped_regions[prefix][seqtype]["ali_len"] = \
+                    df_seqtype["ali_len"].astype(int)
                 # Create a dict. formatted as {"seq": [intervals]}
                 intervals_per_seq = self._list_intervals_in_df(
                     df=df_seqtype, column_sequid=column_sequid,
@@ -621,10 +625,12 @@ class Mapping(object):
                     region_series = self._len_mapped_and_unmapped(
                         intervals=val, chr_end=chr_end)
                     answer = mapped_regions[prefix][seqtype]
-                    answer["mapped"] = pd.concat(
-                        [answer["mapped"], region_series["mapped"]])
-                    answer["unmapped"] = pd.concat(
-                        [answer["unmapped"], region_series["unmapped"]])
+                    answer["mapped_coords"] = pd.concat(
+                        [answer["mapped_coords"],
+                         region_series["mapped_coords"]])
+                    answer["unmapped_coords"] = pd.concat(
+                        [answer["unmapped_coords"],
+                         region_series["unmapped_coords"]])
 
         return mapped_regions, seqtype_lens
 
