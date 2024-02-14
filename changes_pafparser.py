@@ -300,7 +300,7 @@ class Mapping(object):
                           "ms": [], "rl": [], "zd": [], }
         # Furthermore, analyse the CIGAR string (if any).
         cigar = {"cig_deletions": [], "cig_insertions": [], "cig_matches": [],
-                 "cig_compressed": []}
+                 "cig_compressed": [], "CIGAR": []}
         # Scroll through the lines in the file and populate these lists:
         Printing("Reading the optional columns (further than 12th).").status()
         with open(path_to_paf) as file:
@@ -324,11 +324,13 @@ class Mapping(object):
                     cigar["cig_insertions"].append(cigar_summary["I"])
                     cigar["cig_matches"].append(cigar_summary["M"])
                     cigar["cig_compressed"].append(cigar_summary["compressed"])
+                    cigar["CIGAR"].append(last_cigar)
                 else:
                     cigar["cig_deletions"].append(None)
                     cigar["cig_insertions"].append(None)
                     cigar["cig_matches"].append(None)
                     cigar["cig_compressed"].append(None)
+                    cigar["CIGAR"].append(None)
 
         # Translate these small tags into more descriptive column names:
         tag_to_colnames= {"tp": "type_aln", "cm": "num_minimizers",
