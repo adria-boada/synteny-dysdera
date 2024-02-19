@@ -26,6 +26,8 @@ import seaborn as sns
 from datetime import datetime
 import locale
 locale.setlocale(locale.LC_TIME, '') # sets locale to the one used by user
+# CIGAR pattern matching
+import re
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -238,6 +240,10 @@ class Mapping(object):
         the amount of insertions and deletions instead of their lengths in
         basepairs. It is useful to compute "compressed gap identity/divergence".
         """
+        # Pattern matching to find a list of indel lengths.
+        indels = re.findall(r"\d+[ID]", cigar_string)
+        indels = re.findall(r"\d+", "".join(indels) )
+        indels = [int(x) for x in indels]
         # Split string by separating all letters with a space:
         for i in "MID":
             cigar_string = cigar_string.replace(i, i+" ")
@@ -255,6 +261,7 @@ class Mapping(object):
         # Take into account the amount of gaps instead of the length of gaps (i.e.
         # compress gaps into a length of one).
         answer["compressed"] = cigar_string.count("D") + cigar_string.count("I")
+        answer["indels"] = indels
 
         return answer
 
@@ -300,7 +307,7 @@ class Mapping(object):
                           "ms": [], "rl": [], "zd": [], }
         # Furthermore, analyse the CIGAR string (if any).
         cigar = {"cig_deletions": [], "cig_insertions": [], "cig_matches": [],
-                 "cig_compressed": [], "CIGAR": []}
+                 "cig_compressed": [], "indel_list": []}
         # Scroll through the lines in the file and populate these lists:
         Printing("Reading the optional columns (further than 12th).").status()
         with open(path_to_paf) as file:
@@ -324,13 +331,14 @@ class Mapping(object):
                     cigar["cig_insertions"].append(cigar_summary["I"])
                     cigar["cig_matches"].append(cigar_summary["M"])
                     cigar["cig_compressed"].append(cigar_summary["compressed"])
-                    cigar["CIGAR"].append(last_cigar)
+                    cigar["indel_list"].append(cigar_summary["indels"])
+
                 else:
                     cigar["cig_deletions"].append(None)
                     cigar["cig_insertions"].append(None)
                     cigar["cig_matches"].append(None)
                     cigar["cig_compressed"].append(None)
-                    cigar["CIGAR"].append(None)
+                    cigar["indel_list"].append(None)
 
         # Translate these small tags into more descriptive column names:
         tag_to_colnames= {"tp": "type_aln", "cm": "num_minimizers",
@@ -339,7 +347,7 @@ class Mapping(object):
                           "MD": "regenerate_refseq", "AS": "DP_ali_score",
                           "SA": "list_supp_ali", "ms": "DP_max_score",
                           "nn": "ambiguous_bases", "ts": "transcript_strand",
-                          "cg": "cigar_string", "cs": "diff_string",
+                          "cg": "CIGAR_string", "cs": "diff_string",
                           "dv": "divergence", "de": "gap_compr_diverg",
                           "rl": "length_repetitive_seeds",
                           "zd": "zd_unknown", }
@@ -364,15 +372,14 @@ class Mapping(object):
         to_numerical_floats = ["gap_compr_diverg", "second_chain_score",
                                "zd_unknown"]
         # Apply downcasted float to the previous columns.
-        df[to_numerical_floats] = df[to_numerical_floats].apply(pd.to_numeric,
-                                                    downcast="float")
+        df[to_numerical_floats] = df[to_numerical_floats].apply(pd.to_numeric)
 
         # Drop empty columns (with zero non-null entries).
         df = df.dropna(axis="columns", how="all")
         # Another great way to efficiently leverage the computer's memory is to
         # use 'category' dtypes instead of text/object dtypes.
-        object_columns = df.select_dtypes("object").columns
-        df[object_columns] = df[object_columns].astype("category")
+        to_categorical = ["Qname", "Tname", "strand", "type_aln"]
+        df[to_categorical] = df[to_categorical].astype("category")
 
         # Now that the columns have been defined as integer/floats, compute some
         # more parameters and add them to the dataframe:
