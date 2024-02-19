@@ -214,6 +214,9 @@ class Mapping(object):
         self.df = df
         self.mapped_regions = mapped_regions
         self.df_stats = df_stats
+        # Create a list of indel lengths as a separate variable.
+        self.indel_list = list()
+        [self.indel_list.extend(x) for x in df.indel_list.to_list()]
 
     def cigar_analysis(
         self,
