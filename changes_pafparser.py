@@ -210,13 +210,37 @@ class Mapping(object):
         df_stats = self._stats_mapped_regions(
             mapped_regions=mapped_regions, seqtype_lens=seqtype_lens)
 
+        # Compute a list of indel lengths.
+        self.indels_per_region = self.indel_list_per_genome_subset(
+            df=df, patterns=sequence_patterns)
+
         # Store variables into the class.
         self.df = df
         self.mapped_regions = mapped_regions
         self.df_stats = df_stats
-        # Create a list of indel lengths as a separate variable.
-        self.indel_list = list()
-        [self.indel_list.extend(x) for x in df.indel_list.to_list()]
+
+    def indel_list_per_genome_subset(
+        self,
+        df: pd.DataFrame,
+        patterns: dict, ):
+        """
+        Create a list of indel lengths per genome subset found in `patterns`.
+        """
+        indels_per_region = dict()
+        for prefix in ("Q", "T"):
+            indels_per_region[prefix] = dict()
+            # Prepare query or target column names.
+            column_sequid = str(prefix) + "name"
+            for seqtype, patt in patterns.items():
+                # Filter df by the prefix + sequid column using the pattern.
+                mask_seqtype = df[column_sequid].str.contains(patt, case=False)
+                df_seqtype = df.loc[mask_seqtype]
+                # Compute a list of indels from the previously filtered df.
+                indels_per_region[prefix][seqtype] = list()
+                [indels_per_region[prefix][seqtype].extend(i)
+                 for i in df_seqtype.indel_list.to_list()]
+
+        return indels_per_region
 
     def cigar_analysis(
         self,
@@ -676,6 +700,43 @@ class Mapping(object):
 
         return df_stats
 
+def indelling(
+    maplist: list(), ):
+    """
+    """
+    answer_stats = {"filename": [], "DB": [], "partition": [],
+                    "mean": [], "median": [], "max": [], }
+    answer_bins = {"filename": [], "DB": [], "partition": [],
+                   "[1,10)": [], "[10,100)": [], "[100,1k)": [],
+                   "[1k,10k)": [], ">10k": [], }
+    for mapping in maplist:
+        filename = mapping.filename
+        for prefix, subdict in mapping.indels_per_region.items():
+            for genome_subset, series in subdict.items():
+                series = pd.Series(series)
+                answer_stats["filename"].append(filename)
+                answer_stats["DB"].append(prefix)
+                answer_stats["partition"].append(genome_subset)
+                answer_stats["mean"].append(series.mean())
+                answer_stats["median"].append(series.median())
+                answer_stats["max"].append(series.max())
+                answer_bins["filename"].append(filename)
+                answer_bins["DB"].append(prefix)
+                answer_bins["partition"].append(genome_subset)
+                count = series.loc[(series>=1) & (series<10)].shape[0]
+                answer_bins["[1,10)"].append(count)
+                count = series.loc[(series>=10) & (series<100)].shape[0]
+                answer_bins["[10,100)"].append(count)
+                count = series.loc[(series>=100) & (series<1000)].shape[0]
+                answer_bins["[100,1k)"].append(count)
+                count = series.loc[(series>=1000) & (series<10000)].shape[0]
+                answer_bins["[1k,10k)"].append(count)
+                count = series.loc[series>=10000].shape[0]
+                answer_bins[">10k"].append(count)
+
+    return (pd.DataFrame(answer_bins),
+            pd.DataFrame(answer_stats))
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Si es crida com a script:
@@ -700,4 +761,6 @@ if __name__ == '__main__':
     for mapping in maplist:
         print(" --", mapping.filename, "--")
         print(mapping.df_stats)
+
+    indel_stats = indelling(maplist)
 
