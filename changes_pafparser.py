@@ -788,7 +788,7 @@ def table_mapping_lengths(
                     answer_stats["len_mean"].append(series.mean())
                     answer_stats["len_median"].append(series.median())
                     answer_stats["len_max"].append(series.max())
-                    answer_stats["len_min"].append(series.max())
+                    answer_stats["len_min"].append(series.min())
                     answer_stats["bpsum"].append(series.sum())
                     coverage = round((series.sum() / seqlen)*100, ndigits=5)
                     answer_stats["coverage"].append(coverage)
