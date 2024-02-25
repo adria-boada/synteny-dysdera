@@ -211,13 +211,21 @@ class Mapping(object):
             mapped_regions=mapped_regions, seqtype_lens=seqtype_lens)
 
         # Compute a list of indel lengths.
-        self.indels_per_region = self.indel_list_per_genome_subset(
+        self.indels_per_region, self.ali_len_per_indel = \
+            self.indel_list_per_genome_subset(
             df=df, patterns=sequence_patterns)
+
+        # Aboca totes les dades a un sol diccionari.
+        for db, subdict in self.indels_per_region.items():
+            for partition, values in subdict.items():
+                mapped_regions[db][partition]["indels"] = \
+                    pd.Series(values, dtype=int)
 
         # Store variables into the class.
         self.df = df
-        self.mapped_regions = mapped_regions
+        self.mapping_regions = mapped_regions
         self.df_stats = df_stats
+        self.seqtype_lens = seqtype_lens
 
     def indel_list_per_genome_subset(
         self,
@@ -227,8 +235,10 @@ class Mapping(object):
         Create a list of indel lengths per genome subset found in `patterns`.
         """
         indels_per_region = dict()
+        ali_len_per_indel = dict()
         for prefix in ("Q", "T"):
             indels_per_region[prefix] = dict()
+            ali_len_per_indel[prefix] = dict()
             # Prepare query or target column names.
             column_sequid = str(prefix) + "name"
             for seqtype, patt in patterns.items():
@@ -237,10 +247,15 @@ class Mapping(object):
                 df_seqtype = df.loc[mask_seqtype]
                 # Compute a list of indels from the previously filtered df.
                 indels_per_region[prefix][seqtype] = list()
+                # List comprehension to remove sublists.
                 [indels_per_region[prefix][seqtype].extend(i)
-                 for i in df_seqtype.indel_list.to_list()]
+                 for i in df_seqtype["indel_list"].to_list()]
+                # Computa la llargada d'alineament per a cada mida indel.
+                num_indels = df_seqtype["indel_list"].map(len)
+                ali_len_per_indel[prefix][seqtype] = \
+                    np.repeat(df_seqtype["ali_len"], num_indels).to_list()
 
-        return indels_per_region
+        return indels_per_region, ali_len_per_indel
 
     def cigar_analysis(
         self,
@@ -645,6 +660,12 @@ class Mapping(object):
                 # coordinate lists).
                 mapped_regions[prefix][seqtype]["ali_len"] = \
                     df_seqtype["ali_len"].astype(int)
+                # Store the list of matching lengths (removing gaps from
+                # alignment length).
+                mapped_regions[prefix][seqtype]["matches"] = \
+                    df_seqtype["matches"].astype(int)
+                mapped_regions[prefix][seqtype]["mismatches"] = \
+                    df_seqtype["mismatches"].astype(int)
                 # Create a dict. formatted as {"seq": [intervals]}
                 intervals_per_seq = self._list_intervals_in_df(
                     df=df_seqtype, column_sequid=column_sequid,
@@ -705,21 +726,22 @@ def indelling(
     """
     """
     answer_stats = {"filename": [], "DB": [], "partition": [],
-                    "mean": [], "median": [], "max": [], }
+                    "len_mean": [], "len_median": [], "len_max": [], "bpsum": []}
     answer_bins = {"filename": [], "DB": [], "partition": [],
                    "[1,10)": [], "[10,100)": [], "[100,1k)": [],
                    "[1k,10k)": [], ">10k": [], }
     for mapping in maplist:
         filename = mapping.filename
         for prefix, subdict in mapping.indels_per_region.items():
-            for genome_subset, series in subdict.items():
-                series = pd.Series(series)
+            for genome_subset, indel_list in subdict.items():
+                series = pd.Series(indel_list, dtype=int)
                 answer_stats["filename"].append(filename)
                 answer_stats["DB"].append(prefix)
                 answer_stats["partition"].append(genome_subset)
-                answer_stats["mean"].append(series.mean())
-                answer_stats["median"].append(series.median())
-                answer_stats["max"].append(series.max())
+                answer_stats["len_mean"].append(series.mean())
+                answer_stats["len_median"].append(series.median())
+                answer_stats["len_max"].append(series.max())
+                answer_stats["bpsum"].append(series.sum())
                 answer_bins["filename"].append(filename)
                 answer_bins["DB"].append(prefix)
                 answer_bins["partition"].append(genome_subset)
@@ -733,6 +755,58 @@ def indelling(
                 answer_bins["[1k,10k)"].append(count)
                 count = series.loc[series>=10000].shape[0]
                 answer_bins[">10k"].append(count)
+
+    return (pd.DataFrame(answer_bins),
+            pd.DataFrame(answer_stats))
+
+def table_mapping_lengths(
+    maplist: list(), ):
+    """
+    """
+    # Initialise answer dictionaries.
+    answer_stats = {"filename": [], "DB": [],
+                    "genome_subset": [], "type": [],
+                    "len_mean": [], "len_median": [], "len_min": [],
+                    "len_max": [], "bpsum": [], "coverage": [], }
+    answer_bins = {"filename": [], "DB": [],
+                   "genome_subset": [], "type": [],
+                   "[1,10)": [], "[10,100)": [], "[100,1k)": [],
+                   "[1k,10k)": [], ">10k": [], }
+
+    for mapping in maplist:
+        for prefix, subset_dict in mapping.mapping_regions.items():
+            for genome_subset, type_dict in subset_dict.items():
+                for region_type, series in type_dict.items():
+                    seqlen = mapping.seqtype_lens[prefix][genome_subset]
+                    # Try to avoid division by zero.
+                    if seqlen == 0:
+                        seqlen = 1
+                    answer_stats["filename"].append(mapping.filename)
+                    answer_stats["DB"].append(prefix)
+                    answer_stats["genome_subset"].append(genome_subset)
+                    answer_stats["type"].append(region_type)
+                    answer_stats["len_mean"].append(series.mean())
+                    answer_stats["len_median"].append(series.median())
+                    answer_stats["len_max"].append(series.max())
+                    answer_stats["len_min"].append(series.max())
+                    answer_stats["bpsum"].append(series.sum())
+                    coverage = round((series.sum() / seqlen)*100, ndigits=5)
+                    answer_stats["coverage"].append(coverage)
+
+                    answer_bins["filename"].append(mapping.filename)
+                    answer_bins["DB"].append(prefix)
+                    answer_bins["genome_subset"].append(genome_subset)
+                    answer_bins["type"].append(region_type)
+                    count = series.loc[(series>=1) & (series<10)].shape[0]
+                    answer_bins["[1,10)"].append(count)
+                    count = series.loc[(series>=10) & (series<100)].shape[0]
+                    answer_bins["[10,100)"].append(count)
+                    count = series.loc[(series>=100) & (series<1000)].shape[0]
+                    answer_bins["[100,1k)"].append(count)
+                    count = series.loc[(series>=1000) & (series<10000)].shape[0]
+                    answer_bins["[1k,10k)"].append(count)
+                    count = series.loc[series>=10000].shape[0]
+                    answer_bins[">10k"].append(count)
 
     return (pd.DataFrame(answer_bins),
             pd.DataFrame(answer_stats))
