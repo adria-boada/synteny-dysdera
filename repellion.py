@@ -95,7 +95,7 @@ import pandas as pd, numpy as np
 # Plotting figures.
 import seaborn as sns, matplotlib.pyplot as plt
 # Obtain local minima/maxima values to plot them.
-from scipy.signal import argrelextrema
+#> from scipy.signal import argrelextrema
 # Measure the time it takes to run this script.
 from datetime import datetime
 import locale
@@ -1528,7 +1528,7 @@ class Repeats(object):
 def histogram_content_repeats(
     dict_df_grouped: dict,
     hue_column: str, val_y_column: str, cat_x_column: str,
-    yaxis_label: str,
+    yaxis_label: str, title: str,
     ):
     """
     + dict_df_grouped: keys are titles. values are pd.Dataframes for plotting.
@@ -1542,6 +1542,8 @@ def histogram_content_repeats(
     """
     # Crea tants `subplots` com items a la llista `dict_df_grouped`.
     fig, axes = plt.subplots(ncols=len(dict_df_grouped), sharey=True)
+    if len(dict_df_grouped) == 1:
+        axes = [axes]
     # Itera a través de parelles d'axes i dataframes:
     for ax, (df_title, df_loop) in zip(axes, dict_df_grouped.items()):
         g = sns.histplot(data=df_loop, ax=ax, # Utilitza `ax` del "loop".
@@ -1553,6 +1555,7 @@ def histogram_content_repeats(
     # print(g) # debug
     #handles, labels = ax.get_legend_handles_labels()
     #fig.legend(handles, labels, loc="upper left")
+    fig.suptitle(title)
 
     plt.show()
 
@@ -1564,6 +1567,7 @@ def plotting_content_repeats(
     groupby_colnames: list,
     val_y_column: str,
     yaxis_relative: bool=True,
+    title: str="",
     ):
     """
     dict_div_masks = {
@@ -1609,9 +1613,79 @@ def plotting_content_repeats(
         dict_df_grouped=dict_df_grouped,
         hue_column=groupby_colnames[-1], val_y_column=val_y_column,
         cat_x_column="Species",
-        yaxis_label=yaxis_label)
+        yaxis_label=yaxis_label, title=title)
 
     return None
+
+def nacho(repeats_instance):
+    """
+    """
+    # Contingut de les classes relatiu.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp",
+        groupby_colnames=["Species", "class",],
+        title="1. Class relative bp")
+    # Contingut de les classes absolut.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp", yaxis_relative=False,
+        groupby_colnames=["Species", "class",],
+        title="1. Class absolute bp")
+
+    # Contingut de les subclasses relatiu.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp",
+        groupby_colnames=["Species", "class", "subclass"],
+        title="2. Subclass")
+    # Contingut de les subclasses absolut.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp", yaxis_relative=False,
+        groupby_colnames=["Species", "class", "subclass"],
+        title="2. Subclass")
+
+    # Contingut dels ordres relatiu.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp",
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders")
+    # Contingut dels ordres absolut.
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
+        val_y_column="algor_bp", yaxis_relative=False,
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders")
+
+    # Contingut de LTR (FALTA NACHO)
+    df_ltr = repeats_instance.df.loc[
+        repeats_instance.df["order"]=="LTR"]
+
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0,
+        "div < 1%": repeats.df["perc_divg"] < 1,
+        "div < 5%": repeats.df["perc_divg"] < 5,
+        "div >= 5%": repeats. df["perc_divg"] >= 5,},
+        val_y_column="algor_bp", groupby_colnames=["Species", "class",],
+        title="1. Class")
+    plotting_content_repeats(
+        repeats_instance.df,
+        dict_div_masks={"All": repeats.df["perc_divg"] >=0,
+        "div < 1%": repeats.df["perc_divg"] < 1,
+        "div < 5%": repeats.df["perc_divg"] < 5,
+        "div >= 5%": repeats. df["perc_divg"] >= 5,},
+        val_y_column="algor_bp",
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1666,6 +1740,7 @@ if __name__ == '__main__':
             files_dict[species] = file
 
     repeats = Repeats(files_dict, seqsizes_dict=seqsizes_dict)
+    nacho(repeats)
 
     # Write summary tables.
     if args.summary:
