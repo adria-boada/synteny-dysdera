@@ -1641,14 +1641,14 @@ def nacho(repeats_instance):
         dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
         val_y_column="algor_bp",
         groupby_colnames=["Species", "class", "subclass"],
-        title="2. Subclass")
+        title="2. Subclass relative bp")
     # Contingut de les subclasses absolut.
     plotting_content_repeats(
         repeats_instance.df,
         dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
         val_y_column="algor_bp", yaxis_relative=False,
         groupby_colnames=["Species", "class", "subclass"],
-        title="2. Subclass")
+        title="2. Subclass absolute bp")
 
     # Contingut dels ordres relatiu.
     plotting_content_repeats(
@@ -1656,16 +1656,16 @@ def nacho(repeats_instance):
         dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
         val_y_column="algor_bp",
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders")
+        title="3. Orders relative bp")
     # Contingut dels ordres absolut.
     plotting_content_repeats(
         repeats_instance.df,
         dict_div_masks={"All": repeats.df["perc_divg"] >=0, },
         val_y_column="algor_bp", yaxis_relative=False,
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders")
+        title="3. Orders absolute bp")
 
-    # Contingut de LTR (FALTA NACHO)
+    # Contingut de LTR, LINE, SINE, DDE (FALTA NACHO)
     df_ltr = repeats_instance.df.loc[
         repeats_instance.df["order"]=="LTR"]
 
@@ -1676,7 +1676,7 @@ def nacho(repeats_instance):
         "div < 5%": repeats.df["perc_divg"] < 5,
         "div >= 5%": repeats. df["perc_divg"] >= 5,},
         val_y_column="algor_bp", groupby_colnames=["Species", "class",],
-        title="1. Class")
+        title="1. Class by divergence subsets")
     plotting_content_repeats(
         repeats_instance.df,
         dict_div_masks={"All": repeats.df["perc_divg"] >=0,
@@ -1685,7 +1685,7 @@ def nacho(repeats_instance):
         "div >= 5%": repeats. df["perc_divg"] >= 5,},
         val_y_column="algor_bp",
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders")
+        title="3. Orders by divergence subsets")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
