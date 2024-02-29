@@ -19,8 +19,11 @@ def preprocess_rmout(
     output_modified_rmout: str, ):
     """
     Preprocess RM.out files. The 16th field is inconsistent; some rows contain
-    an asterisk, while other rows have an empy 16th field. Make all rows
+    an asterisk, while other rows have an empty 16th field. Make all rows
     consistent (asterisk -> True, empty -> False).
+
+    Input
+    -----
 
     + input_rmout: String pointing to a file.
 
@@ -36,14 +39,15 @@ def preprocess_rmout(
             overlapping_bool = (line.split()[-1] == "*")
             out_line = str(line).strip("\n*") + "\t" +\
                 str(overlapping_bool) + "\n"
+            # Some rows might not have all 16 fields!
             if len(out_line.split()) != 16:
-                print("ERROR: Length of the line number", int(num)+4,
-                      "is not equal to 16")
-                print(out_line)
-                print(out_line.split())
-                print(len(out_line.split()))
+                print("ERROR: The amount of fields/columns in the line",
+                      int(num)+4, "is not equal to 16. Make sure that "+
+                      "this line is not missing any fields.")
+                print("The problematic line is...")
+                print(line)
+                # Stop writing file if an error is encountered.
                 return None
-
             out.write(out_line)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
