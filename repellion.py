@@ -454,8 +454,8 @@ class Repeats(object):
     def _reclassification(self, df):
         """
         Very long function with many paragraphs. Each paragraph reclassifies a
-        default repeat type into four standardised clades, whcih can be easily
-        read and analysed.
+        default repeat type into four standardised clades. It helps in
+        standardising the analyses.
 
         Some repeat types are reclassified based on an exact match in the field
         "default_repclass", while others are reclassified based on containing a
@@ -837,7 +837,7 @@ class Repeats(object):
 
         # Object dtypes are more expensive than category dtypes. Try to
         # downcast from objects to categories, if possible.
-        obj_cols = df.select_dtypes("object").columns
+        obj_cols = ["class", "subclass", "order", "superfam"]
         df[obj_cols] = df[obj_cols].astype("category")
 
         return df
