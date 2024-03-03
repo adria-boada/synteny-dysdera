@@ -1528,17 +1528,18 @@ class Repeats(object):
 def histogram_content_repeats(
     dict_df_grouped: dict,
     hue_column: str, val_y_column: str, cat_x_column: str,
-    yaxis_label: str, title: str,
-    ):
+    yaxis_label: str, title: str, ):
     """
-    + dict_df_grouped: keys are titles. values are pd.Dataframes for plotting.
+    + dict_df_grouped: a dict. where keys are titles. values are pd.Dataframes
+      for plotting.
 
-    + cat_x_column: usually species.
+    + cat_x_column: column with species.
 
-    + val_y_column: elecount or bpcount.
+    + val_y_column: column with count of REs or basepairs.
 
-    + hue_column: type of repeats; try to make these unique (careful with DNA-NA
-      and RT-NA, these values might group together).
+    + hue_column: column which contains type of repeats. Try to make these
+      unique (careful with DNA-NA and RT-NA, if grouped by subclass NA will
+      group together).
     """
     # Crea tants `subplots` com items a la llista `dict_df_grouped`.
     fig, axes = plt.subplots(ncols=len(dict_df_grouped), sharey=True)
@@ -1562,13 +1563,12 @@ def histogram_content_repeats(
     return None
 
 def plotting_content_repeats(
-    df: pd.DataFrame(),
+    df: pd.DataFrame,
     dict_div_masks: dict,
     groupby_colnames: list,
     val_y_column: str,
     yaxis_relative: bool=True,
-    title: str="",
-    ):
+    title: str="", ):
     """
     dict_div_masks = {
         "All": df["perc_divg"] >= 0,
