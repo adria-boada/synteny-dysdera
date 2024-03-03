@@ -151,8 +151,6 @@ def preprocess_rmout_asterisks(
     + output_modified_rmout: String where a new file will be written to. If
       there exists a file with the same filename, it will be overwritten.
     """
-    Printing("Preprocessing the RM output file '"+
-             str(input_rmout)+"'").status()
     with open(input_rmout) as inp, open(output_modified_rmout, "w") as out:
         # Skip first three lines (strangely formatted header).
         for i in range(3):
@@ -179,10 +177,6 @@ def read_preprocessed_rmout(
     preproc_rmout: str, ):
     """
     """
-    Printing(f"Reading preprocessed RM file {preproc_rmout}.").status()
-    # Print file size before reading.
-    file_size = os.path.getsize(preproc_rmout)
-    Printing(f"Size in bytes: {file_size}.").status()
     # Load the file as pd.DataFrame.
     df = pd.read_table(
         preproc_rmout,
@@ -365,16 +359,919 @@ def main_preproc(
     output_modified_rmout: str, ):
     """
     """
-    # Preprocess RM.out file.
+    Printing("Preprocessing the RM output file '"+
+             str(input_rmout)+"'").status()
     preprocess_rmout_asterisks(input_rmout, output_modified_rmout)
-    # Read it as pd.DataFrame()
+    Printing("Reading preprocessed RM file "+
+             f"{output_modified_rmout}.").status()
+    # Print file size before reading.
+    file_size = os.path.getsize(output_modified_rmout)
+    Printing(f"Size in bytes of {output_modified_rmout}: "+
+             f"{file_size}.").status()
     df = read_preprocessed_rmout(output_modified_rmout)
-    # Create a new column with non-overlapping RE basepairs.
+    Printing("Computing overlapping basepairs with algorithm "+
+             "(time expensive).").status()
     df["bp_algor"] = algor_overlap_basepairs(df)
     Printing("Exporting the preprocessed/modified RM.out file to '"+
              str(os.getcwd()) + "/" + str(output_modified_rmout) + "'")\
         .status()
     df.to_markdown(output_modified_rmout, tablefmt="plain", index=False)
+
+class Repeats(object):
+    """
+    """
+    def __init__(
+        self,
+        pairs_species_rmout: dict,
+        pairs_species_idxfile: dict, ):
+        """
+        """
+        # First, make sure all provided files exist:
+        list_of_files =\
+            list(pairs_species_rmout.values()) +\
+            list(pairs_species_idxfile.values())
+        for file in list_of_files:
+            # Try to open all files.
+            try:
+                with open(file) as f:
+                    pass
+            # If any file is not found, stop init execution.
+            except FileNotFoundError:
+                Printing("The file "+str(file)+
+                         " was not found.").error()
+                return None
+        # Check if there are MORE index files than rmout files:
+        if len(pairs_species_idxfile.values()) >\
+                len(pairs_species_rmout.values()):
+            Printing("There are more index files than RM.out "+
+                     "files. Make sure there is at least one "+
+                     "RM.out file per index file.").error()
+            return None
+        # Check if there is one rmout file per index file.
+        species_idx = pairs_species_idxfile.keys()
+        species_rmout = pairs_species_rmout.keys()
+        check = [sp in species_idx for sp in species_rmout]
+        # If one rmout does not have idx file:
+        if not all(check):
+            Printing("An RM.out is missing an index file. "+
+                     "Index files are required to create "+
+                     "summary tables.").warning()
+            # Create a variable to unable the execution of the function which
+            # generates summary tables.
+            self.correct_idx_files = False
+        else:
+            self.correct_idx_files = True
+
+        # Next, read the given files.
+        Printing("Reading the provided index files...").status()
+        df_index = self.read_index_files(pairs_species_idxfile)
+        print(df_index)
+        Printing("Reading the provided RM.out files...").status()
+        df_rmout = self.read_modified_rmout(pairs_species_rmout)
+        # Reclassify RE types into 4 new columns (unpack and standardise default
+        # types).
+        Printing("Reclassifying RE default types into "+
+                 "standardised types...").status()
+        df_rmout = self.reclassify_default_reptypes(df_rmout)
+        # Print information about the main dataframe.
+        Printing("Printing information/columns about the created "+
+                 "dataframe:").status()
+        df_rmout.info(memory_usage="deep")
+        # Check whether the reclassification correctly labelled all default
+        # repeat types.
+        Printing("Checking the reclassification/standardisation of "+
+                 "repeat types:").status()
+        self.df_check_reclass = self.check_reclassification(df_rmout)
+        print(self.df_check_reclass.to_markdown(tablefmt="plain"))
+        Printing("Checking overlapping REs:").status()
+        self.df_check_overlap = self.evaluate_whole_overlapping(df_rmout)
+        print(self.df_check_overlap.to_markdown(tablefmt="plain"))
+        Printing("Checking the provided subsets in the index file:").status()
+        self.df_check_matching_subsets = self.check_genome_subsets(
+            df_index=df_index, df_rmout=df_rmout)
+        print(self.df_check_matching_subsets.to_markdown(tablefmt="plain"))
+
+        self.df_rmout = df_rmout
+        self.df_index = df_index
+
+    def read_index_files(
+        self,
+        pairs_species_idxfile: dict, ):
+        """
+        Read all the index files and concatenate them in a single pd.DataFrame.
+        """
+        answer_df_list = list()
+        for species, idxfile in pairs_species_idxfile.items():
+            df = pd.read_table(
+                idxfile,
+                sep="\s+",
+                header=None,
+                names=["Subset", "Pattern", "Bpsum"])
+            df["Species"] = species
+            answer_df_list.append(df)
+
+        return pd.concat(answer_df_list).reset_index(drop=True)
+
+    def read_modified_rmout(
+        self,
+        pairs_species_rmout: dict, ):
+        """
+        Read all the RM.out files and concatenate them in a single pd.DataFrame.
+        """
+        answer_df_list = list()
+        for species, rmout in pairs_species_rmout.items():
+            file_size = os.path.getsize(rmout)
+            print(f" * {rmout}: {file_size} bytes")
+            df = pd.read_table(
+                rmout,
+                header=0,
+                sep="\s+")
+            df["Species"] = species
+            # Decrease memory usage by using efficient 'dtypes'.
+            obj_cols_to_categ = ["sequid", "orient", "name",
+                                 "default_repclass", "Species"]
+            # Change 'obj' columns to 'category'.
+            df[obj_cols_to_categ] = df[obj_cols_to_categ].astype("category")
+            answer_df_list.append(df)
+
+        return pd.concat(answer_df_list).reset_index(drop=True)
+
+    def reclassify_default_reptypes(
+        self,
+        df: pd.DataFrame(), ):
+        """
+        Very long function with many paragraphs. Each paragraph reclassifies a
+        default repeat type into four standardised clades. It helps in
+        standardising the analyses.
+
+        Some repeat types are reclassified based on an exact match in the field
+        "default_repclass", while others are reclassified based on containing a
+        substring/pattern.
+        """
+        # Unclassified
+        df.loc[
+            df["default_repclass"]=="__unknown",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Unclassified", "NA", "NA", "NA")
+
+        # Enzymatic RNAs.
+        df.loc[
+            df["default_repclass"]=="tRNA",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "tRNA", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="rRNA",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "rRNA", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="srpRNA",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "srpRNA", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="snRNA",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "snRNA", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="scRNA",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "scRNA", "NA", "NA")
+
+        # Generic repetitive elements.
+        df.loc[
+            df["default_repclass"]=="Simple_repeat",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Simple_repeat", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="Satellite",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "NA", "NA")
+        df.loc[
+            df["default_repclass"]=="Satellite/W-chromosome",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "W-chromosome", "NA")
+        df.loc[
+            df["default_repclass"]=="Satellite/Y-chromosome",
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "Y-chromosome", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Satellite/acro"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "acromeric", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Satellite/centr"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "centromeric", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Satellite/macro"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Tandem_repeat", "Satellite", "macro", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Low_complexity"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Other", "Low_complexity", "NA", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Other"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("NA", "NA", "NA", "NA")
+
+        # Generic retrotransposons.
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon") |
+            df["default_repclass"].str.contains("__ClassI"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "NA", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("LINE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "NA")
+        df.loc[
+            (df["default_repclass"].str.contains("_LTR")) |
+            (df["default_repclass"].str.contains("^LTR/")) |
+            (df["default_repclass"] == "LTR"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("SINE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon") &
+            (df["default_repclass"].str.contains("SVA") |
+            df["default_repclass"].str.contains("L1-dep")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "NA", "L1-dependent")
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon/RTE-derived"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "NA", "RTE-derived")
+
+        # Superfamilies in LINE order.
+        df.loc[
+            (df["default_repclass"].str.contains("LINE") &
+            df["default_repclass"].str.contains("Penelope")) |
+            (df["default_repclass"].str.contains("ClassI") &
+            df["default_repclass"].str.contains("PLE")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "PLE", "Penelope")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/CR1") |
+            df["default_repclass"].str.contains("LINE/L2") |
+            df["default_repclass"].str.contains("LINE/Rex-Babar"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "CR1")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/CRE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "CRE")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/Deceiver"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "Deceiver")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/Dong-R4"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "Dong-R4")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/I") |
+            df["default_repclass"].str.contains("nLTR_LINE_I"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "I")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/I-Jockey"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "Jockey")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/L1") |
+            df["default_repclass"].str.contains("nLTR_LINE_L1"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "L1")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/Proto1"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "Proto1")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/Proto2"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "Proto2")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/R1") |
+            df["default_repclass"].str.contains("LINE/Tad1"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "R1")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/R2") |
+            df["default_repclass"].str.contains("nLTR_LINE_R2"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "R2")
+        df.loc[
+            df["default_repclass"].str.contains("LINE/RTE") |
+            df["default_repclass"].str.contains("nLTR_LINE_RTE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LINE", "RTE")
+
+        # Superfamilies in LTR order
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("DIRS"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "YR", "DIRS")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("Ngaro"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "YR", "Ngaro")
+        df.loc[
+            df["default_repclass"].str.contains("LTR/Viper"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "YR", "Viper-group")
+        df.loc[
+            df["default_repclass"].str.contains("LTR/Pao") |
+            df["default_repclass"].str.contains("LTR_BEL"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "Bel-Pao")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("Copia"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "Copia")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("ERV"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "ERV")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("Gypsy"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "Gypsy")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("ERV"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "ERV")
+        df.loc[
+            df["default_repclass"].str.contains("LTR") &
+            df["default_repclass"].str.contains("Caulimovirus"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "LTR", "Pararetrovirus")
+
+        # Superfamilies in SINE order
+        df.loc[
+            df["default_repclass"].str.contains("SINE") &
+            df["default_repclass"].str.contains("5S"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "5S")
+        df.loc[
+            df["default_repclass"].str.contains("SINE") &
+            (df["default_repclass"].str.contains("7SL") |
+            df["default_repclass"].str.contains("ALU", case=False) |
+            df["default_repclass"].str.contains("B2") |
+            df["default_repclass"].str.contains("B4")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "7SL")
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon/L1-derived"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "L1-derived")
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon/L2-derived"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "L2-derived")
+        df.loc[
+            df["default_repclass"].str.contains("SINE") &
+            df["default_repclass"].str.contains("tRNA"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "tRNA")
+        df.loc[
+            df["default_repclass"].str.contains("Retroposon/R4-derived"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("Retrotransposon", "NA", "SINE", "R4-derived")
+
+        # Generic DNA class' repeats.
+        df.loc[
+            (df["default_repclass"] == "DNA") |
+            (df["default_repclass"] == "__ClassII"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "NA", "NA", "NA")
+
+        # DNA, subclass I.
+        df.loc[
+            df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Crypton"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "Crypton", "Crypton")
+        df.loc[
+            df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Zator"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Zator")
+        # Both MITE and nMITE are unassignable to "taxons"; these attributes are
+        # not synapomorphic (unique to any one clade of repeats). I'd rather
+        # classify them as no further than "DNA" (all else unknown).
+        df.loc[
+            df["default_repclass"].str.contains("ClassII_MITE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "NA", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("ClassII_nMITE"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "NA", "NA")
+        df.loc[
+            df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Academ"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Academ")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("CMC")) |
+            df["default_repclass"].str.contains("ClassII_DNA_CACTA"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "CACTA")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Dada")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Dada")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Kolobok")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Kolobok")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Ginger")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Ginger")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("MULE")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "MULE")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("Merlin")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Merlin")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA/P")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "P")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA/PIF")) |
+            (df["default_repclass"].str.contains("ClassII_DNA_Harbinger")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "PIF-Harbinger")
+        df.loc[
+            (df["default_repclass"].str.contains("PiggyBac")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "PiggyBac")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA/Sola")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Sola")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA/Sola")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Sola")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA/TcMar") |
+            df["default_repclass"].str.contains("DNA_TcMar")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "TcMar")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA") &
+            df["default_repclass"].str.contains("hAT")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "hAT")
+        df.loc[
+            (df["default_repclass"].str.contains("DNA_Mutator")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "DDE", "Mutator")
+        df.loc[
+            df["default_repclass"].str.contains("IS3EU"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "NA", "IS3EU")
+        df.loc[
+            df["default_repclass"].str.contains("Novosib"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "NA", "Novosib")
+        df.loc[
+            df["default_repclass"].str.contains("Zisupton"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "1", "NA", "Zisupton")
+
+        # DNA, subclass II
+        df.loc[
+            (df["default_repclass"].str.contains("Helitron")),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "2", "Helitron", "Helitron")
+        df.loc[
+            df["default_repclass"].str.contains("Maverick"),
+            ["class", "subclass", "order", "superfam"]
+        ] = ("DNA", "2", "Maverick", "Maverick")
+
+        # MITE or nMITE?
+        df.loc[
+            df["default_repclass"].str.contains("_MITE"),
+            ["mite"]
+        ] = (True)
+        df.loc[
+            df["default_repclass"].str.contains("_nMITE"),
+            ["mite"]
+        ] = (False)
+
+        # Object dtypes are more expensive than category dtypes. Try to
+        # downcast from objects to categories, if possible.
+        obj_cols_to_categ = ["class", "subclass", "order", "superfam", "mite"]
+        df[obj_cols_to_categ] = df[obj_cols_to_categ].astype("category")
+
+        return df
+
+    def check_reclassification(
+        self,
+        df_rmout: pd.DataFrame(), ):
+        """
+        Checks how the default RE types/names have been reclassified.
+        Returns a dataframe pairing every unique default type/name with their
+        assigned class, subclass, order and superfamily.
+
+        Input
+        -----
+
+        + df_rmout: the main dataframe created by the class `Repeats`.
+
+        Output
+        ------
+
+        Returns a pandas dataframe in which default types are paired with their
+        reassigned classification.
+        """
+        # Create a subset of the main dataframe by dropping duplicate classes,
+        # subclasses, orders, and superfamilies.
+        df_unique_classes = df_rmout.drop_duplicates(
+            subset=["default_repclass", "class",
+                    "subclass", "order", "superfam", "mite"])
+        # Sort the dataframe by the newly assigned types. Reset its index.
+        df_unique_classes = df_unique_classes.sort_values(
+            by=["class", "subclass", "order", "superfam", "mite"],
+            ignore_index=True)
+        # We are only interested in columns with the repeat types;
+        # drop the rest of columns.
+        df_unique_classes = df_unique_classes[["class", "subclass", "order",
+                                               "superfam", "mite",
+                                               "default_repclass"]]
+
+        return df_unique_classes
+
+    def evaluate_whole_overlapping(
+        self,
+        df_rmout: pd.DataFrame(), ):
+        """
+        Compute the sum of base pairs obtained by the three different methods:
+
+        1) Sum of all base pairs (column "bp_naive").
+        2) Sum of the higher SW-score REs, removing the lower SW-score
+           REs (column "bp_naive" filtered by column "overlapping").
+        3) Sum of the higher SW-score REs, including the non-overlapping
+           fragments of lower SW-score REs (column "bp_algor").
+
+        Input
+        -----
+
+        + df_rmout: the main dataframe created by the class `Repeats`.
+
+        Output
+        ------
+
+        Prints and returns a pandas dataframe with the sum of basepairs obtained
+        from each method.
+        """
+        answer_df_list = list()
+        for species in df_rmout["Species"].unique():
+            mask_species = df_rmout["Species"] == species
+            method_1_bpsum = df_rmout.loc[
+                mask_species, "bp_naive"].sum()
+            method_2_bpsum = df_rmout.loc[
+                (mask_species) & (~ df_rmout["overlapping"]),
+                              "bp_naive"].sum()
+            method_3_bpsum = df_rmout.loc[
+                mask_species, "bp_algor"].sum()
+            # Create dataframe displaying the sum of basepairs per method.
+            df = pd.DataFrame({
+                "Species": [species]*3,
+                "Basepairs": [
+                    method_1_bpsum,
+                    method_2_bpsum,
+                    method_3_bpsum]},
+                index=["naive", "best", "algor"])
+            # Compute percentages relative to `method_1_bpsum`.
+            df["%Comparison"] =\
+                (df["Basepairs"] / method_1_bpsum) *100
+            # Store each species' overlapping stats.
+            answer_df_list.append(df)
+
+        # Concatenate the dataframes of all "Species" into a single one.
+        return pd.concat(answer_df_list)
+
+    def check_genome_subsets(
+        self,
+        df_rmout: pd.DataFrame,
+        df_index: pd.DataFrame, ):
+        """
+        Count how many rows match with the pattern referring to each provided
+        genome subset. At the moment it is a poorly optimised function.
+        """
+        # Initialise return dataframe.
+        answer = df_index[["Species", "Subset", "Pattern"]].copy()
+        # The following lambda function computes number of rows matching a
+        # pattern in the defined species.
+        compute_nrows = lambda spec, pat:\
+            df_rmout.loc[(df_rmout["sequid"].str.contains(pat, case=False)) &
+                         (df_rmout["Species"]==spec)].shape[0]
+        # Apply the function to each row (axis=1)
+        answer["#Rows"] = answer.apply(lambda x:\
+            compute_nrows(x["Species"], x["Pattern"]), axis=1)
+        # The following lambda function computes percentage of matching rows.
+        compute_perc_rows = lambda spec, pat:\
+            (df_rmout.loc[(df_rmout["sequid"].str.contains(pat, case=False)) &
+                          (df_rmout["Species"]==spec)].shape[0] /
+             df_rmout.loc[df_rmout["Species"]==spec].shape[0]) * 100
+        # Apply the function to each row (axis=1)
+        answer["%Rows"] = answer.apply(lambda x:\
+            compute_perc_rows(x["Species"], x["Pattern"]), axis=1).round(1)
+        # The following lambda function computes the number of unique sequids
+        # matching a pattern in the defined species.
+        compute_nuniq = lambda spec, pat: len(list(
+            df_rmout.loc[(df_rmout["sequid"].str.contains(pat, case=False)) &
+                         (df_rmout["Species"]==spec), "sequid"].unique()))
+        # Apply the function to each row (axis=1)
+        answer["#Useq"] = answer.apply(lambda x:\
+            compute_nuniq(x["Species"], x["Pattern"]), axis=1)
+        # Once again, percentages of unique sequids...
+        compute_perc_nuniq = lambda spec, pat: (len(
+            df_rmout.loc[(df_rmout["sequid"].str.contains(pat, case=False)) &
+                         (df_rmout["Species"]==spec), "sequid"].unique()) /
+            len(df_rmout.loc[df_rmout["Species"]==spec,
+                             "sequid"].unique())) *100
+        answer["%Useq"] = answer.apply(lambda x:\
+            compute_perc_nuniq(x["Species"], x["Pattern"]), axis=1)
+
+        answer = answer[["Species", "Subset", "#Rows",
+                         "%Rows", "#Useq", "%Useq"]]
+        answer["%Rows"] = answer["%Rows"].round(2)
+        answer["%Useq"] = answer["%Useq"].round(2)
+
+        return answer
+
+#>        # The following lambda function computes unique number of sequids
+#>        # matching a pattern.
+#>
+#>        for species in df_index["Species"].unique():
+#>            mask_sp_rmout = df_rmout["Species"] == species
+#>            mask_sp_index = df_index["Species"] == species
+#>
+#>        # Initialise variables to create dataframe columns
+#>        column_species = list()
+#>        column_subset = list()
+#>        column_method = list()
+#>        column_rows = list()
+#>        column_unique_seq = list()
+#>
+#>        for species in df_index["Species"].unique():
+#>            mask_species_rmout = df_rmout["Species"] == species
+#>            mask_species_index = df_index["Species"] == species
+#>            for pattern, subset in zip(
+#>                    df_index.loc[mask_species_index, "Pattern"],
+#>                    df_index.loc[mask_species_index, "Subset"]):
+#>                mask_sequid_rmout = df_rmout["sequid"].str.contains(pattern,
+#>                                                                    case=False)
+#>                column_species.extend([species] * 3)
+#>                column_subset.extend([subset] * 3)
+#>                column_method.extend(["naive", "best", "algor"])
+
+def histogram_content_repeats(
+    dict_df_grouped: dict,
+    hue_column: str, val_y_column: str, cat_x_column: str,
+    yaxis_label: str, title: str, ):
+    """
+    + dict_df_grouped: a dict. where keys are titles. values are pd.Dataframes
+      for plotting.
+
+    + cat_x_column: column with species.
+
+    + val_y_column: column with count of REs or basepairs.
+
+    + hue_column: column which contains type of repeats. Try to make these
+      unique (careful with DNA-NA and RT-NA, if grouped by subclass NA will
+      group together).
+    """
+    # Crea tants `subplots` com items a la llista `dict_df_grouped`.
+    fig, axes = plt.subplots(ncols=len(dict_df_grouped), sharey=True)
+    if len(dict_df_grouped) == 1:
+        axes = [axes]
+    # Itera a través de parelles d'axes i dataframes:
+    for ax, (df_title, df_loop) in zip(axes, dict_df_grouped.items()):
+        g = sns.histplot(data=df_loop, ax=ax, # Utilitza `ax` del "loop".
+                     x=cat_x_column, weights=val_y_column,
+                     hue=hue_column, multiple="stack",
+                     shrink=0.9, legend=True,
+                     ).set(title=df_title, ylabel=yaxis_label)
+    # Get legend in the last subplot.
+    # print(g) # debug
+    #handles, labels = ax.get_legend_handles_labels()
+    #fig.legend(handles, labels, loc="upper left")
+    fig.suptitle(title)
+
+    # TODO: savefig as svg in folder with filename being title.svg
+    plt.show()
+
+    return None
+
+def main_histo_content_repeats(
+    df: pd.DataFrame,
+    dict_div_masks: dict,
+    groupby_colnames: list,
+    val_y_column: str,
+    yaxis_relative: bool=True,
+    title: str="", ):
+    """
+    dict_div_masks = {
+        "All": df["perc_divg"] >= 0,
+        "div < 1%": df["perc_divg"] < 1,
+        "div < 5%": df["perc_divg"] < 5,
+        "div >= 5%": df["perc_divg"] >= 5,
+    }
+    groupby_colnames = ["class"] | ["class", "subclass"]
+    """
+    # Initialise a dictionary to store pd.DataFrame.groupby().agg() objects.
+    dict_df_grouped = {}
+    # Iterate across the given df masks found in the `dict_div_masks` parameter:
+    for key, mask_divg in dict_div_masks.items():
+        # Locate the df rows matching `mask_divg`.
+        dict_df_grouped[key] = df.loc[mask_divg] \
+            .groupby(groupby_colnames, observed=True, as_index=False) \
+            .agg(count=pd.NamedAgg(column=val_y_column,
+                                          aggfunc="sum"))
+        dict_df_grouped[key] = dict_df_grouped[key].rename(
+            columns={"count": val_y_column})
+
+        # Sort the df by `hue_column` (RE types). This will make it easy for
+        # RE types to retain the same colour across subplots (otherwise might
+        # change colours if the data/order between plots changes).
+        dict_df_grouped[key] = dict_df_grouped[key].sort_values(
+            by=groupby_colnames)
+
+        # If the parameter `yaxis_relative` is equal to True, divide the column
+        # with values by each Species' sum of the values...
+        if yaxis_relative:
+            d = dict_df_grouped[key]
+            for species in d["Species"].unique():
+                mask_species = d["Species"]==species
+                d.loc[mask_species, val_y_column] = (
+                    d.loc[mask_species, val_y_column] /
+                    d.loc[mask_species, val_y_column].sum() )
+            yaxis_label="bp density"
+        else:
+            yaxis_label="bp count"
+    # Call the plotting function.
+    histogram_content_repeats(
+        dict_df_grouped=dict_df_grouped,
+        hue_column=groupby_colnames[-1], val_y_column=val_y_column,
+        cat_x_column="Species",
+        yaxis_label=yaxis_label, title=title)
+
+    return None
+
+def plots_content_repeats(repeats_instance: object):
+    """
+    """
+    # Shortcut to the main `repeats_instance` dataframe.
+    df = repeats_instance.df_rmout
+
+    # Contingut de les classes relatiu.
+    main_histo_content_repeats(
+        df,
+        dict_div_masks={
+            "All": df["perc_divg"] >=0, },
+        val_y_column="bp_algor",
+        groupby_colnames=["Species", "class",],
+        title="1. Class relative bp")
+    # Contingut de les classes absolut.
+    main_histo_content_repeats(
+        df,
+        dict_div_masks={
+            "All": df["perc_divg"] >=0, },
+        val_y_column="bp_algor", yaxis_relative=False,
+        groupby_colnames=["Species", "class",],
+        title="1. Class absolute bp")
+
+    # Contingut de les subclasses relatiu.
+    main_histo_content_repeats(
+        df,
+        dict_div_masks={
+            "All": df["perc_divg"] >=0, },
+        val_y_column="bp_algor",
+        groupby_colnames=["Species", "class", "subclass"],
+        title="2. Subclass relative bp")
+    # Contingut de les subclasses absolut.
+    main_histo_content_repeats(
+        df,
+        dict_div_masks={
+            "All": df["perc_divg"] >=0, },
+        val_y_column="bp_algor", yaxis_relative=False,
+        groupby_colnames=["Species", "class", "subclass"],
+        title="2. Subclass absolute bp")
+
+    # Contingut dels ordres relatiu.
+    df_orders = df.copy()
+    mask_dna = df_orders["class"]=="DNA"
+    mask_retro = df_orders["class"]=="Retrotransposon"
+    df_orders[["order", "superfam"]] =\
+        df_orders[["order", "superfam"]].astype(str)
+    df_orders.loc[mask_dna, "order"] = \
+        "DNA " + df_orders.loc[mask_dna, "order"].astype(str)
+    df_orders.loc[mask_retro, "order"] = \
+        "RT " + df_orders.loc[mask_retro, "order"].astype(str)
+
+    main_histo_content_repeats(
+        df_orders,
+        dict_div_masks={
+            "All": df_orders["perc_divg"] >=0, },
+        val_y_column="bp_algor",
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders relative bp")
+    # Contingut dels ordres absolut.
+    main_histo_content_repeats(
+        df_orders,
+        dict_div_masks={
+            "All": df_orders["perc_divg"] >=0, },
+        val_y_column="bp_algor", yaxis_relative=False,
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders absolute bp")
+
+    # Quatre particions segons "edat" de les REs (dependent del valor de
+    # divergència respecte RE consensus).
+    main_histo_content_repeats(
+        df,
+        dict_div_masks={
+            "All": df["perc_divg"] >=0,
+            "div < 1%": df["perc_divg"] < 1,
+            "div < 5%": df["perc_divg"] < 5,
+            "div >= 5%": df["perc_divg"] >= 5, },
+        val_y_column="bp_algor",
+        groupby_colnames=["Species", "class",],
+        title="1. Class by divergence subsets")
+    main_histo_content_repeats(
+        df_orders,
+        dict_div_masks={
+            "All": df_orders["perc_divg"] >=0,
+            "div < 1%": df_orders["perc_divg"] < 1,
+            "div < 5%": df_orders["perc_divg"] < 5,
+            "div >= 5%": df_orders["perc_divg"] >= 5, },
+        val_y_column="bp_algor",
+        groupby_colnames=["Species", "class", "subclass", "order"],
+        title="3. Orders by divergence subsets")
+
+    # Contingut de LTR, LINE, SINE, DDE a escala de superfamilia.
+    residual_superfamilies = ["Ngaro"]
+    important_orders = ["LTR", "LINE", "DDE", "SINE"]
+
+    # Primer, elimina famílies residuals, com podrien ser "Ngaro", "DADA", etc.
+    mask_not_residual = (~ df["superfam"].isin(residual_superfamilies))
+    # Segon, localitza els ordres importants (LTR, LINE, SINE, etc.)
+    for o in important_orders:
+        df_filtered = df.loc[
+            (df["order"]==o) &
+            (mask_not_residual)]
+        df_filtered[["order", "superfam"]] =\
+            df_orders[["order", "superfam"]].astype(str)
+        main_histo_content_repeats(
+            df_filtered,
+            dict_div_masks={
+                "All": df_filtered["perc_divg"] >=0, },
+            val_y_column="bp_algor",
+            groupby_colnames=["Species", "class", "subclass",
+                              "order", "superfam"],
+            title=f"4. {o} by divergence subsets")
+        main_histo_content_repeats(
+            df_filtered,
+            dict_div_masks={
+                "All": df_filtered["perc_divg"] >=0, },
+            val_y_column="bp_algor", yaxis_relative=False,
+            groupby_colnames=["Species", "class", "subclass",
+                              "order", "superfam"],
+            title=f"4. {o} by divergence subsets")
+        main_histo_content_repeats(
+            df_filtered,
+            dict_div_masks={
+                "All": df_filtered["perc_divg"] >=0,
+                "div < 1%": df_filtered["perc_divg"] < 1,
+                "div < 5%": df_filtered["perc_divg"] < 5,
+                "div >= 5%": df_filtered["perc_divg"] >= 5, },
+            val_y_column="bp_algor", yaxis_relative=False,
+            groupby_colnames=["Species", "class", "subclass",
+                              "order", "superfam"],
+            title=f"4. {o} by divergence subsets")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
