@@ -80,6 +80,39 @@ locale.setlocale(locale.LC_TIME, '') # sets locale to the one used by user
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+def prepare_plotting_folder(file, folder=None):
+    """
+    Makes a new directory if the folder path does not already exist.
+    Concatenates the filename (which should include the extension) with the
+    folder path.
+
+    Input
+    =====
+
+    + file: The filename where the newly created plot should be written to.
+
+    + folder [optional]: The folder name where the newly created plot should be
+      written to. If it is not specified the function will return the
+      filename, only.
+
+    Output
+    ======
+
+    Returns a path where the plot can be written to, as a string. Creates the
+    folder if it did not exist.
+    """
+    if folder:
+        # Create the folder if it did not exist previously
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        # Add an ending forward slash to the directory path if necessary:
+        if folder[-1] != "/":
+            folder += "/"
+        # Return the img path, including the directories:
+        return folder + file
+    else:
+        return file
+
 class Printing(object):
     """
     Print a given `message` with a formatting of interest (eg. as a warning,
@@ -377,13 +410,35 @@ def main_preproc(
         .status()
     df.to_markdown(output_modified_rmout, tablefmt="plain", index=False)
 
+def reading_cmdline_rmout_and_idxfile(
+    parameter: list, ):
+    """
+    """
+    # Init a dict to store {"Species": "file"}
+    pairs_species_file = dict()
+    for pair in parameter:
+        try:
+            species, file = pair.split("=")
+        except ValueError:
+            Printing(f"The parameter `{pair}` of --rmout could "+
+                     "not be split into two with an equal "+
+                     "character (=).").error()
+            Printing("Make sure all parameters are formatted "+
+                     "as 'SpeciesLabel=RM.out.file'").error()
+            return None
+        # Store the pair in the dictionary.
+        pairs_species_file[species] = file
+
+    return pairs_species_file
+
 class Repeats(object):
     """
     """
     def __init__(
         self,
         pairs_species_rmout: dict,
-        pairs_species_idxfile: dict, ):
+        # The index file is not always supplied.
+        pairs_species_idxfile: dict=dict(), ):
         """
         """
         # First, make sure all provided files exist:
@@ -414,7 +469,8 @@ class Repeats(object):
         # If one rmout does not have idx file:
         if not all(check):
             Printing("An RM.out is missing an index file. "+
-                     "Index files are required to create "+
+                     "Index files are required to compute "+
+                     "the non-repetitive fraction in the "+
                      "summary tables.").warning()
             # Create a variable to unable the execution of the function which
             # generates summary tables.
@@ -422,37 +478,42 @@ class Repeats(object):
         else:
             self.correct_idx_files = True
 
-        # Next, read the given files.
-        Printing("Reading the provided index files...").status()
-        df_index = self.read_index_files(pairs_species_idxfile)
-        print(df_index)
+        # READING INPUT FILES.
+        if self.correct_idx_files:
+            Printing("Reading the provided index files...").status()
+            df_index = self.read_index_files(pairs_species_idxfile)
+            print(df_index)
         Printing("Reading the provided RM.out files...").status()
         df_rmout = self.read_modified_rmout(pairs_species_rmout)
-        # Reclassify RE types into 4 new columns (unpack and standardise default
-        # types).
+
+        # UNPACK, STANDARDISE AND RECLASSIFY DEFAULT RE TYPES.
         Printing("Reclassifying RE default types into "+
                  "standardised types...").status()
         df_rmout = self.reclassify_default_reptypes(df_rmout)
-        # Print information about the main dataframe.
+
+        # CHECKING INFO AND RECLASSIFICATION.
         Printing("Printing information/columns about the created "+
                  "dataframe:").status()
         df_rmout.info(memory_usage="deep")
-        # Check whether the reclassification correctly labelled all default
-        # repeat types.
         Printing("Checking the reclassification/standardisation of "+
                  "repeat types:").status()
         self.df_check_reclass = self.check_reclassification(df_rmout)
         print(self.df_check_reclass.to_markdown(tablefmt="plain"))
+
+        # CHECKING OVERALL OVERLAPPING BASEPAIRS.
         Printing("Checking overlapping REs:").status()
         self.df_check_overlap = self.evaluate_whole_overlapping(df_rmout)
         print(self.df_check_overlap.to_markdown(tablefmt="plain"))
-        Printing("Checking the provided subsets in the index file:").status()
-        self.df_check_matching_subsets = self.check_genome_subsets(
-            df_index=df_index, df_rmout=df_rmout)
-        print(self.df_check_matching_subsets.to_markdown(tablefmt="plain"))
+
+        # CHECKING THE MATCHES BETWEEN INDEX SUBSETS AND MAIN DF SEQUIDS.
+        if self.correct_idx_files:
+            Printing("Checking the provided subsets in the index file:").status()
+            self.df_check_matching_subsets = self.check_genome_subsets(
+                df_index=df_index, df_rmout=df_rmout)
+            print(self.df_check_matching_subsets.to_markdown(tablefmt="plain"))
+            self.df_index = df_index
 
         self.df_rmout = df_rmout
-        self.df_index = df_index
 
     def read_index_files(
         self,
@@ -1052,7 +1113,8 @@ class Repeats(object):
 def histogram_content_repeats(
     dict_df_grouped: dict,
     hue_column: str, val_y_column: str, cat_x_column: str,
-    yaxis_label: str, title: str, ):
+    yaxis_label: str, title: str,
+    savefig: str=None, ):
     """
     + dict_df_grouped: a dict. where keys are titles. values are pd.Dataframes
       for plotting.
@@ -1082,8 +1144,11 @@ def histogram_content_repeats(
     #fig.legend(handles, labels, loc="upper left")
     fig.suptitle(title)
 
-    # TODO: savefig as svg in folder with filename being title.svg
-    plt.show()
+    if savefig:
+        Printing(f"Creating a figure at {savefig}").status()
+        plt.savefig(savefig, format="svg")
+    else:
+        plt.show()
 
     return None
 
@@ -1093,7 +1158,8 @@ def main_histo_content_repeats(
     groupby_colnames: list,
     val_y_column: str,
     yaxis_relative: bool=True,
-    title: str="", ):
+    title: str="",
+    savefig: str=None):
     """
     dict_div_masks = {
         "All": df["perc_divg"] >= 0,
@@ -1125,6 +1191,9 @@ def main_histo_content_repeats(
         # with values by each Species' sum of the values...
         if yaxis_relative:
             d = dict_df_grouped[key]
+            # Silence a DeprecationWarning that will happen during the next
+            # paragraph...
+            d[val_y_column] = d[val_y_column].astype("float")
             for species in d["Species"].unique():
                 mask_species = d["Species"]==species
                 d.loc[mask_species, val_y_column] = (
@@ -1138,11 +1207,15 @@ def main_histo_content_repeats(
         dict_df_grouped=dict_df_grouped,
         hue_column=groupby_colnames[-1], val_y_column=val_y_column,
         cat_x_column="Species",
-        yaxis_label=yaxis_label, title=title)
+        yaxis_label=yaxis_label,
+        title=title,
+        savefig=savefig)
 
     return None
 
-def plots_content_repeats(repeats_instance: object):
+def plots_content_repeats(
+    repeats_instance: object,
+    folder: str, ):
     """
     """
     # Shortcut to the main `repeats_instance` dataframe.
@@ -1155,7 +1228,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df["perc_divg"] >=0, },
         val_y_column="bp_algor",
         groupby_colnames=["Species", "class",],
-        title="1. Class relative bp")
+        title="Class relative bp",
+        savefig=prepare_plotting_folder(
+            "1_class_relbp.svg", folder))
     # Contingut de les classes absolut.
     main_histo_content_repeats(
         df,
@@ -1163,7 +1238,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df["perc_divg"] >=0, },
         val_y_column="bp_algor", yaxis_relative=False,
         groupby_colnames=["Species", "class",],
-        title="1. Class absolute bp")
+        title="Class absolute bp",
+        savefig=prepare_plotting_folder(
+            "1_class_absbp.svg", folder))
 
     # Contingut de les subclasses relatiu.
     main_histo_content_repeats(
@@ -1172,7 +1249,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df["perc_divg"] >=0, },
         val_y_column="bp_algor",
         groupby_colnames=["Species", "class", "subclass"],
-        title="2. Subclass relative bp")
+        title="Subclass relative bp",
+        savefig=prepare_plotting_folder(
+            "2_subclass_relbp.svg", folder))
     # Contingut de les subclasses absolut.
     main_histo_content_repeats(
         df,
@@ -1180,7 +1259,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df["perc_divg"] >=0, },
         val_y_column="bp_algor", yaxis_relative=False,
         groupby_colnames=["Species", "class", "subclass"],
-        title="2. Subclass absolute bp")
+        title="Subclass absolute bp",
+        savefig=prepare_plotting_folder(
+            "2_subclass_absbp.svg", folder))
 
     # Contingut dels ordres relatiu.
     df_orders = df.copy()
@@ -1199,7 +1280,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df_orders["perc_divg"] >=0, },
         val_y_column="bp_algor",
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders relative bp")
+        title="Orders relative bp",
+        savefig=prepare_plotting_folder(
+            "3_orders_relbp.svg", folder))
     # Contingut dels ordres absolut.
     main_histo_content_repeats(
         df_orders,
@@ -1207,7 +1290,9 @@ def plots_content_repeats(repeats_instance: object):
             "All": df_orders["perc_divg"] >=0, },
         val_y_column="bp_algor", yaxis_relative=False,
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders absolute bp")
+        title="Orders absolute bp",
+        savefig=prepare_plotting_folder(
+            "3_orders_absbp.svg", folder))
 
     # Quatre particions segons "edat" de les REs (dependent del valor de
     # divergència respecte RE consensus).
@@ -1220,7 +1305,9 @@ def plots_content_repeats(repeats_instance: object):
             "div >= 5%": df["perc_divg"] >= 5, },
         val_y_column="bp_algor",
         groupby_colnames=["Species", "class",],
-        title="1. Class by divergence subsets")
+        title="Class by divergence subsets",
+        savefig=prepare_plotting_folder(
+            "1_class_bydiv_relbp.svg", folder))
     main_histo_content_repeats(
         df_orders,
         dict_div_masks={
@@ -1230,7 +1317,9 @@ def plots_content_repeats(repeats_instance: object):
             "div >= 5%": df_orders["perc_divg"] >= 5, },
         val_y_column="bp_algor",
         groupby_colnames=["Species", "class", "subclass", "order"],
-        title="3. Orders by divergence subsets")
+        title="Orders by divergence subsets",
+        savefig=prepare_plotting_folder(
+            "3_orders_bydiv_relbp.svg", folder))
 
     # Contingut de LTR, LINE, SINE, DDE a escala de superfamilia.
     residual_superfamilies = ["Ngaro"]
@@ -1242,7 +1331,7 @@ def plots_content_repeats(repeats_instance: object):
     for o in important_orders:
         df_filtered = df.loc[
             (df["order"]==o) &
-            (mask_not_residual)]
+            (mask_not_residual)].copy()
         df_filtered[["order", "superfam"]] =\
             df_orders[["order", "superfam"]].astype(str)
         main_histo_content_repeats(
@@ -1252,7 +1341,9 @@ def plots_content_repeats(repeats_instance: object):
             val_y_column="bp_algor",
             groupby_colnames=["Species", "class", "subclass",
                               "order", "superfam"],
-            title=f"4. {o} by divergence subsets")
+            title=f"{o} relative bp",
+            savefig=prepare_plotting_folder(
+                f"4_{o}_superfamilies_relbp.svg", folder))
         main_histo_content_repeats(
             df_filtered,
             dict_div_masks={
@@ -1260,7 +1351,9 @@ def plots_content_repeats(repeats_instance: object):
             val_y_column="bp_algor", yaxis_relative=False,
             groupby_colnames=["Species", "class", "subclass",
                               "order", "superfam"],
-            title=f"4. {o} by divergence subsets")
+            title=f"{o} absolute bp",
+            savefig=prepare_plotting_folder(
+                f"4_{o}_superfamilies_absbp.svg", folder))
         main_histo_content_repeats(
             df_filtered,
             dict_div_masks={
@@ -1268,10 +1361,12 @@ def plots_content_repeats(repeats_instance: object):
                 "div < 1%": df_filtered["perc_divg"] < 1,
                 "div < 5%": df_filtered["perc_divg"] < 5,
                 "div >= 5%": df_filtered["perc_divg"] >= 5, },
-            val_y_column="bp_algor", yaxis_relative=False,
+            val_y_column="bp_algor",
             groupby_colnames=["Species", "class", "subclass",
                               "order", "superfam"],
-            title=f"4. {o} by divergence subsets")
+            title=f"{o} by divergence subsets",
+            savefig=prepare_plotting_folder(
+                f"4_{o}_superfamilies_bydiv_relbp.svg", folder))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1280,21 +1375,78 @@ if __name__ == '__main__':
 
     ### PARSE ARGUMENTS ###
     import argparse
-    parser = argparse.ArgumentParser(description=help_msg,
+    parser = argparse.ArgumentParser(
+        description=help_msg,
         # make sure the 'help_msg' is not automatically
         # wrapped at 80 characters (manually assign newlines).
         formatter_class=argparse.RawTextHelpFormatter)
-    # file-name: positional arg.
-#    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
+
+    # Opció per preprocessar el fitxer; incompatible amb la resta d'opcions.
+    parser.add_argument("--preproc", nargs=2, dest="preproc_files",
+                 metavar=("READ-RM.OUT",
+                          "WRITE-RM.OUT"),
+                 help="A pair of strings. The first string is the "+
+                 "input filename of RepeatMasker to be preprocessed."+
+                 "The second string is where the output file "+
+                 "will be written to.")
+
+    # Opció per analitzar fitxers preprocessats durant el pas anterior.
+    parser.add_argument("--rmout", nargs="+",
+                 metavar="Species=RM.out",
+                 help="A list of preprocessed files containing "+
+                 "the annotation of repeats obtained from "+
+                 "RepeatMasker.")
+    parser.add_argument("--idx", nargs="+",
+                 metavar="Species=index.idx",
+                 help="A list of index files, as specified in --help. "+
+                 "The species labels must be congruent with the "+
+                 "ones specified in the --rmout argument")
+
+    # Anàlisis possibles amb els fitxers preprocessats.
+    parser.add_argument("--content_plots", metavar="FIGURE-FOLDER",
+                 help="Flag which will call the creation of "+
+                 "content plots. Set a folder name where the "+
+                 "newly created figure files will be stored")
+
+    # Fitxer d'estil de matplotlib.
+    parser.add_argument("--matplotlib_style",
+                        help="A file with matplotlib style settings. "+
+                        "They are normally stored in the folder "+
+                        "$HOME/.config/matplotlib/stylelib/.")
 
     args = parser.parse_args()
-    # call a value: args.operacio or args.filename.
 
+    if args.preproc_files:
+        read_rmout, write_rmout = args.preproc_files
+        main_preproc(read_rmout, write_rmout)
+
+    elif args.rmout:
+        pairs_species_rmout =\
+            reading_cmdline_rmout_and_idxfile(args.rmout)
+        # Accepta IDX.
+        if args.idx:
+            pairs_species_idxfile =\
+                reading_cmdline_rmout_and_idxfile(args.idx)
+            repeats = Repeats(
+                pairs_species_idxfile=pairs_species_idxfile,
+                pairs_species_rmout=pairs_species_rmout)
+        # Tenir IDX no és necessari per a totes les situacions.
+        else:
+            repeats = Repeats(
+                pairs_species_rmout=pairs_species_rmout)
+
+        if args.matplotlib_style:
+            plt.style.use(args.matplotlib_style)
+
+        if args.content_plots:
+            plots_content_repeats(repeats, folder=args.content_plots)
+
+    else:
+        Printing("Select either the option '--preproc' "+
+                 "to preprocess the annotation files, or "+
+                 "the option '--rmout' coupled with an "+
+                 "available analysis setting, like "+
+                 "'--content_plots'.").error()
+        Printing("Calling the script with `-h` will show "+
+                 "a help message.").error()
 
