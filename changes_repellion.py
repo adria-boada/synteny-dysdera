@@ -19,24 +19,26 @@ chromosome/scaffolds groups with the sum of their sequences basepairs.
 Index files
 -----------
 
-TSV (Tab-Separated Values) files with two columns: (1) a regex referencing a
-group of scaffold/chromosome IDs, and (2) the sum of basepairs for all the
-scaffold/chromosomes in the aforementioned group. The regex must be compliant
-with `pandas.DataFrame.str.contains()`, which uses `re` regexes.
+TSV (Tab-Separated Values) files with three columns: (1) name of genomic subset
+(eg. autosomes, sexual_chr, minor_scaffolds), (2) regex pattern which matches
+the sequids found in this subset in the `sequid` column of the RM.out file, and
+(3) the sum of lengths of all scaffold/chromosomes in this group, in basepairs.
 
-The first row must contain the species label. The regexes will try to match
-values in the `sequid` column case-insensitively. For example:
+The regex must be compliant with `pandas.DataFrame.str.contains()` function,
+which uses regexes from the module `re`. The regexes will try to match values in
+the sequid column case-insensitively. For example:
 
 ```idxfile
-species
-chr.*1\t32
-chr2\t5600
-Chromosome10\t600
-scaff|HRSCAF\t$(sum_len_scaffolds)
+genome     .*             50900
+sex_chr    chrx           10000
+autosomes  chr\d          40000
+min_scaff  scaff|HRSCAF     900
 ```
 
-Where '.*' means one or more of any characters, '|' is the OR operation, etc. Be
-careful with regexes; 'chr1' will match the string "chr1" and "chr10".
+The regex 'chr\d' will match 'chr' followed by any digit (ie. autosomes). The
+regex '.*' will match anything (ie. whole genome, including minor scaffolds).
+The pipe character '|' is the OR operator, so the regex 'scaff|HRSCAF' will
+match either 'scaff' or 'hrscaf' case-insensitively.
 
 Formatting the RM.out files
 ---------------------------
