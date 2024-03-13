@@ -13,8 +13,7 @@ RM.out files
 
 RepeatMasker output file. RepeatMasker files from multiple species can be feed
 to this script/parser at once. Each RepeatMasker file must be associated with an
-species label. The script also requires an index file which specifies
-chromosome/scaffolds groups with the sum of their sequences basepairs.
+species label.
 
 Index files
 -----------
@@ -26,19 +25,20 @@ the sequids found in this subset in the `sequid` column of the RM.out file, and
 
 The regex must be compliant with `pandas.DataFrame.str.contains()` function,
 which uses regexes from the module `re`. The regexes will try to match values in
-the sequid column case-insensitively. For example:
+the sequid column **case-insensitively**. For example:
 
 ```idxfile
 genome     .*             50900
 sex_chr    chrx           10000
 autosomes  chr\d          40000
-min_scaff  scaff|HRSCAF     900
+min_scaff  scaff|ctg        900
 ```
 
-The regex 'chr\d' will match 'chr' followed by any digit (ie. autosomes). The
-regex '.*' will match anything (ie. whole genome, including minor scaffolds).
-The pipe character '|' is the OR operator, so the regex 'scaff|HRSCAF' will
-match either 'scaff' or 'hrscaf' case-insensitively.
+The regex `.*` of the "genome" subset will match the whole genome - all
+scaffolds and chromosomes will be included in this subset. The regex `chr\d`
+will match `chr` followed by any possible digit (i.e. numbered autosomes).
+The pipe character `|` is the OR operator. Consequently, the regex
+`scaff|ctg` will match either `scaff` or `ctg`.
 
 Formatting the RM.out files
 ---------------------------
@@ -48,24 +48,29 @@ rows contain an asterisk (*) as a 16th field, while others are empty. This
 inconsistency makes it impossible for the file to be read by
 `pandas.read_table()`.
 
-The function `main_preproc` should create a more usable intermediary file. It
-will include the length of the annotated RE as `bp_naive`. Moreover, it will
-take into account overlaps and compute `bp_algor`, which is the length of the
-RE discounting overlaps. The highest-scoring RE will have their overlapping
-basepairs included, while the lower-scoring REs will have their overlapping
-basepairs excluded.
+The function `main_preproc` (setting `--preproc`) should create a more usable
+intermediary file. It will include the length of the annotated RE as `bp_naive`,
+which is computed as the absolute difference between "end" and "begin", plus one
+(as RepeatMasker is zero indexed). Moreover, it will take into account overlaps
+and compute `bp_algor`, which is the length of the RE discounting overlaps. The
+highest-scoring RE will have their overlapping basepairs included, while the
+lower-scoring REs will have their overlapping basepairs excluded.
 
-Make sure to correctly label minor scaffolds and chromosomes in column 5
-(`sequid` column). You can use `awk` or `sed`:
+If an index file will be provided, make sure to correctly label minor scaffolds
+and chromosomes in the column 5 (`sequid` column). The user can use `awk` or
+`sed`:
 
 ```bash
 awk '$5=="Scaffold_1" {$5="DtilchrX"}' RM.out
+
+sed 's/Scaffold_1\s/DtilchrX/' RM.out
 ```
 
 Lastly, it is possible to find missing fields in the column "ID" and asterisks
 in the column "position (left)". These obstruct the loading of the file. One
-solution would be to substitute them with zeroes. Both columns "ID" and
-"position (left)" will later be dropped and not used.
+solution would be to substitute them with zeroes or "NA". Both columns "ID" and
+"position (left)" will later be dropped and not used, so it does not matter how
+these missing values are filled.
 """
 
 # Reading input files' size and creating folders with figures.
@@ -1402,7 +1407,13 @@ if __name__ == '__main__':
                  metavar="Species=index.idx",
                  help="A list of index files, as specified in --help. "+
                  "The species labels must be congruent with the "+
-                 "ones specified in the --rmout argument")
+                 "ones specified in the --rmout argument. It is not "+
+                 "required if the user is not interested in "+
+                 "comparing the repetitive fraction with the "+
+                 "non-repetitive fraction, or the user is not "+
+                 "interested in splitting the genome in data "+
+                 "subsets by the 'sequid' column (i.e. "+
+                 "chrX, autosomes, etc.)")
 
     # Anàlisis possibles amb els fitxers preprocessats.
     parser.add_argument("--content_plots", metavar="FIGURE-FOLDER",
@@ -1450,5 +1461,6 @@ if __name__ == '__main__':
                  "available analysis setting, like "+
                  "'--content_plots'.").error()
         Printing("Calling the script with `-h` will show "+
-                 "a help message.").error()
+                 "a help message with available "+
+                 "settings.").error()
 
