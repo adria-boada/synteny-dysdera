@@ -229,6 +229,13 @@ def read_preprocessed_rmout(
         "begin", "end", "left", "orient", "name",
         "default_repclass", "begin_match", "end_match",
         "left_match", "ID", "overlapping"],
+        dtype={
+            "score_SW": int, "perc_divg": float, "perc_del": float,
+            "perc_ins": float, "sequid": "category", "begin": int,
+            "end": int, "left": object, "orient": "category",
+            "name": "category", "default_repclass": "category",
+            "begin_match": object, "end_match": object,
+            "left_match": object, "ID": object, "overlapping": bool}
     )
     # Decrease memory usage by using efficient 'dtypes'. See:
     # <https://pandas.pydata.org/docs/user_guide/scale.html>)
@@ -1091,33 +1098,7 @@ class Repeats(object):
 
         return answer
 
-#>        # The following lambda function computes unique number of sequids
-#>        # matching a pattern.
-#>
-#>        for species in df_index["Species"].unique():
-#>            mask_sp_rmout = df_rmout["Species"] == species
-#>            mask_sp_index = df_index["Species"] == species
-#>
-#>        # Initialise variables to create dataframe columns
-#>        column_species = list()
-#>        column_subset = list()
-#>        column_method = list()
-#>        column_rows = list()
-#>        column_unique_seq = list()
-#>
-#>        for species in df_index["Species"].unique():
-#>            mask_species_rmout = df_rmout["Species"] == species
-#>            mask_species_index = df_index["Species"] == species
-#>            for pattern, subset in zip(
-#>                    df_index.loc[mask_species_index, "Pattern"],
-#>                    df_index.loc[mask_species_index, "Subset"]):
-#>                mask_sequid_rmout = df_rmout["sequid"].str.contains(pattern,
-#>                                                                    case=False)
-#>                column_species.extend([species] * 3)
-#>                column_subset.extend([subset] * 3)
-#>                column_method.extend(["naive", "best", "algor"])
-
-def histogram_content_repeats(
+def repeats_content_histogram(
     dict_df_grouped: dict,
     hue_column: str, val_y_column: str, cat_x_column: str,
     yaxis_label: str, title: str,
@@ -1159,7 +1140,7 @@ def histogram_content_repeats(
 
     return None
 
-def main_histo_content_repeats(
+def repeats_content_histo_wrapper(
     df: pd.DataFrame,
     dict_div_masks: dict,
     groupby_colnames: list,
@@ -1210,7 +1191,7 @@ def main_histo_content_repeats(
         else:
             yaxis_label="bp count"
     # Call the plotting function.
-    histogram_content_repeats(
+    repeats_content_histogram(
         dict_df_grouped=dict_df_grouped,
         hue_column=groupby_colnames[-1], val_y_column=val_y_column,
         cat_x_column="Species",
@@ -1220,7 +1201,7 @@ def main_histo_content_repeats(
 
     return None
 
-def plots_content_repeats(
+def repeats_content_kiosk(
     repeats_instance: object,
     folder: str, ):
     """
@@ -1229,7 +1210,7 @@ def plots_content_repeats(
     df = repeats_instance.df_rmout
 
     # Contingut de les classes relatiu.
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df,
         dict_div_masks={
             "All": df["perc_divg"] >=0, },
@@ -1239,7 +1220,7 @@ def plots_content_repeats(
         savefig=prepare_plotting_folder(
             "1_class_relbp.svg", folder))
     # Contingut de les classes absolut.
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df,
         dict_div_masks={
             "All": df["perc_divg"] >=0, },
@@ -1250,7 +1231,7 @@ def plots_content_repeats(
             "1_class_absbp.svg", folder))
 
     # Contingut de les subclasses relatiu.
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df,
         dict_div_masks={
             "All": df["perc_divg"] >=0, },
@@ -1260,7 +1241,7 @@ def plots_content_repeats(
         savefig=prepare_plotting_folder(
             "2_subclass_relbp.svg", folder))
     # Contingut de les subclasses absolut.
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df,
         dict_div_masks={
             "All": df["perc_divg"] >=0, },
@@ -1281,7 +1262,7 @@ def plots_content_repeats(
     df_orders.loc[mask_retro, "order"] = \
         "RT " + df_orders.loc[mask_retro, "order"].astype(str)
 
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df_orders,
         dict_div_masks={
             "All": df_orders["perc_divg"] >=0, },
@@ -1291,7 +1272,7 @@ def plots_content_repeats(
         savefig=prepare_plotting_folder(
             "3_orders_relbp.svg", folder))
     # Contingut dels ordres absolut.
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df_orders,
         dict_div_masks={
             "All": df_orders["perc_divg"] >=0, },
@@ -1303,7 +1284,7 @@ def plots_content_repeats(
 
     # Quatre particions segons "edat" de les REs (dependent del valor de
     # divergència respecte RE consensus).
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df,
         dict_div_masks={
             "All": df["perc_divg"] >=0,
@@ -1315,7 +1296,7 @@ def plots_content_repeats(
         title="Class by divergence subsets",
         savefig=prepare_plotting_folder(
             "1_class_bydiv_relbp.svg", folder))
-    main_histo_content_repeats(
+    repeats_content_histo_wrapper(
         df_orders,
         dict_div_masks={
             "All": df_orders["perc_divg"] >=0,
@@ -1341,7 +1322,7 @@ def plots_content_repeats(
             (mask_not_residual)].copy()
         df_filtered[["order", "superfam"]] =\
             df_orders[["order", "superfam"]].astype(str)
-        main_histo_content_repeats(
+        repeats_content_histo_wrapper(
             df_filtered,
             dict_div_masks={
                 "All": df_filtered["perc_divg"] >=0, },
@@ -1351,7 +1332,7 @@ def plots_content_repeats(
             title=f"{o} relative bp",
             savefig=prepare_plotting_folder(
                 f"4_{o}_superfamilies_relbp.svg", folder))
-        main_histo_content_repeats(
+        repeats_content_histo_wrapper(
             df_filtered,
             dict_div_masks={
                 "All": df_filtered["perc_divg"] >=0, },
@@ -1361,7 +1342,7 @@ def plots_content_repeats(
             title=f"{o} absolute bp",
             savefig=prepare_plotting_folder(
                 f"4_{o}_superfamilies_absbp.svg", folder))
-        main_histo_content_repeats(
+        repeats_content_histo_wrapper(
             df_filtered,
             dict_div_masks={
                 "All": df_filtered["perc_divg"] >=0,
@@ -1374,6 +1355,130 @@ def plots_content_repeats(
             title=f"{o} by divergence subsets",
             savefig=prepare_plotting_folder(
                 f"4_{o}_superfamilies_bydiv_relbp.svg", folder))
+
+def div_distrib_recursive_hist(
+    df, value_column: str,
+    categorical_columns: list,
+    hueby_column: str=None,
+    yaxis_relative: bool=True, multiple: str="layer",
+    plot_style: str="hist",
+    folder: str=None, prefix_title: str="", ):
+    """
+    Plot a column `value_column` of a pandas DataFrame filtering by many
+    available categories.
+    """
+    # For each `category` in the zeroeth column of the list
+    # `categorical_columns`:
+    for category in df[categorical_columns[0]].unique():
+        # Filter `df` by `category` within each for-loop.
+        bool_filter = (df[categorical_columns[0]] == category)
+        df_filtered = df.loc[bool_filter]
+        # Obtain the title that will be used in the current plot.
+        current_title = prefix_title + "_" + category
+        # Try to find further categorical subdivisions in the list of
+        # categorical columns. Count all combinations of unique categories.
+        checkval = df_filtered.drop_duplicates(
+            subset=categorical_columns)[categorical_columns].shape[0]
+        # If `checkval` is above 1 there are further subdivisions of the `df`
+        # (more than one combination). Run this function recursively at a lower
+        # level (one category down the list) with the filtered `df`.
+        if checkval > 1:
+            div_distrib_recursive_hist(
+                # Run with filtered df.
+                df=df_filtered,
+                value_column=value_column,
+                # Run one category down the list (recursive aspect)
+                categorical_columns=categorical_columns[1:],
+                hueby_column=hueby_column,
+                prefix_title=current_title, folder=folder,
+                yaxis_relative=yaxis_relative, multiple=multiple)
+
+        # Now, the plotting section.
+        # If a hueby_column was specified, start by iterating across it.
+        if hueby_column:
+            # Init a DataFrame where value counts will be concatenated.
+            df_plot = pd.DataFrame()
+            for hue in df_filtered[hueby_column].unique():
+                # Filter by `hue` categories and create a Series of
+                # value_counts.
+                valcounts_series = (
+                    df_filtered.loc[df_filtered[hueby_column] == hue,
+                                    value_column]
+                    ).value_counts(normalize=yaxis_relative).sort_index(
+                    ).to_frame()
+                # Label these values with their hue and concatenate to main df.
+                valcounts_series[hueby_column] = hue
+                df_plot = pd.concat([df_plot, valcounts_series])
+
+        # If a hueby_column was not specified...
+        else:
+            # Create a Series composed of value counts.
+            df_plot = df_filtered[value_column].value_counts(
+                normalize=yaxis_relative).sort_index().to_frame()
+
+        # Lastly, with the value counts, plot them as an histogram.
+        if plot_style == "hist":
+            ax = sns.histplot(
+                x=df_plot.index, weights=df_plot[value_column],
+                hue=df_plot[hueby_column], binwidth=1,
+                kde=True, kde_kws={"bw_adjust": .25},
+                multiple=multiple, legend=True, # element="step",
+                # Colors for each species (it should not be a static
+                # variable, but parameterised by the function).
+                palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+                         "Dsil": "green", "Dcatv33": "#eb8f46",
+                         "Dcatv35": "#eb8f46"},)
+        elif plot_style == "kde":
+            # Plots only the KDE plot without the underlying histogram.
+            ax = sns.kdeplot(x=df_plot.index, weights=df_plot[value_column],
+                        hue=df_plot[hueby_column], fill=True, bw_adjust=.25,
+                        multiple=multiple, legend=True,
+                         # Colors for each species (it should not be a static
+                         # variable, but parameterised by the function).
+                         palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+                                  "Dsil": "green", "Dcatv33": "#eb8f46",
+                                  "Dcatv35": "#eb8f46"},)
+            # Avoid plotting values below 0% divergence. Useful for KDE plot
+            # `sns.kdeplot()`. Nonetheless, `sns.histplot()` cuts axis
+            # automatically. Sets only minimum limit, with `None` maximum limit.
+            ax.set_xlim(0, None)
+
+        plt.title(current_title)
+        #ax.legend_.set_title("debug")#DEBUG
+        # Reduce the linewidth of the patches to be minimalistic.
+        for patch in ax.legend_.get_patches():
+            patch.set_linewidth(0.5)
+
+        # SVG format does not read `dpi`, only useful for PNG files.
+        f = "svg"
+        save_fig_as = prepare_plotting_folder(
+            file=str(current_title) + "." + f,
+            folder=folder)
+        plt.savefig(save_fig_as, dpi=300, format=f)
+        # Close the plt.axes or they will leak to the next figures.
+        plt.close()
+
+    return None
+
+def div_distrib_kiosk(
+    repeats_instance: object,
+    folder: str, ):
+    """
+    """
+    # Shortcut to the main `repeats_instance` dataframe.
+    df = repeats_instance.df_rmout
+    div_distrib_recursive_hist(
+        df=df, value_column="perc_divg",
+        categorical_columns=["class", "order", "superfam"],
+        hueby_column="Species", yaxis_relative=True,
+        multiple="dodge", plot_style="hist",
+        folder=folder, prefix_title="Relative")
+    div_distrib_recursive_hist(
+        df=df, value_column="perc_divg",
+        categorical_columns=["class", "order", "superfam"],
+        hueby_column="Species", yaxis_relative=False,
+        multiple="dodge", plot_style="hist",
+        folder=folder, prefix_title="Absolute")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1420,6 +1525,12 @@ if __name__ == '__main__':
                  help="Flag which will call the creation of "+
                  "content plots. Set a folder name where the "+
                  "newly created figure files will be stored")
+    parser.add_argument("--distrib_div_hist",
+                 metavar="FIGURE-FOLDER",
+                 help="Flag which will call the creation of "+
+                 "divergence distributions. Set a folder name "+
+                 "where the newly created figure files will be "+
+                 "stored")
 
     # Fitxer d'estil de matplotlib.
     parser.add_argument("--matplotlib_style",
@@ -1452,7 +1563,10 @@ if __name__ == '__main__':
             plt.style.use(args.matplotlib_style)
 
         if args.content_plots:
-            plots_content_repeats(repeats, folder=args.content_plots)
+            repeats_content_kiosk(repeats, folder=args.content_plots)
+
+        if args.distrib_div_hist:
+            div_distrib_kiosk(repeats, folder=args.distrib_div_hist)
 
     else:
         Printing("Select either the option '--preproc' "+
