@@ -73,6 +73,8 @@ solution would be to substitute them with zeroes or "NA". Both columns "ID" and
 these missing values are filled.
 """
 
+# Exit the script, stop running...
+import sys
 # Reading input files' size and creating folders with figures.
 import os
 
@@ -86,6 +88,35 @@ import locale
 locale.setlocale(locale.LC_TIME, '') # sets locale to the one used by user
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def files_exist(
+    files: str|list, ):
+    """
+    """
+    if type(files) == list:
+        for fl in files:
+            # Try to open each file.
+            try:
+                with open(fl) as f:
+                    pass
+                # If any file is not found, return False.
+            except FileNotFoundError:
+                Printing("The file "+str(fl)+
+                         " was not found.").error()
+                return False
+        # Else, all files are found, return True.
+        return True
+    # Otherwise, files must be a single str.
+    elif type(files) == str:
+        try:
+            with open(files) as f:
+                pass
+        except FileNotFoundError:
+            Printing("The file "+str(fl)+
+                     "was not found.").error()
+            return False
+        # Else, the file was found, return True.
+        return True
 
 def prepare_plotting_folder(file, folder=None):
     """
@@ -1551,11 +1582,22 @@ if __name__ == '__main__':
         if args.idx:
             pairs_species_idxfile =\
                 reading_cmdline_rmout_and_idxfile(args.idx)
+            # Before creating a `Repeats` instance, make sure all files exist.
+            list_of_files =\
+                list(pairs_species_rmout.values()) +\
+                list(pairs_species_idxfile.values())
+            if not files_exist(list_of_files):
+                sys.exit()
+            # Create the instance of `Repeats`.
             repeats = Repeats(
                 pairs_species_idxfile=pairs_species_idxfile,
                 pairs_species_rmout=pairs_species_rmout)
         # Tenir IDX no és necessari per a totes les situacions.
         else:
+            # Before creating a `Repeats` instance, make sure all files exist.
+            list_of_files =list(pairs_species_rmout.values())
+            if not files_exist(list_of_files):
+                sys.exit()
             repeats = Repeats(
                 pairs_species_rmout=pairs_species_rmout)
 
