@@ -1511,6 +1511,77 @@ def div_distrib_kiosk(
         multiple="dodge", plot_style="hist",
         folder=folder, prefix_title="Absolute")
 
+def div_boxplots_kiosk(
+    repeats_instance: object,
+    filename: str, ):
+    """
+    """
+    # Shortcut to the main `repeats_instance` dataframe.
+    df = repeats_instance.df_rmout.copy()
+    # Filter residual TE superfamilies out.
+    residual_superfamilies = [
+        "Ngaro", "Dada", "Crypton", "5S", "7SL", "R2", "Merlin", "DIRS", "MULE",
+        "Ginger", "L1"]
+    df = df.loc[ ~ df["superfam"].isin(residual_superfamilies)]
+    # Prepare a categorical column. Avoid pooling "NA" superfamilies from
+    # different classes (DNA-NA, RT-NA, etc.).
+    df["category"] = df["superfam"].astype("object")
+    mask = (df["superfam"]=="NA") & (df["class"]=="Tandem_repeat")
+    df.loc[mask, "category"] = "Tandem_repeat"
+    mask = (df["superfam"]=="NA") & (df["class"]=="DNA")
+    df.loc[mask, "category"] = "DNA Unclass."
+    mask = (df["superfam"]=="NA") & (df["class"]=="Other")
+    df.loc[mask, "category"] = df.loc[mask, "subclass"]
+    mask = ((df["superfam"]=="NA") &
+            (df["class"]=="Retrotransposon") &
+            (df["order"]=="NA"))
+    df.loc[mask, "category"] = "RT Unclass."
+    mask = ((df["superfam"]=="NA") &
+            (df["class"]=="Retrotransposon") &
+            (df["order"]!="NA"))
+    df.loc[mask, "category"] = "RT " + df.loc[mask, "order"].astype(str)
+    mask = (df["superfam"]=="tRNA")
+    df.loc[mask, "category"] = "SINE tRNA"
+    df.loc[df["class"]=="Unclassified", "category"] = "Unclass."
+
+    # Groupby "category" and "aggregate" by summing the column "bp_algor".
+    order_boxes = list(df.groupby("category", observed=True, as_index=False) \
+        .agg(bp_sum=pd.NamedAgg(column="bp_algor", aggfunc="sum")) \
+        .sort_values("bp_sum", ignore_index=True, ascending=False) \
+            ["category"])
+
+    # Plots.
+    ax = sns.boxplot(data=df, x="category", y="perc_divg",
+                     order=order_boxes, hue="Species",
+                     palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
+                              "Dsil": "green", "Dcatv33": "#eb8f46",
+                              "Dcatv35": "#eb8f46",
+                              "Dcat_MegaLTR": "yellow"},)
+
+    # Put more space between categorical X ticks.
+    tick_labels = ax.get_xticklabels()
+    maxsize = max([t.get_window_extent().width for t in tick_labels])
+    m = 0.2
+    s = maxsize/plt.gcf().dpi*len(order_boxes)+2*m
+    margin = m/plt.gcf().get_size_inches()[0]
+    plt.gcf().subplots_adjust(left=margin, right=1.-margin)
+    plt.gcf().set_size_inches(s, plt.gcf().get_size_inches()[1])
+
+    # Tight layout, rotate ticks, manually modify figure size. Not necessary
+    # with the better previous paragraph, which automatically changes figsize!
+    plt.tight_layout()
+    #>ax.set_xticklabels(ax.get_xticklabels(), rotation=60)
+    #>plt.figure(figsize=(20, 10))
+
+    if filename:
+        Printing(f"Creating a figure at {filename}").status()
+        plt.savefig(filename, dpi=300)
+    else:
+        plt.show()
+    plt.close()
+
+    return None
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Si es crida com a script:
@@ -1562,6 +1633,12 @@ if __name__ == '__main__':
                  "divergence distributions. Set a folder name "+
                  "where the newly created figure files will be "+
                  "stored")
+    parser.add_argument("--div_boxplots",
+                 metavar="FILENAME",
+                 help="Flag which will call the creation of "+
+                 "boxplots with the Y axis being 'divergence'. "+
+                 "Set a filename where the newly created "+
+                 "figure will be stored.")
 
     # Fitxer d'estil de matplotlib.
     parser.add_argument("--matplotlib_style",
@@ -1609,6 +1686,9 @@ if __name__ == '__main__':
 
         if args.distrib_div_hist:
             div_distrib_kiosk(repeats, folder=args.distrib_div_hist)
+
+        if args.div_boxplots:
+            div_boxplots_kiosk(repeats, args.div_boxplots)
 
     else:
         Printing("Select either the option '--preproc' "+
