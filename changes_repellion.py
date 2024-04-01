@@ -875,7 +875,7 @@ class Repeats(object):
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Zator"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Zator")
+        ] = ("DNA", "1", "TIR", "Zator")
         # Both MITE and nMITE are unassignable to "taxons"; these attributes are
         # not synapomorphic (unique to any one clade of repeats). I'd rather
         # classify them as no further than "DNA" (all else unknown).
@@ -891,73 +891,73 @@ class Repeats(object):
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Academ"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Academ")
+        ] = ("DNA", "1", "TIR", "Academ")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("CMC")) |
             df["default_repclass"].str.contains("ClassII_DNA_CACTA"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "CACTA")
+        ] = ("DNA", "1", "TIR", "CACTA")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Dada")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Dada")
+        ] = ("DNA", "1", "TIR", "Dada")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Kolobok")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Kolobok")
+        ] = ("DNA", "1", "TIR", "Kolobok")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Ginger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Ginger")
+        ] = ("DNA", "1", "TIR", "Ginger")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("MULE")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "MULE")
+        ] = ("DNA", "1", "TIR", "MULE")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Merlin")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Merlin")
+        ] = ("DNA", "1", "TIR", "Merlin")
         df.loc[
             (df["default_repclass"].str.contains("DNA/P")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "P")
+        ] = ("DNA", "1", "TIR", "P")
         df.loc[
             (df["default_repclass"].str.contains("DNA/PIF")) |
             (df["default_repclass"].str.contains("ClassII_DNA_Harbinger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "PIF-Harbinger")
+        ] = ("DNA", "1", "TIR", "PIF-Harbinger")
         df.loc[
             (df["default_repclass"].str.contains("PiggyBac")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "PiggyBac")
+        ] = ("DNA", "1", "TIR", "PiggyBac")
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Sola")
+        ] = ("DNA", "1", "TIR", "Sola")
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Sola")
+        ] = ("DNA", "1", "TIR", "Sola")
         df.loc[
             (df["default_repclass"].str.contains("DNA/TcMar") |
             df["default_repclass"].str.contains("DNA_TcMar")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "TcMar")
+        ] = ("DNA", "1", "TIR", "TcMar")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("hAT")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "hAT")
+        ] = ("DNA", "1", "TIR", "hAT")
         df.loc[
             (df["default_repclass"].str.contains("DNA_Mutator")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Mutator")
+        ] = ("DNA", "1", "TIR", "Mutator")
         df.loc[
             df["default_repclass"].str.contains("IS3EU"),
             ["class", "subclass", "order", "superfam"]
@@ -1345,9 +1345,9 @@ def repeats_content_kiosk(
         savefig=prepare_plotting_folder(
             "3_orders_bydiv_relbp.svg", folder))
 
-    # Contingut de LTR, LINE, SINE, DDE a escala de superfamilia.
+    # Contingut de LTR, LINE, SINE, TIR a escala de superfamilia.
     residual_superfamilies = ["Ngaro"]
-    important_orders = ["LTR", "LINE", "DDE", "SINE"]
+    important_orders = ["LTR", "LINE", "TIR", "SINE"]
 
     # Primer, elimina famílies residuals, com podrien ser "Ngaro", "DADA", etc.
     mask_not_residual = (~ df["superfam"].isin(residual_superfamilies))
