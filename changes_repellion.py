@@ -79,7 +79,7 @@ import sys
 import os
 
 # Handling input as DataFrames.
-import pandas as pd
+import pandas as pd, numpy as np
 # Plotting figures.
 import seaborn as sns, matplotlib.pyplot as plt
 # Measure the time it takes to run this script.
@@ -556,6 +556,11 @@ class Repeats(object):
             self.df_check_matching_subsets = self.check_genome_subsets(
                 df_index=df_index, df_rmout=df_rmout)
             print(self.df_check_matching_subsets.to_markdown(tablefmt="plain"))
+            # Make sure all subsets match at least one row!
+            if any(self.df_check_matching_subsets["#Rows"]==0):
+                Printing("A subset of the index file does not match "+
+                         "any row! Make sure all subsets match at least "+
+                         "one row.").error()
             self.df_index = df_index
 
         self.df_rmout = df_rmout
@@ -870,7 +875,7 @@ class Repeats(object):
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Zator"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Zator")
+        ] = ("DNA", "1", "TIR", "Zator")
         # Both MITE and nMITE are unassignable to "taxons"; these attributes are
         # not synapomorphic (unique to any one clade of repeats). I'd rather
         # classify them as no further than "DNA" (all else unknown).
@@ -886,73 +891,73 @@ class Repeats(object):
             df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Academ"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Academ")
+        ] = ("DNA", "1", "TIR", "Academ")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("CMC")) |
             df["default_repclass"].str.contains("ClassII_DNA_CACTA"),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "CACTA")
+        ] = ("DNA", "1", "TIR", "CACTA")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Dada")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Dada")
+        ] = ("DNA", "1", "TIR", "Dada")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Kolobok")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Kolobok")
+        ] = ("DNA", "1", "TIR", "Kolobok")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Ginger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Ginger")
+        ] = ("DNA", "1", "TIR", "Ginger")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("MULE")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "MULE")
+        ] = ("DNA", "1", "TIR", "MULE")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("Merlin")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Merlin")
+        ] = ("DNA", "1", "TIR", "Merlin")
         df.loc[
             (df["default_repclass"].str.contains("DNA/P")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "P")
+        ] = ("DNA", "1", "TIR", "P")
         df.loc[
             (df["default_repclass"].str.contains("DNA/PIF")) |
             (df["default_repclass"].str.contains("ClassII_DNA_Harbinger")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "PIF-Harbinger")
+        ] = ("DNA", "1", "TIR", "PIF-Harbinger")
         df.loc[
             (df["default_repclass"].str.contains("PiggyBac")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "PiggyBac")
+        ] = ("DNA", "1", "TIR", "PiggyBac")
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Sola")
+        ] = ("DNA", "1", "TIR", "Sola")
         df.loc[
             (df["default_repclass"].str.contains("DNA/Sola")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Sola")
+        ] = ("DNA", "1", "TIR", "Sola")
         df.loc[
             (df["default_repclass"].str.contains("DNA/TcMar") |
             df["default_repclass"].str.contains("DNA_TcMar")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "TcMar")
+        ] = ("DNA", "1", "TIR", "TcMar")
         df.loc[
             (df["default_repclass"].str.contains("DNA") &
             df["default_repclass"].str.contains("hAT")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "hAT")
+        ] = ("DNA", "1", "TIR", "hAT")
         df.loc[
             (df["default_repclass"].str.contains("DNA_Mutator")),
             ["class", "subclass", "order", "superfam"]
-        ] = ("DNA", "1", "DDE", "Mutator")
+        ] = ("DNA", "1", "TIR", "Mutator")
         df.loc[
             df["default_repclass"].str.contains("IS3EU"),
             ["class", "subclass", "order", "superfam"]
@@ -1340,9 +1345,9 @@ def repeats_content_kiosk(
         savefig=prepare_plotting_folder(
             "3_orders_bydiv_relbp.svg", folder))
 
-    # Contingut de LTR, LINE, SINE, DDE a escala de superfamilia.
+    # Contingut de LTR, LINE, SINE, TIR a escala de superfamilia.
     residual_superfamilies = ["Ngaro"]
-    important_orders = ["LTR", "LINE", "DDE", "SINE"]
+    important_orders = ["LTR", "LINE", "TIR", "SINE"]
 
     # Primer, elimina famílies residuals, com podrien ser "Ngaro", "DADA", etc.
     mask_not_residual = (~ df["superfam"].isin(residual_superfamilies))
@@ -1456,9 +1461,11 @@ def div_distrib_recursive_hist(
                 multiple=multiple, legend=True, # element="step",
                 # Colors for each species (it should not be a static
                 # variable, but parameterised by the function).
+                # Matches with command-line species labels.
                 palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
                          "Dsil": "green", "Dcatv33": "#eb8f46",
-                         "Dcatv35": "#eb8f46"},)
+                         "Dcatv35": "#eb8f46",
+                         "Dcat_MegaLTR": "yellow"},)
         elif plot_style == "kde":
             # Plots only the KDE plot without the underlying histogram.
             ax = sns.kdeplot(x=df_plot.index, weights=df_plot[value_column],
@@ -1553,6 +1560,8 @@ def div_boxplots_kiosk(
     # Plots.
     ax = sns.boxplot(data=df, x="category", y="perc_divg",
                      order=order_boxes, hue="Species",
+                     # ATENCIÓ: ELIMINAR PALETA. Ha de coincidir amb les
+                     # espècies introduïdes.
                      palette={"Dcat": "#eb8f46", "Dtil": "#30acac",
                               "Dsil": "green", "Dcatv33": "#eb8f46",
                               "Dcatv35": "#eb8f46",
@@ -1581,6 +1590,224 @@ def div_boxplots_kiosk(
     plt.close()
 
     return None
+
+def generate_summary_table(
+    df_rmout: pd.DataFrame,
+    categorical_columns: list, ):
+    """
+    + categorical_columns: A list of categorical column names (strings)
+      found in `df`. They will be used to group the dataframe. Info:
+      <https://pandas.pydata.org/docs/user_guide/groupby.html>
+    """
+    # Shortcut to the parameter `df_rmout`
+    df = df_rmout
+    # Compute the total count of REs and their genome occupancy (in bp) with
+    # the "naive" approach (does not discard low scoring REs).
+    summary_naive = df.groupby(categorical_columns,
+                         as_index=False, observed=True) \
+        .agg(
+        # Aggregate the categorical groups (sum/count each group's rows)
+            naive_numele=pd.NamedAgg(column="bp_naive", aggfunc="count"),
+            naive_totbp=pd.NamedAgg(column="bp_naive", aggfunc="sum"),
+            naive_algbp=pd.NamedAgg(column="bp_algor", aggfunc="sum"))
+    # Compute a partial count of REs and their genome occupancy (in bp) with
+    # the "best" approach (discards low scoring REs).
+    df_filtered = df.loc[~ df["overlapping"]]
+    summary_best = df_filtered.groupby(categorical_columns,
+                         as_index=False, observed=True) \
+        .agg(
+        # Aggregate the categorical groups (sum/count each group's rows)
+            best_numele=pd.NamedAgg(column="bp_naive", aggfunc="count"),
+            best_totbp=pd.NamedAgg(column="bp_naive", aggfunc="sum"),
+            best_algbp=pd.NamedAgg(column="bp_algor", aggfunc="sum"))
+
+    # Compute median, mean and mode estimators of divergences per category.
+    # It will compute these estimators from the column "perc_divg".
+    summ_div_naive = df.groupby(categorical_columns,
+                         as_index=False, observed=True) \
+        .agg(
+        # Aggregate the categorical groups.
+            naive_div_medi=pd.NamedAgg(column="perc_divg",
+                aggfunc="median"),
+            naive_div_mean=pd.NamedAgg(column="perc_divg",
+                aggfunc="mean"),
+            # The pd.Series.mode() function could return an array of
+            # divergence with multiple 'most common' values; take the first
+            # (Beg) and the last one (End) in two columns.
+            naive_div_modeBeg=pd.NamedAgg(column="perc_divg",
+                aggfunc=lambda x: pd.Series.mode(x)[
+                    0]),
+            naive_div_modeEnd=pd.NamedAgg(column="perc_divg",
+                aggfunc=lambda x: pd.Series.mode(x)[
+                    len(pd.Series.mode(x))-1]),
+            # Apply the floor of the series of values (np.floor) and,
+            # afterwards, get its mode (mode from the intervals/bins of one
+            # percent of divergence).
+            naive_div_modeFloor=pd.NamedAgg(column="perc_divg",
+                aggfunc=lambda x: pd.Series.mode(np.floor(x))[0]))
+
+    # Merge the multiple summaries (naive basepairs, best basepairs, divergence)
+    # into a single table/df.
+    df_summary = summary_naive \
+        .merge(summary_best) \
+        .merge(summ_div_naive) \
+        .sort_values(by=categorical_columns, ignore_index=True)
+
+    # Aggregate the total RE fraction of each species.
+    # Consider all RE types as a single RE category.
+    if "Species" in categorical_columns:
+        # If "class" is not given as a categorical column, do not compute total.
+        if "class" in categorical_columns:
+            for species in df["Species"].unique():
+                df_species = df.loc[df["Species"]==species]
+                df_filtered_and_species = df_filtered.loc[
+                    df_filtered["Species"]==species]
+
+                new_row = {
+                    "Species": species,
+                    "class": "TOTAL_REPETITIVE",
+                    "naive_numele": df_species.shape[0],
+                    "naive_totbp": df_species["bp_naive"].sum(),
+                    "naive_algbp": df_species["bp_algor"].sum(),
+                    "best_numele": df_filtered_and_species.shape[0],
+                    "best_totbp": df_filtered_and_species["bp_naive"].sum(),
+                    "best_algbp": df_filtered_and_species["bp_algor"].sum(),
+                    "naive_div_medi": df_species["perc_divg"].median(),
+                    "naive_div_mean": df_species["perc_divg"].mean(),
+                    "naive_div_modeBeg": df_species["perc_divg"].mode()[0],
+                    "naive_div_modeEnd": df_species["perc_divg"].mode()[
+                            len(df_species["perc_divg"].mode())-1],
+                    "naive_div_modeFloor": np.floor(df_species["perc_divg"]) \
+                            .mode(), }
+                # If categorical_columns contains "subclass", "order", etc. Fill
+                # these fields with "pd.NA" for the total repetitive fraction.
+                for col in categorical_columns:
+                    if col not in ["class", "Species"]:
+                        new_row[col] = pd.NA
+                df_summary = pd.concat([df_summary, pd.DataFrame(new_row)])
+    # If the column "Species" is not in the categorical columns to aggregate, do
+    # not compute total by Species.
+    elif "class" in categorical_columns:
+        new_row = {
+            "class": "TOTAL_REPETITIVE",
+            "naive_numele": df.shape[0],
+            "naive_totbp": df["bp_naive"].sum(),
+            "naive_algbp": df["bp_algor"].sum(),
+            "best_numele": df_filtered.shape[0],
+            "best_totbp": df_filtered["bp_naive"].sum(),
+            "best_algbp": df_filtered["bp_algor"].sum(),
+            "naive_div_medi": df["perc_divg"].median(),
+            "naive_div_mean": df["perc_divg"].mean(),
+            "naive_div_modeBeg": df["perc_divg"].mode()[0],
+            "naive_div_modeEnd": df["perc_divg"].mode()[
+                    len(df["perc_divg"].mode())-1],
+            "naive_div_modeFloor": np.floor(df["perc_divg"]) \
+                    .mode(), }
+        # If categorical_columns contains "subclass", "order", etc. Fill
+        # these fields with "pd.NA" for the total repetitive fraction.
+        for col in categorical_columns:
+            if col != "class":
+                new_row[col] = pd.NA
+        df_summary = pd.concat([df_summary, pd.DataFrame(new_row)])
+
+    # Revise mode columns: is there multiple "most frequent" value?
+    # If so, assign them `pd.NA`.
+    df_summary["naive_div_modeRaw"] = 0  # Initialise column.
+    df_summary.loc[
+        df_summary["naive_div_modeEnd"]==df_summary["naive_div_modeBeg"],
+                   "naive_div_modeRaw"] = (
+        df_summary.loc[
+        df_summary["naive_div_modeEnd"]==df_summary["naive_div_modeBeg"],
+                   "naive_div_modeBeg"] )
+    df_summary.loc[
+        df_summary["naive_div_modeEnd"]!=df_summary["naive_div_modeBeg"],
+                   "naive_div_modeRaw"] = pd.NA
+    # Drop the now redundant "Beg" and "End" mode columns.
+    df_summary = df_summary.drop(columns=["naive_div_modeBeg",
+                                          "naive_div_modeEnd"])
+
+    return df_summary
+
+def summary_table_kiosk(
+    repeats_instance: object,
+    folder: str=None):
+    """
+    """
+    if not repeats_instance.correct_idx_files:
+        Printing("Index files were not supplied.").error()
+    # Shorthand to the main dataframe
+    df = repeats_instance.df_rmout
+    # Lists of categorical columns to groupby the dataframe.
+    categorical_columns = [
+        "class",
+        "class_subclass",
+        "class_subclass_order",
+        "class_subclass_order_superfam"]
+    # Initialise a catalog of dataframes with empty dataframes.
+    catalog_df_summary = dict()
+    for cols in categorical_columns:
+        catalog_df_summary[cols] = pd.DataFrame()
+
+    # Create multiple tables from different groupings of Species-Subsets.
+    for species in repeats_instance.df_index["Species"].unique():
+        # Filter the index and the main rmout dataframes with species.
+        df_index_filter_sp = repeats_instance.df_index.loc[
+            repeats_instance.df_index["Species"]==species]
+        df_rmout_filter_sp = df.loc[df["Species"]==species]
+
+        for subset, pat, fraction_total in zip(
+            df_index_filter_sp["Subset"],
+            df_index_filter_sp["Pattern"],
+                df_index_filter_sp["Bpsum"]):
+
+            # Filter the main dataframe with the pattern of the index.
+            df_rmout_filter_sp_and_pat = df_rmout_filter_sp.loc[
+                df_rmout_filter_sp["sequid"].str.contains(
+                    pat, case=False)]
+
+            # For each group of categorical columns:
+            for cat_col in categorical_columns:
+                list_cat_col = cat_col.split("_")
+                df_summary = generate_summary_table(
+                    df_rmout_filter_sp_and_pat, list_cat_col)
+                df_summary["Subset"] = subset
+                df_summary.insert(0, "Subset", df_summary.pop("Subset"))
+                df_summary["Species"] = species
+                df_summary.insert(0, "Species", df_summary.pop("Species"))
+
+                # Compute NonRepetitive size.
+                new_row = dict()
+                mask = df_summary["class"]=="TOTAL_REPETITIVE"
+                # Fill all cells with "NA" to begin with.
+                for col in df_summary.columns:
+                    new_row[col] = pd.NA
+                # Change only the values specified below from "NA".
+                new_row["class"] = "TOTAL_NON_REPETITIVE"
+                new_row["Species"] = species
+                new_row["Subset"] = subset
+                new_row["naive_totbp"] = fraction_total - df_summary.loc[
+                    mask, "naive_totbp"].sum()
+                new_row["naive_algbp"] = fraction_total - df_summary.loc[
+                    mask, "naive_algbp"].sum()
+                new_row["best_totbp"] = fraction_total - df_summary.loc[
+                    mask, "best_totbp"].sum()
+                new_row["best_algbp"] = fraction_total - df_summary.loc[
+                    mask, "best_algbp"].sum()
+
+                df_summary = pd.concat([df_summary, pd.DataFrame(new_row, index=[0])])
+                catalog_df_summary[cat_col] = pd.concat([
+                    catalog_df_summary[cat_col], df_summary],
+                    ignore_index=True)
+
+    if folder:
+        for filename, dfsum in catalog_df_summary.items():
+            dfsum.to_csv(
+                path_or_buf=prepare_plotting_folder(
+                    filename+".tsv", folder),
+                sep="\t", index=False, na_rep="NA")
+
+    else:
+        return catalog_df_summary
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1639,6 +1866,10 @@ if __name__ == '__main__':
                  "boxplots with the Y axis being 'divergence'. "+
                  "Set a filename where the newly created "+
                  "figure will be stored.")
+    parser.add_argument("--summary_tables", metavar="TSV-FOLDER",
+                 help="Flag which will call the creation of "+
+                 "summary tables. Set a folder name where the "+
+                 "newly created tables will be stored")
 
     # Fitxer d'estil de matplotlib.
     parser.add_argument("--matplotlib_style",
@@ -1689,6 +1920,9 @@ if __name__ == '__main__':
 
         if args.div_boxplots:
             div_boxplots_kiosk(repeats, args.div_boxplots)
+
+        if args.summary_tables:
+            summary_table_kiosk(repeats, folder=args.summary_tables)
 
     else:
         Printing("Select either the option '--preproc' "+
