@@ -5,15 +5,13 @@
 #
 # 11 d’abr. 2024  <adria@molevol-OptiPlex-9020>
 
-help_msg = """
-Describe here the goal, input, output, etc. of the script
-as a multi-line block of text.
-"""
-
 import sys
 from . import missatges
 
+# Dataframes manipulation, akin to the R project
 import pandas as pd
+# CIGAR pattern matching
+import re
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -47,14 +45,19 @@ class Mapping:
     """
     def __init__(self, path_to_paf: str, memory_efficient: bool=False):
 
+        # Llegeix el fitxer PAF, incorporant-lo com a `pandas.DataFrame()` dins
+        # la variable `self.df`.
         self.df = self.read_paf_file(path_to_paf)
+
+        if not memory_efficient:
+            self.df = self.read_paf_optional_columns(self.df, path_to_paf)
 
         return None
 
     def read_paf_file(self, path_to_paf: str):
         # PAF may optionally have additional fields, i.e. an irregular number of
         # columns (ragged TSV).
-        # First, read the columns that are always present.
+        # This function initially reads columns which are always present.
         colnames = ["Qname",    # Name of a query scaffold/chr.
                     "Qlen",     # Length of above sequence.
                     "Qstart",   # Start of alignment in Qname.
@@ -70,8 +73,8 @@ class Mapping:
                     "Tlen": "int", "Tstart": "int", "Tend": "int",
                     "matches": "int", "ali_len": "int", "mapQ": "int"}
 
-        ##> missatges.Estat("Reading the first 12 columns of the file "+
-        ##>                "(always present)")
+        missatges.Estat("Reading the first 12 columns of the file "+
+                        "(always present).")
         df = pd.read_table(path_to_paf, header=None,
             # The regex "\s+" stands for
             # "one or more blank spaces" (includes spaces and TABs).
@@ -82,6 +85,139 @@ class Mapping:
             names=colnames,
             # Specify the dtypes of each column.
             dtype=coltypes)
+
+        return df
+
+    def prepend_sequid_with_QT(self, series: pd.Series, label: str,
+                               separador: str="."):
+        """
+        Prepend all strings within a pd.Series (either Qname or Tname) of
+        categorical or object «dtype» with a label.
+
+        Parameters
+        ----------
+
+        series : pd.Series
+        A series with sequid values; either "Qname" or "Tname" columns of the
+        main dataframe.
+
+        label : str
+        A label which will be added to the beginning of all sequids; for
+        instance, "Q" for "Qname" and "T" for "Tname".
+
+        Returns
+        -------
+
+        pd.Series with the aforementioned changes.
+        """
+        # Afageix etiquetes al principi.
+        series = series.copy()
+        tipus = series.dtype
+        series = pd.Series([label] * len(series)).str.cat(series, sep=separador)
+        series = series.astype(tipus)
+
+        return series
+
+    def read_paf_optional_columns(self, df: pd.DataFrame, path_to_paf: str):
+        # Crea una llista amb els camps opcionals. Són camps que podrien
+        # trobar-se en totes, alguna o cap filera. Veieu el manual de referència
+        # per una explicació de cada etiqueta/columna:
+        # <https://lh3.github.io/minimap2/minimap2.html#10>
+        # Recordeu que ordeno les columnes manualment segons "importància"
+        # subjectiva i personal.
+        etiqueta_a_columna = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
+                              "cg": [], "cs": [], "SA": [], "ts": [], "cm": [],
+                              "s1": [], "s2": [], "MD": [], "AS": [], "ms": [],
+                              "rl": [], "zd": [], }
+        # A més, interpreta la cadena CIGAR (si existeix).
+        cigar_columnes = {"cig_deletions": [], "cig_insertions": [],
+                          "cig_matches": [], "cig_compressed": [],
+                          "indel_list": [], }
+        # Desplaça't a través de les línies del fitxer PAF i omple les llistes
+        # dels diccionaris anteriors.
+        missatges.Estat("Reading optional columns beyond the 12th field.")
+        with open(path_to_paf) as fitxer_paf:
+            for count, line in enumerate(fitxer_paf):
+                # Obté una llista amb tots els camps a partir del 12é.
+                line = line.strip("\n").split("\t")[12:]
+                while line:
+                    camp = line.pop(0)
+                    # L'etiqueta dels camps opcionals es troba a
+                    # la primera parella de caràcters.
+                    etiqueta = camp[0:2]
+                    # El valor del camp es troba a partir del 5é caràcter.
+                    valor = camp[5:]
+                    etiqueta_a_columna[etiqueta].append(valor)
+                # Omple amb "None" els camps que no s'han trobat dins la filera:
+                for key, val in etiqueta_a_columna.items():
+                    if len(val) < count+1:
+                        etiqueta_a_columna[key].append(None)
+                # Si aquesta línia contenia una cadena CIGAR, interpreta-la:
+                if etiqueta_a_columna["cg"][-1] != None:
+                    last_cigar = etiqueta_a_columna["cg"][-1]
+                    resum_cigar = self.interpret_cigar_string(last_cigar)
+                    cigar_columnes["cig_deletions"].append(resum_cigar["D"])
+                    cigar_columnes["cig_insertions"].append(resum_cigar["I"])
+                    cigar_columnes["cig_matches"].append(resum_cigar["M"])
+                    cigar_columnes["cig_compressed"].append(resum_cigar["compressed"])
+                    cigar_columnes["indel_list"].append(resum_cigar["indels"])
+                # Si no contenia CIGAR, afageix "None" per representar buit a
+                # les dades finals.
+                else:
+                    for key in cigar_columnes.keys():
+                        cigar_columnes[key].append(None)
+
+        # Tradueix aquestes curtes etiquetes a noms de columna més descriptius:
+        reanomenar_etiquetes = {"tp": "type_aln", "cm": "num_minimizers",
+                          "s1": "chaining_score", "s2": "second_chain_score",
+                          "NM": "mismatches_and_gaps",
+                          "MD": "regenerate_refseq", "AS": "DP_ali_score",
+                          "SA": "list_supp_ali", "ms": "DP_max_score",
+                          "nn": "ambiguous_bases", "ts": "transcript_strand",
+                          "cg": "CIGAR_string", "cs": "diff_string",
+                          "dv": "divergence", "de": "gap_compr_diverg",
+                          "rl": "length_repetitive_seeds",
+                          "zd": "zd_unknown", }
+        # Finalment, afageix els camps opcionals al marc de dades.
+        for etiqueta, llista_valors in etiqueta_a_columna.items():
+            df[reanomenar_etiquetes[etiqueta]] = llista_valors
+        # Afageix l'interpretació / anàlisi del CIGAR:
+        for nom_columna, llista_valors in cigar_columnes.items():
+            df[nom_columna] = llista_valors
+
+        # Assegura que els «dtypes» d'aquestes columnes són correctes.
+        columnes_enters = ["mismatches_and_gaps", "ambiguous_bases",
+                           "num_minimizers", "chaining_score", "DP_ali_score",
+                           "DP_max_score", "length_repetitive_seeds",
+                           "cig_deletions", "cig_insertions", "cig_matches",
+                           "cig_compressed"]
+        df[columnes_enters] = df[columnes_enters].apply(pd.to_numeric,
+                                                        downcast="integer")
+        columnes_decimals = ["gap_compr_diverg", "second_chain_score",
+                             "zd_unknown"]
+        df[columnes_decimals] = df[columnes_decimals].astype("float")
+        df["type_aln"] = df["type_aln"].astype("category")
+
+        # Elimina columnes buides (totes les entrades amb valors nuls).
+        df = df.dropna(axis="columns", how="all")
+
+        # Per evitar un error estrany de "SettingWithCopyWarning", faig una
+        # còpia abans de computar noves columnes del marc de dades???
+        df = df.copy()
+        # Havent assignat el «dtype» numèric, computa altres paràmetres i
+        # afageix-los al marc de dades:
+        df["blast_identity"] = df["matches"] / df["ali_len"]
+        # Computa altres valors a partir del CIGAR, si és present.
+        if ("cig_matches" in df.columns) and \
+           ("cig_compressed" in df.columns) and \
+           ("cig_deletions" in df.columns) and \
+           ("cig_insertions" in df.columns) and \
+           ("mismatches_and_gaps" in df.columns):
+            df["gap_compr_identity"] = (
+                df["matches"] / (df["cig_matches"] + df["cig_compressed"]))
+            df["mismatches"] = \
+                df["mismatches_and_gaps"] - \
+                (df["cig_insertions"] + df["cig_deletions"])
 
         return df
 
@@ -141,27 +277,4 @@ class Mapping:
         return answer
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Si es crida com a script:
-if __name__ == '__main__':
-
-    ### PARSE ARGUMENTS ###
-    import argparse
-    parser = argparse.ArgumentParser(description=help_msg,
-        # make sure the 'help_msg' is not automatically
-        # wrapped at 80 characters (manually assign newlines).
-        formatter_class=argparse.RawTextHelpFormatter)
-    # file-name: positional arg.
-#    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
-
-    args = parser.parse_args()
-    # call a value: args.operacio or args.filename.
-
 
