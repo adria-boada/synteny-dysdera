@@ -44,11 +44,30 @@ class Mapping:
     being killed.
     """
     def __init__(self, path_to_paf: str, memory_efficient: bool=False):
+        # Make sure that the provided path points to an existing file.
+        try:
+            with open(path_to_paf):
+                pass
+            missatges.Estat("Opening the file " + str(path_to_paf) + ".")
+        except FileNotFoundError:
+            missatges.Error("The file " + str(path_to_paf) +
+                            " was not found.")
+            return None
+        # Emmagatzema el nom del fitxer. Elimina els directoris que precedeixen
+        # el camí `path_to_paf`.
+        self.filename = path_to_paf.strip("\n").split("/")[-1]
+        # Elimina l'extensió PAF del fitxer.
+        fitxer_separat = self.filename.split(".")
+        if fitxer_separat[-1].lower() == "paf":
+            self.filename = ".".join(fitxer_separat[:-1])
+        else:
+            self.filename = ".".join(fitxer_separat)
 
         # Llegeix el fitxer PAF, incorporant-lo com a `pandas.DataFrame()` dins
         # la variable `self.df`.
         self.df = self.read_paf_file(path_to_paf)
-
+        # Si `memory_efficient` està desactivat (False), llegeix la resta de
+        # columnes opcionals que ocupen considerablement més memòria.
         if not memory_efficient:
             self.df = self.read_paf_optional_columns(self.df, path_to_paf)
 
