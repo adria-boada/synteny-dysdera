@@ -84,6 +84,20 @@ class Mapping:
         catalog_series = self.compute_nonoverlap_len(self.df)
         self.df = self.df.join([catalog_series["Q"], catalog_series["T"], ])
 
+        # Revisa com d'encavalcats es troben els alineaments.
+        # Seria necessari incorporar-hi un diccionari de patrons a l'objecte
+        # mapping de manera opcional, o podria ser cridada havent finalitzat
+        # l'inicialització de l'instància 'Mapping'.
+        missatges.Estat("Evaluating overlapping found within the "+
+                        "mapping of the queried and targeted genomes...")
+        self.df_overlap_comparison = self.evaluate_overlapping_alignment(
+            df=self.df, genome_subset_patterns={
+                "genome": ".",
+                "autosomes": "chr\d",
+                "sex_chr": "chrx",
+                "minor_scaff": "scaff|ctg", })
+        print(self.df_overlap_comparison)
+
         return None
 
     def read_paf_file(self, path_to_paf: str):
@@ -381,6 +395,63 @@ class Mapping:
                 "T": pd.Series(answer["Talgorbp"],
                                name="Talgorbp", index=index["T"],
                                dtype=int).sort_index(), }
+
+    def evaluate_overlapping_alignment(self, df: pd.DataFrame,
+                                       genome_subset_patterns: dict):
+        """
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file.
+
+        genome_subset_patterns : dict
+        The keys are genome subsets, whereas the values are patterns that will
+        be matched against sequence names to filter the main dataframe. For
+        instance,
+
+        {"genome": ".", "autosomes": "chr\d", "sex_chr": "chrX",
+         "minor_scaff": "scaff|ctg", }
+
+        The pattern for "genome" encompasses any sequence name ("." matches
+        everything). The pattern "chr\d" matches "chr" followed by amy digit.
+        The pattern "scaff|ctg" matches either "scaff" or "ctg".
+        """
+        answer = {"Subset": [], "Kind": [], "Length (#bp)": [],
+                  "Length (%naive)": [], "Length (%subset)": [], }
+
+        for db in ["Q", "T"]:
+            for subset, pat in genome_subset_patterns.items():
+                # The filtered df is the main df where the column
+                # "str(db+'name')" contains the pattern, case-insensitively.
+                df_filtered = df.loc[df[str(db+"name")].str.contains(
+                    pat, case=False)]
+                # Compute the length of alignments naively, end - start +1
+                series_naive = df_filtered[str(db+"end")] - \
+                    df_filtered[str(db+"start")] +1
+                series_algor = df_filtered[str(db+"algorbp")]
+                # Recull les llargades de totes les seqüències (llargada del
+                # subset genòmic). Paràgraf una mica complicat per
+                # aconseguir-ho.
+                series_seqlen = df_filtered[ \
+                    [str(db+"name"), str(db+"len")]] \
+                    .groupby(str(db+"name"), observed=True) \
+                    .agg("min") \
+                    [str(db+"len")]
+
+                # Emmagatzema aquests resultats per a crear-ne un pd.DataFrame.
+                answer["Subset"].extend([subset] *2)
+                answer["Kind"].extend(["naive", "algor"])
+                answer["Length (#bp)"].extend([sum(x) \
+                                        for x in (series_naive, series_algor)])
+                answer["Length (%naive)"].extend([sum(x)/sum(series_naive) \
+                                        if sum(series_naive) != 0 else 0 \
+                                        for x in (series_naive, series_algor)])
+                answer["Length (%subset)"].extend([sum(x)/sum(series_seqlen) \
+                                        if sum(series_naive) != 0 else 0 \
+                                        for x in (series_naive, series_algor)])
+
+        return pd.DataFrame(answer)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
