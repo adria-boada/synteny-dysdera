@@ -23,26 +23,3 @@ print("Quina confusió")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Si es crida com a script:
-if __name__ == '__main__':
-
-    ### PARSE ARGUMENTS ###
-    import argparse
-    parser = argparse.ArgumentParser(description=help_msg,
-        # make sure the 'help_msg' is not automatically
-        # wrapped at 80 characters (manually assign newlines).
-        formatter_class=argparse.RawTextHelpFormatter)
-    # file-name: positional arg.
-#    parser.add_argument('filename', type=str, help='Path to ... file-name')
-    # integer argument
-#    parser.add_argument('-a', '--numero_a', type=int, help='Paràmetre "a"')
-    # choices argument
-#    parser.add_argument('-o', '--operacio', 
-#            type=str, choices=['suma', 'resta', 'multiplicacio'],
-#            default='suma', required=False,
-#            help='')
-
-    args = parser.parse_args()
-    # call a value: args.operacio or args.filename.
-
-
