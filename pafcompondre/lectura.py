@@ -6,7 +6,10 @@
 # 11 d’abr. 2024  <adria@molevol-OptiPlex-9020>
 
 import sys
+# Printing colourful messages.
 from . import missatges
+# Accounting for overlapping intervals.
+from . import encavalcament as encav
 
 # Dataframes manipulation, akin to the R project
 import pandas as pd
@@ -65,11 +68,21 @@ class Mapping:
 
         # Llegeix el fitxer PAF, incorporant-lo com a `pandas.DataFrame()` dins
         # la variable `self.df`.
+        missatges.Estat("Reading the first 12 columns of the file "+
+                        "(always present).")
         self.df = self.read_paf_file(path_to_paf)
         # Si `memory_efficient` està desactivat (False), llegeix la resta de
         # columnes opcionals que ocupen considerablement més memòria.
         if not memory_efficient:
+            missatges.Estat("Reading optional columns beyond the 12th field.")
             self.df = self.read_paf_optional_columns(self.df, path_to_paf)
+
+        # Val la pena còrrer l'algorisme d'encavalcament cada vegada que
+        # es llegeixen les dades?
+        missatges.Estat("Running algorithm which removes alignments "+
+                        "with overlapping intervals.")
+        catalog_series = self.compute_nonoverlap_len(self.df)
+        self.df = self.df.join([catalog_series["Q"], catalog_series["T"], ])
 
         return None
 
@@ -92,8 +105,6 @@ class Mapping:
                     "Tlen": "int", "Tstart": "int", "Tend": "int",
                     "matches": "int", "ali_len": "int", "mapQ": "int"}
 
-        missatges.Estat("Reading the first 12 columns of the file "+
-                        "(always present).")
         df = pd.read_table(path_to_paf, header=None,
             # The regex "\s+" stands for
             # "one or more blank spaces" (includes spaces and TABs).
@@ -154,7 +165,6 @@ class Mapping:
                           "indel_list": [], }
         # Desplaça't a través de les línies del fitxer PAF i omple les llistes
         # dels diccionaris anteriors.
-        missatges.Estat("Reading optional columns beyond the 12th field.")
         with open(path_to_paf) as fitxer_paf:
             for count, line in enumerate(fitxer_paf):
                 # Obté una llista amb tots els camps a partir del 12é.
@@ -294,6 +304,83 @@ class Mapping:
         answer["compressed"] = cigar_string.count("D") + cigar_string.count("I")
 
         return answer
+
+    def list_intervals_in_df(self, df: pd.DataFrame, column_sequid: str,
+                             column_start: str, column_end: str, ):
+        """
+        Create a dictionary with all the intervals found in each sequid of
+        either the queried or targeted genome.
+
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file.
+
+        column_sequid : str
+        Either "Qname" or "Tname", where sequence IDs can be found.
+
+        column_start : str
+        Either "Qstart" or "Tstart", where interval openings can be found.
+
+        column_end : str
+        Either "Qend" or "Tend", where interval endings can be found.
+        """
+        # Inicialita un diccionari de retorn. Emmagatzemarà intervals indicant
+        # regions incloses al mapatge. Una llista d'intervals per cromosoma.
+        # P. ex. {"sequid": ((beg1, end1), (beg2, end2), ... (begN, endN)) }
+        intervals_per_seq = dict()
+        for seq in df[column_sequid].unique():
+            df_seq = df.loc[df[column_sequid] == seq]
+            intervals = list( zip(
+                list(df_seq.index),
+                list(df_seq[column_start]),
+                list(df_seq[column_end]),
+                list(df_seq["mapQ"]), ))
+            # Ordena intervals segons la coordenada inicial.
+            intervals = sorted(intervals, key=lambda x: x[0])
+            intervals_per_seq[seq] = intervals
+
+        return intervals_per_seq
+
+    def compute_nonoverlap_len(self, df: pd.DataFrame):
+        """
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file.
+        """
+        # No sobrescriguis el "df".
+        df = df.copy()
+        # Inicialita una llista on guardar-hi els resultats de l'algorisme.
+        answer = {"Qalgorbp": list(), "Talgorbp": list()}
+        index = {}
+        # Repeteix el procediment per a cada base de dades "query" i "target".
+        for db in ["Q", "T"]:
+            llista_extensible = list()
+            # Obté un diccionari amb totes les seqüències de la base de dades,
+            # juntament a la seva llista de coordenades d'intervals mapats.
+            intervals_per_seq = self.list_intervals_in_df(
+                df=df,
+                column_sequid=str(db) + "name",
+                column_start=str(db) + "start",
+                column_end=str(db) + "end", )
+            # Travessa el diccionari de seqüències.
+            for seq, intervals in intervals_per_seq.items():
+                # Extén la resposta afegint-hi parelles "(index, llargada)".
+                llista_extensible.extend(
+                    encav.remove_overlapping_with_score(intervals))
+            answer[str(db) + "algorbp"] = [x[1] for x in llista_extensible]
+            index[db] = [x[0] for x in llista_extensible]
+
+        # Finalment, crea dues pd.Series a partir de les parelles anteriors.
+        return {"Q": pd.Series(answer["Qalgorbp"],
+                               name="Qalgorbp", index=index["Q"],
+                               dtype=int).sort_index(),
+                "T": pd.Series(answer["Talgorbp"],
+                               name="Talgorbp", index=index["T"],
+                               dtype=int).sort_index(), }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
