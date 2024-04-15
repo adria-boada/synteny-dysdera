@@ -511,8 +511,6 @@ class Mapping(object):
 
         values = [ (begin_1, end_1), (b_2, e_2), etc. ]
         """
-        # Initialise a dict. to store results and return.
-        answer = dict()
         # Initialise a dict. to store a list of sorted intervals indicating
         # regions which are included in the mapping. One list per chromosome.
         # Eg. dict[sequence] = ((begin1, end1), (b2, e2), ..., (bN, eN))
