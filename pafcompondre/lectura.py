@@ -200,7 +200,7 @@ class Mapping:
                 # Si aquesta línia contenia una cadena CIGAR, interpreta-la:
                 if etiqueta_a_columna["cg"][-1] != None:
                     last_cigar = etiqueta_a_columna["cg"][-1]
-                    resum_cigar = self.interpret_cigar_string(last_cigar)
+                    resum_cigar = interpret_cigar_string(last_cigar)
                     cigar_columnes["cig_deletions"].append(resum_cigar["D"])
                     cigar_columnes["cig_insertions"].append(resum_cigar["I"])
                     cigar_columnes["cig_matches"].append(resum_cigar["M"])
@@ -265,61 +265,6 @@ class Mapping:
                 (df["cig_insertions"] + df["cig_deletions"])
 
         return df
-
-    def interpret_cigar_string(self, cigar_string: str):
-        """
-        Interpret a CIGAR string; compute its total amount of "M" (matches), "I"
-        (insertions to query) and "D" (deletions to query).
-
-        Parameters
-        ----------
-
-        cigar_string : str
-        A string of letters, each paired with a number. They symbolize the gap
-        composition of an alignment/mapping. Accepts a string with the letters
-        "M", "I" and "D". Each letter must be preceded by a number, which is the
-        length of the gap/match. Take a look at the specifications of the "SAM"
-        format for a more in-depth explanation:
-
-        <https://samtools.github.io/hts-specs/SAMv1.pdf>
-        # accessed 12-04-2024
-
-        Returns
-        -------
-
-        A dictionary with the sum of "M", "I" and "D" fragments. Moreover, it
-        returns the amount of insertions and deletions instead of their lengths
-        in basepairs. It is useful to compute "compressed gap identity". For a
-        discussion on "compressed gap identity", see:
-
-        <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
-        # accessed 12-04-2024
-        """
-        # Crea una llista de llargada (bp) d'indels
-        # identificant el patró "\d+[ID]".
-        indels = re.findall(r"\d+[ID]", cigar_string)
-        indels = re.findall(r"\d+", "".join(indels))
-        indels = [int(i) for i in indels]
-        # Separa la cadena CIGAR per mitjà de
-        # concatenar espais a les lletres "MID":
-        for i in "MID":
-            cigar_string = cigar_string.replace(i, i+" ")
-        cigar_list = cigar_string.strip("\n").split(" ")
-        # Inicialitza un diccionari de retorn:
-        answer = {"M": 0, "I": 0, "D": 0, "indels": indels}
-        # Compta i emmagatzema resultats a `answer`.
-        for i in cigar_list:
-            if "M" in i:
-                answer["M"] += int(i[:-1])
-            elif "D" in i:
-                answer["D"] += int(i[:-1])
-            elif "I" in i:
-                answer["I"] += int(i[:-1])
-        # Prén en consideració la quantitat de gaps en comptes de la seva
-        # llargada (és a dir, comprimeix els gaps a la llargada igual a 1).
-        answer["compressed"] = cigar_string.count("D") + cigar_string.count("I")
-
-        return answer
 
     def list_intervals_in_df(self, df: pd.DataFrame, column_sequid: str,
                              column_start: str, column_end: str, ):
@@ -464,6 +409,61 @@ class Mapping:
                                         for x in (series_naive, series_algor)])
 
         return pd.DataFrame(answer)
+
+def interpret_cigar_string(cigar_string: str):
+    """
+    Interpret a CIGAR string; compute its total amount of "M" (matches), "I"
+    (insertions to query) and "D" (deletions to query).
+
+    Parameters
+    ----------
+
+    cigar_string : str
+    A string of letters, each paired with a number. They symbolize the gap
+    composition of an alignment/mapping. Accepts a string with the letters
+    "M", "I" and "D". Each letter must be preceded by a number, which is the
+    length of the gap/match. Take a look at the specifications of the "SAM"
+    format for a more in-depth explanation:
+
+    <https://samtools.github.io/hts-specs/SAMv1.pdf>
+    # accessed 12-04-2024
+
+    Returns
+    -------
+
+    A dictionary with the sum of "M", "I" and "D" fragments. Moreover, it
+    returns the amount of insertions and deletions instead of their lengths
+    in basepairs. It is useful to compute "compressed gap identity". For a
+    discussion on "compressed gap identity", see:
+
+    <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
+    # accessed 12-04-2024
+    """
+    # Crea una llista de llargada (bp) d'indels
+    # identificant el patró "\d+[ID]".
+    indels = re.findall(r"\d+[ID]", cigar_string)
+    indels = re.findall(r"\d+", "".join(indels))
+    indels = [int(i) for i in indels]
+    # Separa la cadena CIGAR per mitjà de
+    # concatenar espais a les lletres "MID":
+    for i in "MID":
+        cigar_string = cigar_string.replace(i, i+" ")
+    cigar_list = cigar_string.strip("\n").split(" ")
+    # Inicialitza un diccionari de retorn:
+    answer = {"M": 0, "I": 0, "D": 0, "indels": indels}
+    # Compta i emmagatzema resultats a `answer`.
+    for i in cigar_list:
+        if "M" in i:
+            answer["M"] += int(i[:-1])
+        elif "D" in i:
+            answer["D"] += int(i[:-1])
+        elif "I" in i:
+            answer["I"] += int(i[:-1])
+    # Prén en consideració la quantitat de gaps en comptes de la seva
+    # llargada (és a dir, comprimeix els gaps a la llargada igual a 1).
+    answer["compressed"] = cigar_string.count("D") + cigar_string.count("I")
+
+    return answer
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
