@@ -83,6 +83,8 @@ class Mapping:
                         "with overlapping intervals.")
         catalog_series = self.compute_nonoverlap_len(self.df)
         self.df = self.df.join([catalog_series["Q"], catalog_series["T"], ])
+        self.intervals_per_seq_sans_encavalcament = \
+            catalog_series["intervals_sans_encavalcament"]
 
         # Revisa com d'encavalcats es troben els alineaments.
         # Seria necessari incorporar-hi un diccionari de patrons a l'objecte
@@ -370,6 +372,8 @@ class Mapping:
         # Inicialita una llista on guardar-hi els resultats de l'algorisme.
         answer = {"Qalgorbp": list(), "Talgorbp": list()}
         index = {}
+        intervals_per_seq_sans_encavalcament = {"Qinterval": dict(),
+                                                "Tinterval": dict(), }
         # Repeteix el procediment per a cada base de dades "query" i "target".
         for db in ["Q", "T"]:
             llista_extensible = list()
@@ -382,9 +386,15 @@ class Mapping:
                 column_end=str(db) + "end", )
             # Travessa el diccionari de seqüències.
             for seq, intervals in intervals_per_seq.items():
+                # Per cada seqüencia, elimina nucleòtids encavalcats.
+                sans_encavalcament = \
+                    encav.remove_overlapping_with_score(intervals)
                 # Extén la resposta afegint-hi parelles "(index, llargada)".
-                llista_extensible.extend(
-                    encav.remove_overlapping_with_score(intervals))
+                llista_extensible.extend(sans_encavalcament["algorbp"])
+                # Amplia el diccionari d'intervals sense encavalcar.
+                intervals_per_seq_sans_encavalcament \
+                    [str(db+"interval")][seq] = \
+                    sans_encavalcament["intervals"]
             answer[str(db) + "algorbp"] = [x[1] for x in llista_extensible]
             index[db] = [x[0] for x in llista_extensible]
 
@@ -394,7 +404,9 @@ class Mapping:
                                dtype=int).sort_index(),
                 "T": pd.Series(answer["Talgorbp"],
                                name="Talgorbp", index=index["T"],
-                               dtype=int).sort_index(), }
+                               dtype=int).sort_index(),
+                "intervals_sans_encavalcament": \
+                    intervals_per_seq_sans_encavalcament, }
 
     def evaluate_overlapping_alignment(self, df: pd.DataFrame,
                                        genome_subset_patterns: dict):

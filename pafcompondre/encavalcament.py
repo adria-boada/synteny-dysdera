@@ -32,7 +32,8 @@ def remove_overlapping_with_score(intervals: list):
     [ (idx1, len1), ... (idxN, lenN) ]
     """
     # Inicialitza un diccionari per guardar-hi els resultats.
-    answer = dict()
+    answer_algorbp = dict()
+    answer_intervals = list()
     # Crea una llista de punts a partir d'una llista d'intervals. Exemple:
     # Llista de punts → ( [beg1, 0, idx1, score1], [end1, 1, idx1, score1],
     #                     [beg2, 0, idx2, score2], [end2, 1, idx2, score2], ...
@@ -50,11 +51,12 @@ def remove_overlapping_with_score(intervals: list):
                                   intervals[i][0],
                                   intervals[i][3], ]))
         # Crea una entrada al diccionari on sumar-hi els resultats.
-        answer[intervals[i][0]] = 0
+        answer_algorbp[intervals[i][0]] = 0
     # Ordena la llista de punts segons la posició (primer item de subllistes).
     llista_punts = sorted(llista_punts, key=lambda x: x[0])
     # Inicialitza altres variables de l'algorisme.
     currentBest = -1
+    firstOpen = -1
     intervals_oberts = list()
 
     # Comença iterant a través de la llista de punts. Descompta bp encavalcats
@@ -69,6 +71,8 @@ def remove_overlapping_with_score(intervals: list):
                 currentBest = int(punt[2])
                 currentBegin = int(punt[0])
                 currentScore = int(punt[3])
+                # No hi ha altres intervals oberts, és el primer.
+                firstOpen = int(punt[0])
 
             # Altrament,ja hi havia un interval encetat.
             elif currentScore > punt[3]:
@@ -85,7 +89,7 @@ def remove_overlapping_with_score(intervals: list):
                 # El próxim interval és d'una puntuació superior. Computa
                 # llargada 'currentBest' fins ara.
                 llargada_interval = int(punt[0] - currentBegin)
-                answer[currentBest] += llargada_interval
+                answer_algorbp[currentBest] += llargada_interval
                 # Afageix "currentBest" als intervals prèviament encetats.
                 intervals_oberts.append(list([
                     int(currentBest),       # ID
@@ -106,11 +110,15 @@ def remove_overlapping_with_score(intervals: list):
             # RepeatMasker i minimap2 diria que són "0-based" (suma 1 a la
             # diferència entre principi i final per obtenir llargada).
             llargada_interval = int(punt[0] - currentBegin +1)
-            answer[punt[2]] += llargada_interval
+            answer_algorbp[punt[2]] += llargada_interval
             # Tanca "currentBest". Revisa si hi ha intervals oberts que puguin
             # prendre-li el lloc.
             if len(intervals_oberts) == 0:
                 currentBest = -1
+                # Volem emmagatzemar una llista amb els intervals que no solapen. No
+                # fa falta associar-los a cap índex, és una llista a seques de
+                # coordenades (beg1, end1), (beg2, end2), etc.
+                answer_intervals.append(list([firstOpen, punt[0]]))
             else:
                 currentBest, currentScore = intervals_oberts.pop(0)
                 # Calcula principi a partir de l'interval que acabem de tancar.
@@ -123,7 +131,9 @@ def remove_overlapping_with_score(intervals: list):
                 int(punt[2]),      # ID
                 int(punt[3]), ]))  # Puntuació
 
-    return list(zip(answer.keys(), answer.values()))
+    return {"algorbp": list(zip(answer_algorbp.keys(),
+                                answer_algorbp.values(), )),
+            "intervals": list(answer_intervals), }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
