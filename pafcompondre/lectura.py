@@ -25,6 +25,7 @@ class Mapping:
     `minimap2`:
 
     <https://lh3.github.io/minimap2/minimap2.html#10>
+    # accessed 16-april-2024
 
     In summary, we have used the following column names:
 
@@ -75,13 +76,13 @@ class Mapping:
         # columnes opcionals que ocupen considerablement més memòria.
         if not memory_efficient:
             missatges.Estat("Reading optional columns beyond the 12th field.")
-            self.df = self.read_paf_optional_columns(self.df, path_to_paf)
+            self.df = self.read_paf_optional_columns(path_to_paf)
 
         # Val la pena còrrer l'algorisme d'encavalcament cada vegada que
         # es llegeixen les dades?
         missatges.Estat("Running algorithm which removes alignments "+
                         "with overlapping intervals.")
-        catalog_series = self.compute_nonoverlap_len(self.df)
+        catalog_series = self.compute_nonoverlap_len()
         self.df = self.df.join([catalog_series["Q"], catalog_series["T"], ])
         self.intervals_per_seq_sans_encavalcament = \
             catalog_series["intervals_sans_encavalcament"]
@@ -93,13 +94,14 @@ class Mapping:
         missatges.Estat("Evaluating overlapping found within the "+
                         "mapping of the queried and targeted genomes...")
         self.df_overlap_comparison = self.evaluate_overlapping_alignment(
-            df=self.df, genome_subset_patterns={
+            genome_subset_patterns={
                 "genome": ".",
                 "autosomes": "chr\d",
                 "sex_chr": "chrx",
                 "minor_scaff": "scaff|ctg", })
         print(self.df_overlap_comparison)
 
+        missatges.Estat("Finished!")
         return None
 
     def read_paf_file(self, path_to_paf: str):
@@ -164,13 +166,19 @@ class Mapping:
 
         return series
 
-    def read_paf_optional_columns(self, df: pd.DataFrame, path_to_paf: str):
+    def read_paf_optional_columns(self, path_to_paf: str):
+        """
+        """
         # Crea una llista amb els camps opcionals. Són camps que podrien
         # trobar-se en totes, alguna o cap filera. Veieu el manual de referència
         # per una explicació de cada etiqueta/columna:
         # <https://lh3.github.io/minimap2/minimap2.html#10>
         # Recordeu que ordeno les columnes manualment segons "importància"
         # subjectiva i personal.
+
+        # Drecera fins al dataframe principal, evitant paramatritzar-lo.
+        df = self.df
+
         etiqueta_a_columna = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
                               "cg": [], "cs": [], "SA": [], "ts": [], "cm": [],
                               "s1": [], "s2": [], "MD": [], "AS": [], "ms": [],
@@ -304,16 +312,11 @@ class Mapping:
 
         return intervals_per_seq
 
-    def compute_nonoverlap_len(self, df: pd.DataFrame):
+    def compute_nonoverlap_len(self):
         """
-        Parameters
-        ----------
-
-        df : pd.DataFrame
-        The main dataframe created from the PAF file.
         """
-        # No sobrescriguis el "df".
-        df = df.copy()
+        # No sobrescriguis el "df". Crea'n una drecera.
+        df = self.df.copy()
         # Inicialita una llista on guardar-hi els resultats de l'algorisme.
         answer = {"Qalgorbp": list(), "Talgorbp": list()}
         index = {}
@@ -353,14 +356,10 @@ class Mapping:
                 "intervals_sans_encavalcament": \
                     intervals_per_seq_sans_encavalcament, }
 
-    def evaluate_overlapping_alignment(self, df: pd.DataFrame,
-                                       genome_subset_patterns: dict):
+    def evaluate_overlapping_alignment(self, genome_subset_patterns: dict):
         """
         Parameters
         ----------
-
-        df : pd.DataFrame
-        The main dataframe created from the PAF file.
 
         genome_subset_patterns : dict
         The keys are genome subsets, whereas the values are patterns that will
@@ -374,6 +373,8 @@ class Mapping:
         everything). The pattern "chr\d" matches "chr" followed by amy digit.
         The pattern "scaff|ctg" matches either "scaff" or "ctg".
         """
+        # Drecera fins al dataframe principal, evitant paramatritzar-lo.
+        df = self.df
         answer = {"Subset": [], "Kind": [], "Length (#bp)": [],
                   "Length (%naive)": [], "Length (%subset)": [], }
 
@@ -397,7 +398,7 @@ class Mapping:
                     [str(db+"len")]
 
                 # Emmagatzema aquests resultats per a crear-ne un pd.DataFrame.
-                answer["Subset"].extend([subset] *2)
+                answer["Subset"].extend([str(db + "." + subset)] *2)
                 answer["Kind"].extend(["naive", "algor"])
                 answer["Length (#bp)"].extend([sum(x) \
                                         for x in (series_naive, series_algor)])
@@ -426,7 +427,7 @@ def interpret_cigar_string(cigar_string: str):
     format for a more in-depth explanation:
 
     <https://samtools.github.io/hts-specs/SAMv1.pdf>
-    # accessed 12-04-2024
+    # accessed 12-april-2024
 
     Returns
     -------
@@ -437,7 +438,7 @@ def interpret_cigar_string(cigar_string: str):
     discussion on "compressed gap identity", see:
 
     <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
-    # accessed 12-04-2024
+    # accessed 12-april-2024
     """
     # Crea una llista de llargada (bp) d'indels
     # identificant el patró "\d+[ID]".
