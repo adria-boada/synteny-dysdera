@@ -48,6 +48,8 @@ class Mapping:
     being killed.
     """
     def __init__(self, path_to_paf: str, memory_efficient: bool=False):
+        """
+        """
         # Make sure that the provided path points to an existing file.
         try:
             with open(path_to_paf):
@@ -101,10 +103,19 @@ class Mapping:
                 "minor_scaff": "scaff|ctg", })
         print(self.df_overlap_comparison)
 
+        self.mapped_regions = self.delimit_mapped_regions(
+            genome_subset_patterns={
+                "genome": ".",
+                "autosomes": "chr\d",
+                "sex_chr": "chrx",
+                "minor_scaff": "scaff|ctg", })
+
         missatges.Estat("Finished!")
         return None
 
     def read_paf_file(self, path_to_paf: str):
+        """
+        """
         # PAF may optionally have additional fields, i.e. an irregular number of
         # columns (ragged TSV).
         # This function initially reads columns which are always present.
@@ -356,6 +367,20 @@ class Mapping:
                 "intervals_sans_encavalcament": \
                     intervals_per_seq_sans_encavalcament, }
 
+    def genome_subset_length(self, df: pd.DataFrame, column_sequid: str,
+                             column_len: str, ):
+        """
+        """
+        # Obtén una pd.Series amb les llargades de totes les seqüències. Evita els
+        # duplicats que podrien sorgir d'una simple i directa operació "unique()"
+        # a la columna "Qlen" o "Tlen".
+        series_seqlen = df[[column_sequid, column_len]] \
+            .groupby(column_sequid, observed=True) \
+            .agg("min") \
+            [column_len]
+
+        return series_seqlen
+
     def evaluate_overlapping_alignment(self, genome_subset_patterns: dict):
         """
         Parameters
@@ -391,11 +416,10 @@ class Mapping:
                 # Recull les llargades de totes les seqüències (llargada del
                 # subset genòmic). Paràgraf una mica complicat per
                 # aconseguir-ho.
-                series_seqlen = df_filtered[ \
-                    [str(db+"name"), str(db+"len")]] \
-                    .groupby(str(db+"name"), observed=True) \
-                    .agg("min") \
-                    [str(db+"len")]
+                series_seqlen = self.genome_subset_length(
+                    df=df_filtered,
+                    column_sequid=str(db+"name"),
+                    column_len=str(db+"len"), )
 
                 # Emmagatzema aquests resultats per a crear-ne un pd.DataFrame.
                 answer["Subset"].extend([str(db + "." + subset)] *2)
@@ -410,6 +434,91 @@ class Mapping:
                                         for x in (series_naive, series_algor)])
 
         return pd.DataFrame(answer)
+
+    def len_mapped_and_unmapped(self, intervals: list, final_chr: int,
+                                principi_chr: int=0, ):
+        """
+        """
+        # Crea una llista de punts a partir de la llista d'intervals.
+        punts = []
+        for i in range(0, len(intervals)):
+            # Extén la llista afegint l'interval.
+            punts.extend(list([intervals[i][0], intervals[i][1], ]))
+
+        # Inicialitza variables.
+        coord_end = principi_chr
+        interdist, alig_lens = list(), list()
+        # Itera a través de la llista de punts.
+        while len(punts) != 0:
+            coord_beg = punts.pop(0)
+            # Computa distància entre alineaments, inter-alineaments.
+            interdist.append(int(coord_beg - coord_end))
+            coord_end = punts.pop(0)
+            # Computa llargada dels alineaments, intra-alineaments.
+            alig_lens.append(int(coord_end - coord_beg))
+        # Finalment, calcula la distància entre l'últim alineament i el final
+        # del cromosoma.
+        interdist.append(int(final_chr - coord_end))
+
+        # Converteix les llistes a pd.Series. Haurien de ser més fàcils de
+        # manipular.
+        answer = {
+            "mapped_coords": pd.Series(alig_lens),
+            "unmapped_coords": pd.Series(interdist), }
+
+    def delimit_mapped_regions(self, genome_subset_patterns: dict):
+        """
+        """
+        # Inicialitza un diccionari que emmagatzema llargada d'alineament i
+        # distàncies entre mapatges (intervals de regions no mapades,
+        # complementari als intervals de regions mapades).
+        answer = dict()
+        # Drecera fins al df principal de la classe.
+        df = self.df
+        # Computa pd.Series amb una llista de valors observats.
+        for db in ("Q", "T"):
+            answer[db] = dict()
+            for seqtype, patt in genome_subset_patterns.items():
+                # Filtra el df segons el patró del bucle.
+                mask_seqtype = df[str(db + "name")] \
+                    .str.contains(patt, case=False)
+                df_filtered = df.loc[mask_seqtype] #.copy()
+                if df_filtered.empty:
+                    missatges.Avis("The pattern "+str(patt)+" does not "
+                                   "match any sequence in "+str(db))
+                    continue
+                # Inicialitza un diccionari per a guardar-hi regions.
+                answer[db][seqtype] = {
+                    "mapped_coords": pd.Series(dtype="int"),
+                    "unmapped_coords": pd.Series(dtype="int"), }
+                # Crea una drecera fins a "answer".
+                a = answer[db][seqtype]
+                # Emmagatzema la llista de llargades dels alineaments, per
+                # separat dels intervals mapats sense encavalcaments.
+                a["ali_len"] = df_filtered["ali_len"].astype(int)
+                # Emmagatzema "matches" i "mismatches" dels alineaments (la part
+                # dels alineaments que no són "gaps").
+                a["matches"] = df_filtered["matches"].astype(int)
+                a["mismatches"] = df_filtered["mismatches"].astype(int)
+                # Obtén un diccionari on es relacioni cada "seqtype" amb una
+                # llista dels seus intervals mapats, eliminant encavalcaments.
+                intervals_per_seq = self.intervals_per_seq_sans_encavalcament
+                for seq, val in intervals_per_seq.items():
+                    # Crea dues pd.Series amb les llargades de les regions
+                    # mapades i no mapades.
+                    final_chr = df_filtered.loc[
+                        df_filtered[str(db + "name")] == seq, str(db + "len")] \
+                        .iloc[0]
+                    series_regions = self.len_mapped_and_unmapped(
+                        intervals=val, final_chr=final_chr)
+                    a["mapped_coords"] = pd.concat([
+                        m["mapped_coords"],
+                        series_regions["mapped_coords"]])
+                    a["unmapped_coords"] = pd.concat([
+                        m["unmapped_coords"],
+                        series_regions["unmapped_coords"]])
+
+        return answer
 
 def interpret_cigar_string(cigar_string: str):
     """
