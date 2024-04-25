@@ -36,24 +36,37 @@ class Mapping(object):
     Parameters
     ----------
 
-    path_to_paf : str
-    The path to a PAF file. The file will be read and transformed into a
-    `pd.Dataframe`.
+    filename : str
+    The name of the mapping file.
 
-    memory_efficient : bool, default False
-    Whether memory expensive columns should be loaded or left discarded. For
-    instance, CIGAR and difference strings will not be loaded when True. Might
-    prevent Python to run out of memory. Set to `True` if the Python process is
-    being killed.
+    df : pd.DataFrame
+    The contents of the mapping file formatted as a pandas DataFrame. See the
+    factory method `cls.from_PAF', which creates a pandas df from a PAF file.
+
+    genome_subsets_patterns : dict
+    A dictionary where keys are names of genome subsets and values are
+    corresponding patterns which can be used to filter the main dataframe.
+    For example:
+
+        genome_subsets_patterns = dict({
+            "genome": ".",
+            "autosomes": "chr\d",
+            "sex_chr": "chrx",
+            "minor_scaff": "scaff", }
     """
     def __init__(self, filename: str, df: pd.DataFrame,
                  genome_subsets_patterns: dict=None):
+        # Emmagatzema `df' i `filename'.
+        self.filename = filename
+        self.df = df
         # Revisa si s'han entregat patrons dins el mètode de fàbrica!
         if not genome_subsets_patterns:
             # Patrons predeterminats, genèrics, d'exemple.
-            genome_subsets_patterns = {
+            self.genome_subsets_patterns = {
                 "genome": ".",
-                "autosomes": "chr\d", }
+                "autosomes": "chr\d",
+                "sex_chr": "chrx",
+                "minor_scaff": "scaff|ctg", }
 
         return None
 
@@ -73,8 +86,8 @@ class Mapping(object):
         memory_efficient : bool, default False
         Whether memory expensive columns should be loaded or left discarded. For
         instance, CIGAR and difference strings will not be loaded when True. Might
-        prevent Python to run out of memory. Set to `True` if the Python process is
-        being killed.
+        prevent Python to run out of memory. Set this parameter to `True` if the
+        Python process ends up killed.
         """
         # Revisa que el camí fins al fitxer PAF existeixi.
         try:
@@ -106,6 +119,7 @@ class Mapping(object):
             missatges.Estat("Reading optional columns beyond the 12th field.")
             df_main = cls._read_optional_paf_file(df_main, path_to_paf)
 
+        missatges.Estat("Finished reading the PAF file.")
         return cls(filename=paf_filename, df=df_main)
 
     @classmethod
@@ -153,9 +167,6 @@ class Mapping(object):
         # <https://lh3.github.io/minimap2/minimap2.html#10>
         # Recordeu que ordeno les columnes manualment segons "importància"
         # subjectiva i personal.
-
-        # Drecera fins al dataframe principal, evitant paramatritzar-lo.
-        df = self.df
 
         etiqueta_a_columna = {"tp": [], "NM": [], "nn": [], "dv": [], "de": [],
                               "cg": [], "cs": [], "SA": [], "ts": [], "cm": [],
@@ -252,13 +263,332 @@ class Mapping(object):
 
         return df
 
-    def _list_intervals():
+    def _list_intervals(self, df: pd.DataFrame, column_sequid: str,
+                        column_start: str, column_end: str):
+        """
+        Create a dictionary with all the intervals found in each sequid of
+        either the queried or targeted genome.
+
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file.
+
+        column_sequid : str
+        Either "Qname" or "Tname", where sequence IDs can be found.
+
+        column_start : str
+        Either "Qstart" or "Tstart", where interval openings can be found.
+
+        column_end : str
+        Either "Qend" or "Tend", where interval endings can be found.
+        """
+        # Inicialita un diccionari de retorn. Emmagatzemarà intervals indicant
+        # regions incloses al mapatge. Una llista d'intervals per cromosoma.
+        # P. ex. {"sequid": ((beg1, end1), (beg2, end2), ... (begN, endN)) }
+        intervals_per_seq = dict()
+        for seq in df[column_sequid].unique():
+            df_seq = df.loc[df[column_sequid] == seq]
+            intervals = list( zip(
+                list(df_seq.index),
+                list(df_seq[column_start]),
+                list(df_seq[column_end]),
+                list(df_seq["mapQ"]), ))
+            # Ordena intervals segons la coordenada inicial.
+            intervals = sorted(intervals, key=lambda x: x[0])
+            intervals_per_seq[seq] = intervals
+
+        return intervals_per_seq
+
+    def compute_nonoverlap_len(self, df: pd.DataFrame):
+        """
+        Compute how many basepairs of each mapping are not overlapping with
+        other mappings. Resolve conflicts by retaining the basepairs of higher
+        mapping quality alignments.
+
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file. Does not have the columns
+        `Qalgorbp' nor `Talgorbp'.
+
+        Returns
+        -------
+
+        A dict with two values: (1) the inputted `df' with two newly added
+        columns, "Qalgorbp" and "Talgorbp", and (2) a dictionary which relates each
+        sequence to a list of their nonoverlapping, aligned regions.
+
+        The newly added columns convey the length of the nonoverlapping aligned
+        regions, in basepairs. They're obtained from `Qstart' or `Tstart' and
+        `Qend' and `Tend' columns.
+        """
+        # No sobrescriguis el "df". Crea'n una drecera.
+        df = df.copy()
+        # Inicialita una llista on guardar-hi els resultats de l'algorisme.
+        answer = {"Qalgorbp": list(), "Talgorbp": list()}
+        index = {}
+        intervals_per_seq_sans_encavalcament = {"Qinterval": dict(),
+                                                "Tinterval": dict(), }
+        # Repeteix el procediment per a cada base de dades "query" i "target".
+        for db in ["Q", "T"]:
+            llista_extensible = list()
+            # Obté un diccionari amb totes les seqüències de la base de dades,
+            # juntament a la seva llista de coordenades d'intervals mapats.
+            intervals_per_seq = self._list_intervals(
+                df=df,
+                column_sequid=str(db) + "name",
+                column_start=str(db) + "start",
+                column_end=str(db) + "end", )
+            # Travessa el diccionari de seqüències.
+            for seq, intervals in intervals_per_seq.items():
+                # Per cada seqüencia, elimina nucleòtids encavalcats.
+                sans_encavalcament = \
+                    encav.remove_overlapping_with_score(intervals)
+                # Extén la resposta afegint-hi parelles "(index, llargada)".
+                llista_extensible.extend(sans_encavalcament["algorbp"])
+                # Amplia el diccionari d'intervals sense encavalcar.
+                intervals_per_seq_sans_encavalcament \
+                    [str(db+"interval")][seq] = \
+                    sans_encavalcament["intervals"]
+            answer[str(db) + "algorbp"] = [x[1] for x in llista_extensible]
+            index[db] = [x[0] for x in llista_extensible]
+
+        # Crea dues `Series' amb les llargades sense encavalcar (en bp.)
+        column_Qalgorbp = pd.Series(answer["Qalgorbp"],
+                               name="Qalgorbp", index=index["Q"],
+                               dtype=int).sort_index()
+        column_Talgorbp = pd.Series(answer["Talgorbp"],
+                               name="Talgorbp", index=index["T"],
+                               dtype=int).sort_index()
+        # Enganxa les dues columnes "Qalgorbp" i "Talgorbp" al df.
+        df = df.join([column_Qalgorbp, column_Talgorbp, ])
+
+        # Finalment, crea dues pd.Series a partir de les parelles anteriors.
+        return {"df": df,
+                "intervals_sans_encav": \
+                    intervals_per_seq_sans_encavalcament, }
+
+    def genome_subset_length(self, df: pd.DataFrame, column_sequid: str,
+                             column_len: str, ):
         """
         """
+        # Obtén una pd.Series amb les llargades de totes les seqüències. Evita els
+        # duplicats que podrien sorgir d'una simple i directa operació "unique()"
+        # a la columna "Qlen" o "Tlen".
+        series_seqlen = df[[column_sequid, column_len]] \
+            .groupby(column_sequid, observed=True) \
+            .agg("min") \
+            [column_len]
 
-    def 
+        return series_seqlen
 
-def interpreting_cigar_string(cigar_string: str):
+    def evaluate_overlapping_alignment(self, df: pd.DataFrame,
+                                       genome_subset_patterns: dict):
+        """
+        Parameters
+        ----------
+
+        df : pd.DataFrame
+        The main dataframe created from the PAF file. Does have the columns
+        `Qalgorbp' and `Talgorbp' obtained by running the function
+        `self.compute_nonoverlap_len()'.
+
+        genome_subset_patterns : dict
+        The keys are genome subsets, whereas the values are patterns that will
+        be matched against sequence names to filter the main dataframe. For
+        instance,
+
+        {"genome": ".", "autosomes": "chr\d", "sex_chr": "chrX",
+         "minor_scaff": "scaff|ctg", }
+
+        The pattern for "genome" encompasses any sequence name ("." matches
+        everything). The pattern "chr\d" matches "chr" followed by amy digit.
+        The pattern "scaff|ctg" matches either "scaff" or "ctg".
+        """
+        # Revisa que `df' conté ambdós columnes "Qalgorbp" i "Talgorbp". Si no,
+        # demanar que computi `self.compute_nonoverlap_len'.
+        if ("Qalgorbp" not in df.columns) or \
+           ("Talgorbp" not in df.columns):
+            missatges.Error("The function "+
+                            "`self.evaluate_overlapping_alignment()' "+
+                            "takes as the `df' parameter the output of "+
+                            "`self.compute_nonoverlap_len()['df'].")
+            return None
+
+        answer = {"Subset": [], "Kind": [], "Length (#bp)": [],
+                  "Length (%naive)": [], "Length (%subset)": [], }
+
+        for db in ["Q", "T"]:
+            for subset, pat in genome_subset_patterns.items():
+                # The filtered df is the main df where the column
+                # "str(db+'name')" contains the pattern, case-insensitively.
+                df_filtered = df.loc[df[str(db+"name")].str.contains(
+                    pat, case=False)]
+                # Compute the length of alignments naively, end - start +1
+                series_naive = df_filtered[str(db+"end")] - \
+                    df_filtered[str(db+"start")] +1
+                series_algor = df_filtered[str(db+"algorbp")]
+                # Recull les llargades de totes les seqüències (llargada del
+                # subset genòmic). Paràgraf una mica complicat per
+                # aconseguir-ho.
+                series_seqlen = self.genome_subset_length(
+                    df=df_filtered,
+                    column_sequid=str(db+"name"),
+                    column_len=str(db+"len"), )
+
+                # Emmagatzema aquests resultats per a crear-ne un pd.DataFrame.
+                answer["Subset"].extend([str(db + "." + subset)] *2)
+                answer["Kind"].extend(["naive", "algor"])
+                answer["Length (#bp)"].extend([sum(x) \
+                                        for x in (series_naive, series_algor)])
+                answer["Length (%naive)"].extend([sum(x)/sum(series_naive) \
+                                        if sum(series_naive) != 0 else 0 \
+                                        for x in (series_naive, series_algor)])
+                answer["Length (%subset)"].extend([sum(x)/sum(series_seqlen) \
+                                        if sum(series_naive) != 0 else 0 \
+                                        for x in (series_naive, series_algor)])
+
+        return pd.DataFrame(answer)
+
+    def len_mapped_and_unmapped(self, intervals: list, chr_end: int,
+                                chr_begin: int=0, ):
+        """
+        Parameters
+        ----------
+
+        intervals : list
+        A list that contains sublists [begin, end], representing the intervals
+        of mapped regions within a single sequence/chromosome.
+
+        chr_end : int
+        The ending coordinate of the sequence/chromosome; sequence length.
+
+        chr_begin : int
+        The starting coordinate of the sequence/chromosome; zero.
+        """
+        # Crea una llista de punts a partir de la llista d'intervals.
+        punts = []
+        for i in range(0, len(intervals)):
+            # Extén la llista afegint l'interval.
+            punts.extend(list([intervals[i][0], intervals[i][1], ]))
+
+        # Inicialitza variables.
+        coord_end = chr_begin
+        interdist, alig_lens = list(), list()
+        # Itera a través de la llista de punts.
+        while len(punts) != 0:
+            coord_beg = punts.pop(0)
+            # Computa distància entre alineaments, inter-alineaments.
+            interdist.append(int(coord_beg - coord_end))
+            coord_end = punts.pop(0)
+            # Computa llargada dels alineaments, intra-alineaments.
+            alig_lens.append(int(coord_end - coord_beg))
+        # Finalment, calcula la distància entre l'últim alineament i el final
+        # del cromosoma.
+        interdist.append(int(chr_end - coord_end))
+
+        # Converteix les llistes a pd.Series. Haurien de ser més fàcils de
+        # manipular.
+        answer = {
+            "mapped_coords": pd.Series(alig_lens, dtype=int),
+            "unmapped_coords": pd.Series(interdist, dtype=int), }
+
+        return answer
+
+    def delimit_mapped_regions(self, intervals_per_seq: list,
+                               genome_subset_patterns: dict):
+        """
+        """
+        # Inicialitza un diccionari que emmagatzema llargada d'alineament i
+        # distàncies entre mapatges (intervals de regions no mapades,
+        # complementari als intervals de regions mapades).
+        answer = dict()
+        # Drecera fins al df principal de la classe.
+        df = self.df
+        # Computa pd.Series amb una llista de valors observats.
+        for db in ("Q", "T"):
+            answer[db] = dict()
+            for seqtype, patt in genome_subset_patterns.items():
+                # Filtra el df segons el patró del bucle.
+                mask_seqtype = df[str(db + "name")] \
+                    .str.contains(patt, case=False)
+                df_filtered = df.loc[mask_seqtype].copy()
+                if df_filtered.empty:
+                    missatges.Avis("The pattern "+str(patt)+" does not "+
+                                   "match any sequence in the column "+
+                                   str(db)+"name.")
+                    continue
+                # Inicialitza un diccionari per a guardar-hi regions.
+                answer[db][seqtype] = {
+                    "mapped_coords": pd.Series(dtype="int"),
+                    "unmapped_coords": pd.Series(dtype="int"), }
+                # Crea una drecera fins a "answer".
+                a = answer[db][seqtype]
+                # Emmagatzema la llista de llargades dels alineaments, per
+                # separat dels intervals mapats sense encavalcaments.
+                a["ali_len"] = df_filtered["ali_len"].astype(int)
+                # Emmagatzema "matches" i "mismatches" dels alineaments (la part
+                # dels alineaments que no són "gaps").
+                a["matches"] = df_filtered["matches"].astype(int)
+                a["mismatches"] = df_filtered["mismatches"].astype(int)
+                # Obtén un diccionari on es relacioni cada "seqtype" amb una
+                # llista dels seus intervals mapats, eliminant encavalcaments.
+                intervals = intervals_per_seq[str(db) + "interval"]
+                for seq, intrv in intervals.items():
+                    # Crea dues pd.Series amb les llargades de les regions
+                    # mapades i no mapades.
+                    seq_matches_pat = re.search(
+                        pattern=patt, string=seq, flags=re.IGNORECASE)
+                    if not seq_matches_pat:
+                        continue
+                    final_chr = df_filtered.loc[
+                        df_filtered[str(db + "name")] == seq, str(db + "len")] \
+                        .iloc[0]
+                    series_regions = self.len_mapped_and_unmapped(
+                        intervals=intrv, chr_end=final_chr)
+                    a["mapped_coords"] = pd.concat([
+                        a["mapped_coords"],
+                        series_regions["mapped_coords"]], ignore_index=True)
+                    a["unmapped_coords"] = pd.concat([
+                        a["unmapped_coords"],
+                        series_regions["unmapped_coords"]], ignore_index=True)
+
+        return answer
+
+    def prepend_sequid_with_QT(self, series: pd.Series, label: str,
+                               separador: str="."):
+        """
+        Prepend all strings within a pd.Series (either Qname or Tname) of
+        categorical or object «dtype» with a label.
+
+        Parameters
+        ----------
+
+        series : pd.Series
+        A series with sequid values; either "Qname" or "Tname" columns of the
+        main dataframe.
+
+        label : str
+        A label which will be added to the beginning of all sequids; for
+        instance, "Q" for "Qname" and "T" for "Tname".
+
+        Returns
+        -------
+
+        pd.Series with the aforementioned changes.
+        """
+        # Afageix etiquetes al principi.
+        series = series.copy()
+        tipus = series.dtype
+        series = pd.Series([label] * len(series)).str.cat(series, sep=separador)
+        series = series.astype(tipus)
+
+        return series
+
+def interpret_cigar_string(cigar_string: str):
     """
     Interpret a CIGAR string; compute its total amount of "M" (matches), "I"
     (insertions to query) and "D" (deletions to query).
