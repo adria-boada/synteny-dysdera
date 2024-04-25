@@ -133,7 +133,7 @@ def remove_overlapping_with_score(intervals: list):
 
     return {"algorbp": list(zip(answer_algorbp.keys(),
                                 answer_algorbp.values(), )),
-            "intervals": list(answer_intervals), }
+            "intervals": sorted(list(answer_intervals), key=lambda x: x[0])}
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
