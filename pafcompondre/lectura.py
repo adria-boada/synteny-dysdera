@@ -12,6 +12,7 @@ from . import encavalcament as encav
 
 # Dataframes manipulation, akin to the R project
 import pandas as pd
+import numpy as np
 # CIGAR pattern matching
 import re
 
@@ -476,19 +477,25 @@ class Mapping(object):
             punts.extend(list([intervals[i][0], intervals[i][1], ]))
 
         # Inicialitza variables.
-        coord_end = chr_begin
         interdist, alig_lens = list(), list()
+        # Calcula interdistància entre principi cromosoma i el 1r mapatge.
+        principi = int(punts[0] - chr_begin)
+        if principi > 0:
+            interdist.append(principi)
+        coord_beg = punts.pop(0)
         # Itera a través de la llista de punts.
-        while len(punts) != 0:
-            coord_beg = punts.pop(0)
-            # Computa distància entre alineaments, inter-alineaments.
-            interdist.append(int(coord_beg - coord_end))
+        while len(punts) > 1:
             coord_end = punts.pop(0)
             # Computa llargada dels alineaments, intra-alineaments.
             alig_lens.append(int(coord_end - coord_beg))
-        # Finalment, calcula la distància entre l'últim alineament i el final
+            coord_beg = punts.pop(0)
+            # Computa distància entre alineaments, inter-alineaments.
+            interdist.append(int(coord_beg - coord_end))
+        # Finalment, calcula interdistància entre l'últim alineament i el final
         # del cromosoma.
-        interdist.append(int(chr_end - coord_end))
+        final = int(chr_end - punts[-1])
+        if final > 0:
+            interdist.append(final)
 
         # Converteix les llistes a pd.Series. Haurien de ser més fàcils de
         # manipular.
@@ -558,6 +565,34 @@ class Mapping(object):
 
         return answer
 
+    def indel_list_per_genome_subset(self, df: pd.DataFrame,
+                                     patterns: dict, ):
+        """
+        Create a list of indel lengths per genome subset found in `patterns`.
+        """
+        indels_per_region = dict()
+        ali_len_per_indel = dict()
+        for db in ("Q", "T"):
+            indels_per_region[db] = dict()
+            ali_len_per_indel[db] = dict()
+            for seqtype, patt in patterns.items():
+                # Filtra df segons "db + name" (columna sequid) utilitzant el
+                # patró adient.
+                mask_seqtype = df[str(db + "name")].str.contains(patt, case=False)
+                df_seqtype = df.loc[mask_seqtype]
+                # Inicialitza una entrada al dict. i usa "list comprehension"
+                # per a allisar una llista de subllistes.
+                indels_per_region[db][seqtype] = list()
+                [indels_per_region[db][seqtype].extend(i)
+                 for i in df_seqtype["indel_list"].to_list()]
+                # Computa la llargada d'alineament per a cada mida indel.
+                num_indels = df_seqtype["indel_list"].map(len)
+                ali_len_per_indel[db][seqtype] = \
+                    np.repeat(df_seqtype["ali_len"], num_indels).to_list()
+
+        return {"indels_per_regions": indels_per_region,
+                "ali_len_per_indel": ali_len_per_indel, }
+
     def prepend_sequid_with_QT(self, series: pd.Series, label: str,
                                separador: str="."):
         """
@@ -587,6 +622,32 @@ class Mapping(object):
         series = series.astype(tipus)
 
         return series
+
+    def prova(self):
+        """
+        """
+        import seaborn as sns, matplotlib.pyplot as plt
+        self.df, self.intervals_per_seq = self.compute_nonoverlap_len(self.df).values()
+        m = self.delimit_mapped_regions(
+            intervals_per_seq=self.intervals_per_seq,
+            genome_subset_patterns=self.genome_subsets_patterns)
+        # ["T"]["autosomes"]["unmapped_coords"]
+        dataset = pd.DataFrame({"x": [], "y": [], "hue": []})
+        for db, d in m.items():
+            for subset, dd in d.items():
+                dd = dd["unmapped_coords"].value_counts().sort_index()
+                new_rows = pd.DataFrame({
+                    "x": dd.index, "y": dd.values,
+                    "hue": [str(db + " - " + subset)] * len(dd.index), })
+                dataset = pd.concat([dataset, new_rows])
+
+        sns.kdeplot(data=dataset, x="x", weights="y", hue="hue")
+        plt.xscale("log")
+        #> g.set(
+        #> g.set_xlim(left=0)
+        plt.show()
+
+        return None
 
 def interpret_cigar_string(cigar_string: str):
     """
