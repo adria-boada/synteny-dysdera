@@ -51,7 +51,7 @@ class Mapping(object):
 
         genome_subsets_patterns = dict({
             "genome": ".",
-            "autosomes": "chr\d",
+            "autosomes": "chr\\d",
             "sex_chr": "chrx",
             "minor_scaff": "scaff", }
     """
@@ -64,10 +64,10 @@ class Mapping(object):
         if not genome_subsets_patterns:
             # Patrons predeterminats, genèrics, d'exemple.
             self.genome_subsets_patterns = {
-                "genome": ".",
-                "autosomes": "chr\d",
-                "sex_chr": "chrx",
-                "minor_scaff": "scaff|ctg", }
+                "genome": r".",
+                "autosomes": r"chr\d",
+                "sex_chr": r"chrx",
+                "minor_scaff": r"scaff|ctg", }
 
         return None
 
@@ -148,7 +148,7 @@ class Mapping(object):
         df = pd.read_table(path_to_paf, header=None,
             # The regex "\s+" stands for
             # "one or more blank spaces" (includes spaces and TABs).
-            sep="\s+",
+            sep=r"\s+",
             # Load the appropiate (always present) columns and no more.
             usecols=list(range(12)), # [0, 1, 2, etc., 10, 11]
             # Use the following column names (from first to last column).
@@ -402,11 +402,11 @@ class Mapping(object):
         be matched against sequence names to filter the main dataframe. For
         instance,
 
-        {"genome": ".", "autosomes": "chr\d", "sex_chr": "chrX",
+        {"genome": ".", "autosomes": "chr\\d", "sex_chr": "chrx",
          "minor_scaff": "scaff|ctg", }
 
         The pattern for "genome" encompasses any sequence name ("." matches
-        everything). The pattern "chr\d" matches "chr" followed by amy digit.
+        everything). The pattern "chr\\d" matches "chr" followed by amy digit.
         The pattern "scaff|ctg" matches either "scaff" or "ctg".
         """
         # Revisa que `df' conté ambdós columnes "Qalgorbp" i "Talgorbp". Si no,
@@ -482,18 +482,21 @@ class Mapping(object):
         principi = int(punts[0] - chr_begin)
         if principi > 0:
             interdist.append(principi)
-        coord_beg = punts.pop(0)
+        # Calcula 1r interval mapat (while loop necessita parelles "unmapped" i
+        # "mapped", el 1r interval queda desaparellat).
+        coord_beg, coord_end = [punts.pop(0) for i in range(2)]
+        alig_lens.append(int(coord_end - coord_beg))
         # Itera a través de la llista de punts.
-        while len(punts) > 1:
-            coord_end = punts.pop(0)
-            # Computa llargada dels alineaments, intra-alineaments.
-            alig_lens.append(int(coord_end - coord_beg))
-            coord_beg = punts.pop(0)
+        while len(punts) > 0:
             # Computa distància entre alineaments, inter-alineaments.
+            coord_beg = punts.pop(0)
             interdist.append(int(coord_beg - coord_end))
+            # Computa llargada dels alineaments, intra-alineaments.
+            coord_end = punts.pop(0)
+            alig_lens.append(int(coord_end - coord_beg))
         # Finalment, calcula interdistància entre l'últim alineament i el final
         # del cromosoma.
-        final = int(chr_end - punts[-1])
+        final = int(chr_end - coord_end)
         if final > 0:
             interdist.append(final)
 
