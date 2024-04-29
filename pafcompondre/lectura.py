@@ -44,26 +44,26 @@ class Mapping(object):
     The contents of the mapping file formatted as a pandas DataFrame. See the
     factory method `cls.from_PAF', which creates a pandas df from a PAF file.
 
-    genome_subsets_patterns : dict
+    genome_subset_patterns : dict
     A dictionary where keys are names of genome subsets and values are
     corresponding patterns which can be used to filter the main dataframe.
     For example:
 
-        genome_subsets_patterns = dict({
+        genome_subset_patterns = dict({
             "genome": ".",
             "autosomes": "chr\\d",
             "sex_chr": "chrx",
             "minor_scaff": "scaff", }
     """
     def __init__(self, filename: str, df: pd.DataFrame,
-                 genome_subsets_patterns: dict=None):
+                 genome_subset_patterns: dict=None):
         # Emmagatzema `df' i `filename'.
         self.filename = filename
         self.df = df
         # Revisa si s'han entregat patrons dins el mètode de fàbrica!
-        if not genome_subsets_patterns:
+        if not genome_subset_patterns:
             # Patrons predeterminats, genèrics, d'exemple.
-            self.genome_subsets_patterns = {
+            self.genome_subset_patterns = {
                 "genome": r".",
                 "autosomes": r"chr\d",
                 "sex_chr": r"chrx",
@@ -477,7 +477,7 @@ class Mapping(object):
             punts.extend(list([intervals[i][0], intervals[i][1], ]))
 
         # Inicialitza variables.
-        interdist, alig_lens = list(), list()
+        interdist, alig_lens, position = list(), list(), list()
         # Calcula interdistància entre principi cromosoma i el 1r mapatge.
         principi = int(punts[0] - chr_begin)
         if principi > 0:
@@ -486,6 +486,9 @@ class Mapping(object):
         # "mapped", el 1r interval queda desaparellat).
         coord_beg, coord_end = [punts.pop(0) for i in range(2)]
         alig_lens.append(int(coord_end - coord_beg))
+        # Recull la posició percentual dins el cromosoma de regions mapades.
+        # (=> posició/llargada chr.)
+        position.append(int((coord_end + coord_beg)/(.02*chr_end)))
         # Itera a través de la llista de punts.
         while len(punts) > 0:
             # Computa distància entre alineaments, inter-alineaments.
@@ -494,6 +497,7 @@ class Mapping(object):
             # Computa llargada dels alineaments, intra-alineaments.
             coord_end = punts.pop(0)
             alig_lens.append(int(coord_end - coord_beg))
+            position.append(int((coord_end + coord_beg)/(.02*chr_end)))
         # Finalment, calcula interdistància entre l'últim alineament i el final
         # del cromosoma.
         final = int(chr_end - coord_end)
@@ -504,7 +508,8 @@ class Mapping(object):
         # manipular.
         answer = {
             "mapped_coords": pd.Series(alig_lens, dtype=int),
-            "unmapped_coords": pd.Series(interdist, dtype=int), }
+            "unmapped_coords": pd.Series(interdist, dtype=int),
+            "mapped_positions": pd.Series(position, dtype=int), }
 
         return answer
 
@@ -534,7 +539,8 @@ class Mapping(object):
                 # Inicialitza un diccionari per a guardar-hi regions.
                 answer[db][seqtype] = {
                     "mapped_coords": pd.Series(dtype="int"),
-                    "unmapped_coords": pd.Series(dtype="int"), }
+                    "unmapped_coords": pd.Series(dtype="int"),
+                    "mapped_positions": pd.Series(dtype="int"), }
                 # Crea una drecera fins a "answer".
                 a = answer[db][seqtype]
                 # Emmagatzema la llista de llargades dels alineaments, per
@@ -565,6 +571,9 @@ class Mapping(object):
                     a["unmapped_coords"] = pd.concat([
                         a["unmapped_coords"],
                         series_regions["unmapped_coords"]], ignore_index=True)
+                    a["mapped_positions"] = pd.concat([
+                        a["mapped_positions"],
+                        series_regions["mapped_positions"]], ignore_index=True)
 
         return answer
 
@@ -573,10 +582,10 @@ class Mapping(object):
         """
         Create a list of indel lengths per genome subset found in `patterns`.
         """
-        indels_per_region = dict()
+        indels_per_regions = dict()
         ali_len_per_indel = dict()
         for db in ("Q", "T"):
-            indels_per_region[db] = dict()
+            indels_per_regions[db] = dict()
             ali_len_per_indel[db] = dict()
             for seqtype, patt in patterns.items():
                 # Filtra df segons "db + name" (columna sequid) utilitzant el
@@ -585,15 +594,15 @@ class Mapping(object):
                 df_seqtype = df.loc[mask_seqtype]
                 # Inicialitza una entrada al dict. i usa "list comprehension"
                 # per a allisar una llista de subllistes.
-                indels_per_region[db][seqtype] = list()
-                [indels_per_region[db][seqtype].extend(i)
+                indels_per_regions[db][seqtype] = list()
+                [indels_per_regions[db][seqtype].extend(i)
                  for i in df_seqtype["indel_list"].to_list()]
                 # Computa la llargada d'alineament per a cada mida indel.
                 num_indels = df_seqtype["indel_list"].map(len)
                 ali_len_per_indel[db][seqtype] = \
                     np.repeat(df_seqtype["ali_len"], num_indels).to_list()
 
-        return {"indels_per_regions": indels_per_region,
+        return {"indels_per_regions": indels_per_regions,
                 "ali_len_per_indel": ali_len_per_indel, }
 
     def prepend_sequid_with_QT(self, series: pd.Series, label: str,
