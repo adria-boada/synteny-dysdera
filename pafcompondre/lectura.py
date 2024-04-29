@@ -635,15 +635,35 @@ class Mapping(object):
 
         return series
 
-    def prova(self):
+    def prova1(self):
         """
         """
         import seaborn as sns, matplotlib.pyplot as plt
         self.df, self.intervals_per_seq = self.compute_nonoverlap_len(self.df).values()
         m = self.delimit_mapped_regions(
             intervals_per_seq=self.intervals_per_seq,
-            genome_subset_patterns=self.genome_subsets_patterns)
+            genome_subset_patterns=self.genome_subset_patterns)
         # ["T"]["autosomes"]["unmapped_coords"]
+
+        dataset = pd.DataFrame({"unmap": [], "map": [], "hue": []})
+        for db, d in m.items():
+            for subset, dd in d.items():
+                h = [str(db + " - " + subset)] * len(dd["unmapped_coords"])
+                columnes = {"hue": h,
+                    "unmap": dd["unmapped_coords"],
+                    "map": dd["mapped_coords"], }
+                new_rows = pd.concat([pd.DataFrame(v, columns=[k]) for k, v in
+                                      columnes.items()], axis=1, )
+                dataset = pd.concat([dataset, new_rows], ignore_index=True)
+        print(dataset.describe())
+
+        sns.boxplot(dataset, x="unmap", y="hue", hue="hue", )
+        plt.xscale("log")
+        plt.show()
+        sns.boxplot(dataset, x="map", y="hue", hue="hue", )
+        plt.xscale("log")
+        plt.show()
+
         dataset = pd.DataFrame({"x": [], "y": [], "hue": []})
         for db, d in m.items():
             for subset, dd in d.items():
@@ -653,11 +673,73 @@ class Mapping(object):
                     "hue": [str(db + " - " + subset)] * len(dd.index), })
                 dataset = pd.concat([dataset, new_rows])
 
-        sns.kdeplot(data=dataset, x="x", weights="y", hue="hue")
+        sns.kdeplot(data=dataset, x="x", weights="y", hue="hue",
+                    bw_adjust=1)
         plt.xscale("log")
         #> g.set(
         #> g.set_xlim(left=0)
         plt.show()
+
+        sns.lineplot(data=dataset, x="x", y="y", hue="hue")
+        #> plt.xscale("log")
+        plt.show()
+
+        return None
+
+    def prova2(self):
+        """
+        """
+        import seaborn as sns, matplotlib.pyplot as plt
+        d = self.indel_list_per_genome_subset(
+            df=self.df, patterns=self.genome_subset_patterns) \
+            ["indels_per_regions"]
+
+        dataset = pd.DataFrame({"x": [], "hue": [], })
+        for db, dd in d.items():
+            for subset, l in dd.items():
+                new_rows = pd.DataFrame({
+                    "x": l,
+                    "hue": [str(db + " - " + subset)] * len(l), })
+                dataset = pd.concat([dataset, new_rows])
+
+        sns.boxplot(dataset, x="x", y="hue", hue="hue", )
+        plt.xscale("log")
+        plt.show()
+
+    def prova3(self):
+        """
+        """
+        import seaborn as sns, matplotlib.pyplot as plt
+        self.df, self.intervals_per_seq = self.compute_nonoverlap_len(self.df).values()
+        m = self.delimit_mapped_regions(
+            intervals_per_seq=self.intervals_per_seq,
+            genome_subset_patterns=self.genome_subset_patterns)
+        # ["T"]["autosomes"]["unmapped_coords"]
+
+        dataset = pd.DataFrame({"map": [], "pos": [], "hue": [], })
+        for db, d in m.items():
+            for subset, dd in d.items():
+                new_rows = pd.DataFrame({
+                    "map": dd["mapped_coords"].values,
+                    "pos": dd["mapped_positions"].values,
+                    "hue": [str(db + " - " + subset)] * len(dd_length.index), })
+                dataset = pd.concat([dataset, new_rows])
+        # Calcula bp mapats en finestres de 2% del cromosoma.
+        dataset["x"] = -1 # init
+        window_width = 4 # param
+        for i in range(0, 100, window_width):
+            filtre_finestra = (i <= dataset["pos"]) & \
+            (dataset["pos"] < i+window_width)
+
+            dataset.loc[filtre_finestra, "x"] = int(i + (window_width/2))
+
+        print(dataset.describe())
+        for h in dataset["hue"].unique():
+            dataset_filtered = dataset.loc[dataset["hue"] == h]
+            sns.boxplot(dataset, x="x", y="map")
+            plt.yscale("log")
+            plt.title(h)
+            plt.show()
 
         return None
 
