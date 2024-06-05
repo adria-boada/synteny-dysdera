@@ -7,7 +7,7 @@
 #
 # 28 de febr. 2024  <adria@molevol-OptiPlex-9020>
 
-help_msg = """
+help_msg = r"""
 RM.out files
 ------------
 
@@ -253,7 +253,7 @@ def read_preprocessed_rmout(
         preproc_rmout,
         header=None, # RM.out does not contain header
         skiprows=3,  # Skip the first three rows of header.
-        sep="\s+",   # Fields are separated by one or multiple 'spaces'.
+        sep=r"\s+",   # Fields are separated by one or multiple 'spaces'.
         names=[
         # For an explanation of RepeatMasker's fields, search its manual.
         "score_SW", "perc_divg", "perc_del", "perc_ins", "sequid",
@@ -575,7 +575,7 @@ class Repeats(object):
         for species, idxfile in pairs_species_idxfile.items():
             df = pd.read_table(
                 idxfile,
-                sep="\s+",
+                sep=r"\s+",
                 header=None,
                 names=["Subset", "Pattern", "Bpsum"])
             df["Species"] = species
@@ -596,7 +596,7 @@ class Repeats(object):
             df = pd.read_table(
                 rmout,
                 header=0,
-                sep="\s+")
+                sep=r"\s+")
             df["Species"] = species
             # Decrease memory usage by using efficient 'dtypes'.
             obj_cols_to_categ = ["sequid", "orient", "name",
@@ -1808,6 +1808,106 @@ def summary_table_kiosk(
 
     else:
         return catalog_df_summary
+
+def sliding_window_by_midpoints(
+    window_size: int,
+    array_midpoints: list,
+    array_weights: list=None,
+    jump_size: int=0,
+    window_start: int=0):
+    """
+    Parameters
+    ----------
+
+    window_size : int
+    The size of the sliding window.
+
+    array_midpoints : list
+    A list with the midpoints of features, i.e. (end + begin) / 2.
+
+    array_weights : list = None
+    A list with the weights of features. For instance, a list with the length of
+    each feature, in basepairs. The length of `array_weights' has to be the same
+    that the length of `array_midpoints'. By default, each feature is given a
+    weight of 1.
+
+    jump_size : int = 0
+    Jump size between windows. Excludes gaps of the sequence from the sliding
+    window analysis. By default includes the whole sequence, leaving no gaps.
+
+    window_start : int = 0
+    The value where the windows start to slide across. By default, start by
+    zero. Ending windows can be excluded by cutting the arrays.
+    """
+    # Initialise return dictionary.
+    answer = {
+        "WindowStart": list(),
+        "WindowEnd": list(),
+        "Val": list(), }
+    # Initialise the ending of the first window.
+    currentPos = window_start + window_size
+    # Initialise a list to store weights and sum them.
+    currentWeights = list()
+    # If some weights per element have been provided, check that both arrays
+    # contain the same amount of elements.
+    if array_weights:
+        if len(array_weights) != len(array_midpoints):
+            Printing("The provided `array_weights' differs in length "+
+                     "of elements to `array_midpoints'").error()
+            return None
+    # If no weights per element have been provided, use an array of ones with
+    # the same length of `array_midpoints'.
+    else:
+        array_weights = [1 for i in range(0, len(array_midpoints))]
+
+    # Compute algor.
+    # duple[0] is the midpoint of each element.
+    # duple[1] is the weight of each element.
+    for duple in zip(array_midpoints, array_weights):
+        # If midpoint is below currentPos (end of the window), add to the
+        # list of currentWeights.
+        if duple[0] < currentPos:
+            currentWeights.append(duple[1])
+        # When the midpoint crosses over the currentPos, slide the window.
+        else:
+            answer["WindowStart"].append(currentPos - window_size)
+            answer["WindowEnd"].append(currentPos - 1)
+            answer["Val"].append(sum(currentWeights))
+            # Reset currentWeights, including the point that crossed the
+            # ending position of the last window.
+            currentWeights = [duple[1]]
+            # Slide the window forward
+            currentPos += window_size
+    # Add the last window.
+    answer["WindowStart"].append(currentPos - window_size)
+    answer["WindowEnd"].append(currentPos - 1)
+    answer["Val"].append(sum(currentWeights))
+
+    return pd.DataFrame(answer)
+
+def main_slim_slidy(repeats_instance: object):
+    # Shorthand to the main dataframe.
+    df = repeats_instance.df_rmout
+    # Localise main chromosomes in `df'.
+    df = df.loc[df["sequid"].str.contains("chr", case=False)]
+    # Initialise a list to store many pd.DataFrames.
+    df_windows = list()
+    # Loop across unique sequids.
+    for seq in df["sequid"].unique():
+        # Localise unique sequid.
+        df_filtered = df.loc[df["sequid"] == seq]
+        array_midpoints = list((df_filtered["begin"] + df_filtered["end"]) / 2)
+        array_weights = list(df_filtered["bp_algor"])
+        # Slide windows.
+        current_sequid = sliding_window_by_midpoints(
+            window_size=1000000,
+            array_midpoints=array_midpoints,
+            array_weights=array_weights, )
+        current_sequid["Sequid"] = seq
+        # Append to the list of pd.DataFrames.
+        df_windows.append(current_sequid)
+
+    return pd.concat(df_windows)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
