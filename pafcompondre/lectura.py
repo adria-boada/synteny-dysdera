@@ -56,10 +56,13 @@ class Mapping(object):
             "minor_scaff": "scaff", }
     """
     def __init__(self, filename: str, df: pd.DataFrame,
+                 q_species: str, t_species: str,
                  genome_subset_patterns: dict=None):
         # Emmagatzema `df' i `filename'.
         self.filename = filename
         self.df = df
+        self.q_species = q_species
+        self.t_species = t_species
         # Revisa si s'han entregat patrons dins el mètode de fàbrica!
         if not genome_subset_patterns:
             # Patrons predeterminats, genèrics, d'exemple.
@@ -72,7 +75,9 @@ class Mapping(object):
         return None
 
     @classmethod
-    def from_PAF(cls, path_to_paf: str, memory_efficient: bool=False):
+    def from_PAF(cls, path_to_paf: str,
+                 q_species: str, t_species: str,
+                 memory_efficient: bool=False):
         """
         `Factory method'. It accepts a path to a PAF file, and returns an
         instance of the `Mapping' class.
@@ -121,7 +126,8 @@ class Mapping(object):
             df_main = cls._read_optional_paf_file(df_main, path_to_paf)
 
         missatges.Estat("Finished reading the PAF file.")
-        return cls(filename=paf_filename, df=df_main)
+        return cls(filename=paf_filename, df=df_main,
+                   q_species=q_species, t_species=t_species)
 
     @classmethod
     def _read_main_paf_file(cls, path_to_paf: str):
@@ -176,7 +182,7 @@ class Mapping(object):
         # A més, interpreta la cadena CIGAR (si existeix).
         cigar_columnes = {"cig_deletions": [], "cig_insertions": [],
                           "cig_matches": [], "cig_compressed": [],
-                          "indel_list": [], }
+                          "dels_list": [], "incs_list": []}
         # Desplaça't a través de les línies del fitxer PAF i omple les llistes
         # dels diccionaris anteriors.
         with open(path_to_paf) as fitxer_paf:
@@ -203,7 +209,8 @@ class Mapping(object):
                     cigar_columnes["cig_insertions"].append(resum_cigar["I"])
                     cigar_columnes["cig_matches"].append(resum_cigar["M"])
                     cigar_columnes["cig_compressed"].append(resum_cigar["compressed"])
-                    cigar_columnes["indel_list"].append(resum_cigar["indels"])
+                    cigar_columnes["dels_list"].append(resum_cigar["dels"])
+                    cigar_columnes["incs_list"].append(resum_cigar["incs"])
                 # Si no contenia CIGAR, afageix "None" per representar buit a
                 # les dades finals.
                 else:
@@ -582,28 +589,32 @@ class Mapping(object):
         """
         Create a list of indel lengths per genome subset found in `patterns`.
         """
-        indels_per_regions = dict()
-        ali_len_per_indel = dict()
+        answer = dict()
         for db in ("Q", "T"):
-            indels_per_regions[db] = dict()
-            ali_len_per_indel[db] = dict()
+            answer[db] = dict()
             for seqtype, patt in patterns.items():
                 # Filtra df segons "db + name" (columna sequid) utilitzant el
                 # patró adient.
                 mask_seqtype = df[str(db + "name")].str.contains(patt, case=False)
                 df_seqtype = df.loc[mask_seqtype]
-                # Inicialitza una entrada al dict. i usa "list comprehension"
-                # per a allisar una llista de subllistes.
-                indels_per_regions[db][seqtype] = list()
-                [indels_per_regions[db][seqtype].extend(i)
-                 for i in df_seqtype["indel_list"].to_list()]
-                # Computa la llargada d'alineament per a cada mida indel.
-                num_indels = df_seqtype["indel_list"].map(len)
-                ali_len_per_indel[db][seqtype] = \
-                    np.repeat(df_seqtype["ali_len"], num_indels).to_list()
+                if not df_seqtype.empty:
+                    answer[db][seqtype] = dict()
+                    a = answer[db][seqtype] #> Drecera.
+                    # Inicialitza una entrada al dict. i usa "list comprehension"
+                    # per a allisar una llista de subllistes.
+                    a["insertions"] = list()
+                    [ a["insertions"].extend(i)
+                     for i in list(df_seqtype["incs_list"])]
+                    a["deletions"] = list()
+                    [ a["deletions"].extend(i)
+                     for i in list(df_seqtype["dels_list"])]
+                    # Computa la llargada d'alineament per a cada mida indel.
+                    num_indels_per_ali = df_seqtype["dels_list"].map(len)
+                    a["ali_len_per_indel"] = \
+                        np.repeat(df_seqtype["ali_len"], num_indels_per_ali) \
+                        .to_list()
 
-        return {"indels_per_regions": indels_per_regions,
-                "ali_len_per_indel": ali_len_per_indel, }
+        return answer
 
     def prepend_sequid_with_QT(self, series: pd.Series, label: str,
                                separador: str="."):
@@ -645,10 +656,12 @@ class Mapping(object):
             genome_subset_patterns=self.genome_subset_patterns)
         # ["T"]["autosomes"]["unmapped_coords"]
 
+        db_to_spec = lambda db: self.q_species if db == "Q" else self.t_species
+
         dataset = pd.DataFrame({"unmap": [], "map": [], "hue": []})
         for db, d in m.items():
             for subset, dd in d.items():
-                h = [str(db + " - " + subset)] * len(dd["unmapped_coords"])
+                h = [str(db_to_spec(db) + " - " + subset)] * len(dd["unmapped_coords"])
                 columnes = {"hue": h,
                     "unmap": dd["unmapped_coords"],
                     "map": dd["mapped_coords"], }
@@ -656,6 +669,12 @@ class Mapping(object):
                                       columnes.items()], axis=1, )
                 dataset = pd.concat([dataset, new_rows], ignore_index=True)
         print(dataset.describe())
+        print(dataset)
+        # Remove unmapped distances equal to zero.
+        dataset = dataset.loc[dataset["unmap"] > 0]
+
+        print(dataset.describe())
+        print(dataset)
 
         sns.boxplot(dataset, x="unmap", y="hue", hue="hue", )
         plt.xscale("log")
@@ -664,24 +683,112 @@ class Mapping(object):
         plt.xscale("log")
         plt.show()
 
-        dataset = pd.DataFrame({"x": [], "y": [], "hue": []})
+        return None
+
+    def prova4(self, bw_adjust: float=.25):
+        """
+        """
+        import seaborn as sns, matplotlib.pyplot as plt
+        self.df, self.intervals_per_seq = self.compute_nonoverlap_len(self.df).values()
+        m = self.delimit_mapped_regions(
+            intervals_per_seq=self.intervals_per_seq,
+            genome_subset_patterns=self.genome_subset_patterns)
+        # ["T"]["autosomes"]["unmapped_coords"]
+
+        indels = self.indel_list_per_genome_subset(self.df,
+                                                   self.genome_subset_patterns)
+
+        db_to_spec = lambda db: self.q_species if db == "Q" else self.t_species
+
+        dataset_indels = {"Values": [], "Hue": [], }
+        dataset_unmap = {"Values": [], "Hue": [], }
+
+        databases = m.keys()
+        genome_subsets = m[list(databases)[0]].keys()
+
+        for sub in genome_subsets:
+            title = str(sub) + " - " + str(self.filename)
+            for db in databases:
+                h = str(db_to_spec(db))
+                i = indels[db][sub]
+                unmap = m[db][sub]["unmapped_coords"].loc[m[db][sub]["unmapped_coords"] > 0]
+                dataset_unmap["Values"].extend(list(unmap))
+                dataset_unmap["Hue"].extend([h + "_Unmap"] * unmap.shape[0])
+                dataset_indels["Values"].extend(list(i["deletions"]))
+                dataset_indels["Hue"].extend([h + "_Del"] * len(list(i["deletions"])))
+                dataset_indels["Values"].extend(list(i["insertions"]))
+                dataset_indels["Hue"].extend([h + "_Ins"] * len(list(i["insertions"])))
+
+            dataset_complet = pd.concat([
+                pd.DataFrame(dataset_unmap),
+                pd.DataFrame(dataset_indels), ])
+            print(dataset_complet)
+            print(dataset_complet.describe())
+
+            fig, axs = plt.subplots(nrows=3)
+
+            sns.boxplot(ax=axs[0], data=dataset_complet,
+                        x="Values", y="Hue", hue="Hue",
+                        log_scale=True)
+            sns.kdeplot(ax=axs[1], data=dataset_unmap, x="Values", hue="Hue",
+                        log_scale=True, bw_adjust=bw_adjust/2, cut=0)
+            sns.kdeplot(ax=axs[2], data=dataset_indels, x="Values", hue="Hue",
+                        log_scale=True, bw_adjust=bw_adjust, cut=0)
+            # sns.histplot(ax=axs[2], data=dataset, x="Values", hue="Hue",
+            #              binwidth=10, log_scale=False,
+            #              kde=True, kde_kws={"bw_adjust": bw_adjust})
+            fig.suptitle(title)
+            # Sembla que 'tight_layout' fa perdre espai de la gràfica.
+            # plt.tight_layout()
+            plt.show()
+
+        return None
+
+    def prova5(self, bw_adjust: float=.25):
+        """
+        """
+        import seaborn as sns, matplotlib.pyplot as plt
+        self.df, self.intervals_per_seq = self.compute_nonoverlap_len(self.df).values()
+        m = self.delimit_mapped_regions(
+            intervals_per_seq=self.intervals_per_seq,
+            genome_subset_patterns=self.genome_subset_patterns)
+        # ["T"]["autosomes"]["unmapped_coords"]
+
+        db_to_spec = lambda db: self.q_species if db == "Q" else self.t_species
+
+        dataset = pd.DataFrame({"unmap": [], "hue": []})
         for db, d in m.items():
             for subset, dd in d.items():
-                dd = dd["unmapped_coords"].value_counts().sort_index()
+                dd = dd["unmapped_coords"]
                 new_rows = pd.DataFrame({
-                    "x": dd.index, "y": dd.values,
-                    "hue": [str(db + " - " + subset)] * len(dd.index), })
+                    "unmap": dd,
+                    "hue": [str(db_to_spec(db) + " - " + subset)] * len(dd.index), })
                 dataset = pd.concat([dataset, new_rows])
 
-        sns.kdeplot(data=dataset, x="x", weights="y", hue="hue",
-                    bw_adjust=1)
+        # Remove unmapped distances equal to zero.
+        dataset = dataset.loc[dataset["unmap"] > 0]
+        # DEBUG
+        print(dataset.describe())
+
+        sns.boxplot(dataset, x="unmap", y="hue", hue="hue", )
         plt.xscale("log")
-        #> g.set(
-        #> g.set_xlim(left=0)
         plt.show()
 
-        sns.lineplot(data=dataset, x="x", y="y", hue="hue")
-        #> plt.xscale("log")
+        fig, axs = plt.subplots(nrows=3)
+
+        sns.kdeplot(ax=axs[0], data=dataset, x="unmap",
+                    hue="hue", bw_adjust=bw_adjust,
+                    log_scale=True)
+
+        datalogged = pd.DataFrame({
+            "unmap": np.log10(dataset["unmap"]),
+            "hue": dataset["hue"]})
+        sns.kdeplot(ax=axs[1], data=dataset, x="unmap",
+                    hue="hue", bw_adjust=bw_adjust,
+                    log_scale=False)
+
+        sns.histplot(ax=axs[2], data=dataset, x="unmap", log_scale=True,
+                     hue="hue", kde=True, kde_kws={"bw_adjust": bw_adjust})
         plt.show()
 
         return None
@@ -690,20 +797,58 @@ class Mapping(object):
         """
         """
         import seaborn as sns, matplotlib.pyplot as plt
-        d = self.indel_list_per_genome_subset(
-            df=self.df, patterns=self.genome_subset_patterns) \
-            ["indels_per_regions"]
+        indels = self.indel_list_per_genome_subset(
+            df=self.df, patterns=self.genome_subset_patterns)
+        dataset = pd.DataFrame()
 
-        dataset = pd.DataFrame({"x": [], "hue": [], })
-        for db, dd in d.items():
-            for subset, l in dd.items():
+        for db, dd in indels.items():
+            for subset, ddd in dd.items():
+                incs = pd.Series(ddd["insertions"], name="insertions", )
+                dels = pd.Series(ddd["deletions"], name="deletions", )
                 new_rows = pd.DataFrame({
-                    "x": l,
-                    "hue": [str(db + " - " + subset)] * len(l), })
+                    "Indel size": list(incs.values) + list(dels.values),
+                    "Kind": ["Ins"]*len(incs) + ["Del"]*len(dels),
+                    "Subset": [str(db + " - " + subset)]*(len(incs) +
+                                                          len(dels)), })
                 dataset = pd.concat([dataset, new_rows])
 
-        sns.boxplot(dataset, x="x", y="hue", hue="hue", )
+        step = 5
+        dataset["Indel categories"] = 0
+        for i in range(1, 30, step):
+            begin, end = (i, i + step - 1)
+            dataset.loc[ (begin <= dataset["Indel size"]) &
+                         (end   >= dataset["Indel size"]),
+                        "Indel categories"] = str(begin) + "-" + str(end)
+        dataset.loc[end < dataset["Indel size"],
+                    "Indel categories"] = ">" + str(end)
+        dataset = dataset.sort_values(by=["Kind", "Indel size"])
+
+        print(dataset)
+        print(dataset.describe())
+
+        sns.boxplot(dataset, x="Indel size", hue="Kind", y="Subset", )
         plt.xscale("log")
+        plt.title(self.filename)
+        plt.show()
+
+        # Suma entre 1-10.
+        sum_dels = dataset.loc[dataset["Kind"]=="Del", "Indel size"].sum()
+        sum_incs = dataset.loc[dataset["Kind"]=="Ins", "Indel size"].sum()
+        print("\n",dataset.loc[dataset["Indel size"]<=10].shape[0])
+
+        sns.histplot(dataset, x="Indel categories",
+                     hue="Kind", multiple="dodge", shrink=.9)
+        #> plt.xscale("log")
+        plt.title("Q: " + self.q_species)
+        plt.suptitle("Del: " + str(sum_dels) +
+                     " bp; Ins: " + str(sum_incs) + " bp")
+        plt.show()
+
+        sns.histplot(dataset, x="Indel categories", weights="Indel size",
+                     hue="Kind", multiple="dodge", shrink=.9)
+        plt.title("Weighted.  Q: " + self.q_species)
+        plt.suptitle("Del: " + str(sum_dels) +
+                     " bp; Ins: " + str(sum_incs) + " bp")
         plt.show()
 
     def prova3(self):
@@ -717,12 +862,16 @@ class Mapping(object):
         # ["T"]["autosomes"]["unmapped_coords"]
 
         dataset = pd.DataFrame({"map": [], "pos": [], "hue": [], })
+        suma_regions_mapades = dict()
         for db, d in m.items():
+            suma_regions_mapades[db] = dict()
             for subset, dd in d.items():
+                suma_regions_mapades[db][subset] = sum(dd["mapped_coords"])
                 new_rows = pd.DataFrame({
                     "map": dd["mapped_coords"].values,
                     "pos": dd["mapped_positions"].values,
-                    "hue": [str(db + " - " + subset)] * len(dd_length.index), })
+                    "hue": [str(db + " - " + subset)] * \
+                        len(dd["mapped_coords"]), })
                 dataset = pd.concat([dataset, new_rows])
         # Calcula bp mapats en finestres de 2% del cromosoma.
         dataset["x"] = -1 # init
@@ -734,6 +883,7 @@ class Mapping(object):
             dataset.loc[filtre_finestra, "x"] = int(i + (window_width/2))
 
         print(dataset.describe())
+        print(suma_regions_mapades)
         for h in dataset["hue"].unique():
             dataset_filtered = dataset.loc[dataset["hue"] == h]
             sns.boxplot(dataset, x="x", y="map")
@@ -772,18 +922,24 @@ def interpret_cigar_string(cigar_string: str):
     <https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity>
     # accessed 12-april-2024
     """
-    # Crea una llista de llargada (bp) d'indels
-    # identificant el patró "\d+[ID]".
-    indels = re.findall(r"\d+[ID]", cigar_string)
-    indels = re.findall(r"\d+", "".join(indels))
-    indels = [int(i) for i in indels]
+    # Crea una llista que emmagatzemi la llargada, en bp, de delecions i
+    # insercions. Identifica el patró «un o més digits seguits de 'I' o 'D'»
+    dels = re.findall(r"\d+[D]", cigar_string)
+    incs = re.findall(r"\d+[I]", cigar_string)
+    indels = {"dels": dels, "incs": incs}
+    # Elimina text d'ambdues llistes (lletres 'I' o 'D').
+    for key, l in indels.items():
+        l = re.findall(r"\d+", "".join(l))
+        l = [int(i) for i in l]
+        indels[key] = l
     # Separa la cadena CIGAR per mitjà de
     # concatenar espais a les lletres "MID":
     for i in "MID":
         cigar_string = cigar_string.replace(i, i+" ")
     cigar_list = cigar_string.strip("\n").split(" ")
     # Inicialitza un diccionari de retorn:
-    answer = {"M": 0, "I": 0, "D": 0, "indels": indels}
+    answer = {"M": 0, "I": 0, "D": 0,
+              "dels": indels["dels"], "incs": indels["incs"], }
     # Compta i emmagatzema resultats a `answer`.
     for i in cigar_list:
         if "M" in i:
