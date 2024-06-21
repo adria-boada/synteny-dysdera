@@ -602,12 +602,24 @@ class Mapping(object):
                     a = answer[db][seqtype] #> Drecera.
                     # Inicialitza una entrada al dict. i usa "list comprehension"
                     # per a allisar una llista de subllistes.
-                    a["insertions"] = list()
-                    [ a["insertions"].extend(i)
-                     for i in list(df_seqtype["incs_list"])]
-                    a["deletions"] = list()
-                    [ a["deletions"].extend(i)
-                     for i in list(df_seqtype["dels_list"])]
+                    if db == "Q":
+                        a["insertions"] = list()
+                        [ a["insertions"].extend(i)
+                        for i in list(df_seqtype["incs_list"])]
+                        a["deletions"] = list()
+                        [ a["deletions"].extend(i)
+                        for i in list(df_seqtype["dels_list"])]
+                    elif db == "T":
+                        # La target va al revés; delecions a la query són
+                        # insercions a la target.
+                        a["insertions"] = list()
+                        [ a["insertions"].extend(i)
+                        for i in list(df_seqtype["dels_list"])]
+                        a["deletions"] = list()
+                        [ a["deletions"].extend(i)
+                        for i in list(df_seqtype["incs_list"])]
+
+                    # NO S'HAURIA DE REPETIR PER INSERCIONS???
                     # Computa la llargada d'alineament per a cada mida indel.
                     num_indels_per_ali = df_seqtype["dels_list"].map(len)
                     a["ali_len_per_indel"] = \
@@ -700,14 +712,14 @@ class Mapping(object):
 
         db_to_spec = lambda db: self.q_species if db == "Q" else self.t_species
 
-        dataset_indels = {"Values": [], "Hue": [], }
-        dataset_unmap = {"Values": [], "Hue": [], }
-
         databases = m.keys()
         genome_subsets = m[list(databases)[0]].keys()
 
         for sub in genome_subsets:
-            title = str(sub) + " - " + str(self.filename)
+            dataset_indels = {"Values": [], "Hue": [], }
+            dataset_unmap = {"Values": [], "Hue": [], }
+            title = str(sub).capitalize() + "_" + str(self.filename)
+            print(title)#debug
             for db in databases:
                 h = str(db_to_spec(db))
                 i = indels[db][sub]
@@ -725,13 +737,32 @@ class Mapping(object):
             print(dataset_complet)
             print(dataset_complet.describe())
 
-            fig, axs = plt.subplots(nrows=3)
+            fig, axs = plt.subplots(nrows=3, sharex=True, figsize=(6.4, 8), )
+
+            # Ordena "Hue" del dataset_complet per obtenir boxplot ordenat.
+            ordena = lambda x: "1" + str(x) if "_Unmap" in x else\
+                ("2" + str(x) if "_Del" in x else\
+                ("3" + str(x)))
+            dataset_complet = dataset_complet.sort_values(
+                by="Hue", key=lambda col: col.apply(ordena), ignore_index=True)
+            dataset_indels = dataset_complet.loc[
+                dataset_complet["Hue"].str.contains("Del|Ins")]
+            dataset_unmap = dataset_complet.loc[
+                dataset_complet["Hue"].str.contains("Unmap")]
 
             sns.boxplot(ax=axs[0], data=dataset_complet,
-                        x="Values", y="Hue", hue="Hue",
-                        log_scale=True)
+                        x="Values", y="Hue", hue="Hue", dodge=False,
+                        flierprops={"marker": "o", "markersize": 4,
+                                    "markerfacecolor": "None", }, )
+            # Moves legend to upper left, outside of the plotting box.
+            # sns.move_legend(axs[0], "upper left", bbox_to_anchor=(1, 1))
+            # Entirely remove the legend (it's already written in the Y axis!)
+            axs[0].legend_.remove()
+            axs[0].set_xscale("log")
+            axs[0].set_ylabel("Regions")
+            axs[0].set_xlabel("") # Elimina etiqueta (solament una, a sota)
             sns.kdeplot(ax=axs[1], data=dataset_unmap, x="Values", hue="Hue",
-                        log_scale=True, bw_adjust=bw_adjust/2, cut=0)
+                        log_scale=True, bw_adjust=bw_adjust/4, cut=0)
             sns.kdeplot(ax=axs[2], data=dataset_indels, x="Values", hue="Hue",
                         log_scale=True, bw_adjust=bw_adjust, cut=0)
             # sns.histplot(ax=axs[2], data=dataset, x="Values", hue="Hue",
@@ -740,7 +771,8 @@ class Mapping(object):
             fig.suptitle(title)
             # Sembla que 'tight_layout' fa perdre espai de la gràfica.
             # plt.tight_layout()
-            plt.show()
+            plt.xlabel("Basepairs")
+            plt.savefig(title + ".png", bbox_inches="tight", dpi=1200)
 
         return None
 
