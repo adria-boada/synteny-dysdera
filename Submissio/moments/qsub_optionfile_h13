@@ -1,0 +1,4 @@
+-q h13.q
+-pe ompi255h13 1
+-cwd
+-V
