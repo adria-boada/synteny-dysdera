@@ -33,7 +33,7 @@ import moments
 #>import pylab
 #>from datetime import datetime
 import Optimize_Functions
-import Two_Population_Pipeline.Models_2D as Models_2D
+import Models_2D
 
 # AVAILABLE TESTING/FITTING MODELS
 # --------------------------------
