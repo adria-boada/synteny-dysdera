@@ -1,2 +1,2 @@
-$HOME/Dipogits/moments_pipeline/moments_Run_Optimizations.py
-$HOME/Dipogits/synteny-dysdera/Submissio/moments/moments_Personal.py --snps_file "$HOME/Dipogits/moments_pipeline/Example_Data/moments_2pops_North_South_snps.txt" --pop_ids North South --projections 16 32 --rounds 3 --replicates 10 20 50 --fit no_mig
+/users-d3/adria.boada/home/Dipogits/moments_pipeline/moments_Run_Optimizations.py
+moments_Personal.py --snps_file "/users-d3/adria.boada/home/Dipogits/moments_pipeline/Example_Data/moments_2pops_North_South_snps.txt" --pop_ids North South --projections 16 32 --rounds 3 --replicates 10 20 50 --fit no_mig

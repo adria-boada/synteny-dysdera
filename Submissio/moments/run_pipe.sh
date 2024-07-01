@@ -15,9 +15,12 @@ echo $(python3 -c 'import moments')
 
 QSUB_OPTIONFILE="$1"
 PYT_PARAM_FILE="$2"
-STDOUT="$(date +%y%m%d-%H%M)-moments.log" 
 
+i=0
 cat $PYT_PARAM_FILE | while read line; do
-	qsub -@ "$QSUB_OPTIONFILE" -N "moments" -o "$STDOUT" -j yes -b y python3 "$line"
+	# Un nom de fitxer per a cada ordre qsub.
+	STDOUT="$(date +%y%m%d-%H%M)-moments.log"
+	qsub -@ "$QSUB_OPTIONFILE" -N "moments$i" -o "$STDOUT" -j yes -b y python3 "$line"
+	i=$(expr $i + 1)
 done
 
