@@ -4,14 +4,17 @@
 
 ## usage: bash run_pipe.sh (without 'qsub')
 
-source /users-d3/adria.boada/.bash_profile
-
 # Command-line parameters.
 QSUB_OPTIONFILE="$1"
 PYT_PARAM_FILE="$2"
+# Check command-line arguments were given.
+if [ -z "$QSUB_OPTIONFILE" ] || [ -z "$PYT_PARAM_FILE" ] ; then
+	echo "The arguments have not been specified"
+	exit 1
+fi
 
 # Utilizem un 'environment' de Python amb els paquets necessaris preparats.
-PYT_BIN="./anaconda3/envs/moments/bin/python"
+PYT_BIN="$HOME/anaconda3/envs/moments/bin/python"
 
 i=0
 cat $PYT_PARAM_FILE | while read line; do
